@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: realitygraph-${{ github.ref }}
+  group: realitygraph-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
