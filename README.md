@@ -19,6 +19,73 @@ The kernel is:
 - **Keep**: retain only what changes future reach; preserve unresolved alternatives.
 - **Repeat**: begin from the changed present.
 
+## Blind meta-world transfer
+
+Run:
+
+    python meta_world_demo.py
+
+This is the strongest current experiment.
+
+The learner receives only finite hypotheses, available actions, and predicted consequences. The generic experiment designer has no family-specific branch for lookup tables, binary affine laws, modular affine laws, local cellular dynamics, or the held-out quadratic family.
+
+Before touching the hidden world it evaluates candidate consequences and designs a **joint separating batch**. The whole batch is then applied in one interaction round rather than paying for a linear observe/reason/observe loop.
+
+Current frozen families:
+
+    family                    hypotheses   actions   discovered batch
+    opaque lookup/12              4096        12          12
+    binary affine/7                256       128           8
+    modular affine/17              289        17           2
+    cyclic local dynamics/8        256       256           1
+
+For those four families, cold experiment design requires exactly:
+
+    649,537 counterfactual predictions
+
+Once a separating batch has been exhaustively verified, RealityGraph compiles it into two layers:
+
+    .mg source       = tiny retained separating batch
+    runtime decoder  = derived signature -> hypothesis primitive
+
+Fresh worlds in the same verified model family then require:
+
+    experiment-design predictions = 0
+    hypothesis-scan predictions   = 0
+    interaction rounds            = 1
+
+The demo solves 64 fresh hidden worlds this way.
+
+A restart that discards the derived decoder but retains only .mg can rebuild the decoder from the retained batch without repeating experiment search. For the four training families the rebuild requires 52,034 predictions instead of 649,537 cold design predictions: about **12.48x less work** before the first new observation.
+
+Ablating retained capability restores the expensive path.
+
+### Held-out-after-freeze control
+
+The fifth family is absent from memory when the test begins:
+
+    modular quadratic/7
+    343 possible laws
+    7 candidate actions
+
+The same generic machinery discovers a 3-action separating batch using 6,174 counterfactual predictions, identifies the hidden law in one batch round, verifies it across the full finite action set, and retains the batch.
+
+The next hidden world from that newly encountered family starts from compiled capability:
+
+    experiment-design predictions = 0
+    hypothesis-scan predictions   = 0
+    interaction rounds            = 1
+
+In CI, hidden laws are generated from:
+
+    github.sha + github.run_id
+
+so the concrete hidden worlds are chosen only after the tested commit already exists.
+
+This is still a bounded finite experiment. It does **not** establish universal system identification or autonomous ontology invention. It establishes a narrower, testable claim:
+
+> **Expensive model discrimination can be moved off the linear interaction path, verified once, compiled, and reused until a new consequence forces further development.**
+
 ## Compounding field demo
 
 Run:
@@ -33,63 +100,28 @@ It evaluates every 8-cell experiment against every possible law:
     x 256 possible world-laws
     = 65,536 internal predictions
 
-The generic field selects the experiment whose predicted consequences maximally separate the frontier. It discovers a perfect separator: one real observation collapses 256 lawful worlds to one.
+The generic field discovers a perfect separator. One real observation collapses 256 lawful worlds to one. The separating probe is verified against the entire declared family and compiled into .mg.
 
-That experiment is then independently verified against the entire declared 256-rule family and compiled into `.mg` as a reusable learning capability.
+A different World B inherits the probe instead of searching again:
 
-World B is a different hidden law. It inherits the compiled probe instead of searching 256 experiments again:
-
-    cold identification:
-      65,536 probe-search predictions
-      + 256 collision predictions
-
-    inherited identification:
-      0 probe-search predictions
-      + 256 collision predictions
-
-    reduction = 257x
-
-Both worlds require one real interaction. Each identified law is kept only in its own world scope; the probe alone is promoted across the whole verified family. Fresh 64-cell states are then predicted exactly from the retained instance laws without another acquisition interaction.
-
-This is a bounded finite demonstration, not universal system identification. The point is architectural:
-
-> **A solved world can teach the system how to learn the next world.**
+    cold identification = 65,792 internal predictions
+    inherited           = 256 internal predictions
+    reduction           = 257x
 
 ## Ledger and .mg
-
-They are different objects.
 
     Ledger = immutable causal evidence
     .mg     = compressed consequential present
 
-Every consequential change is an event in a content-addressed causal DAG. Events carry parents, so RealityGraph knows whether two edits were sequential or genuinely concurrent without trusting wall-clock order.
+Every consequential change is an event in a content-addressed causal DAG. Concurrent edits are preserved rather than resolved by last-write-wins. Revocation removes only versions it causally observed.
 
-Concurrent edits never use last-write-wins:
-
-    K1: x -> A
-    K2: x -> B
-
-materializes as two live alternatives until consequence separates them.
-
-A revoke removes only versions it causally observed. A concurrent edit survives. Merge is deterministic set union over immutable events, so kernels can write locally and reconcile later without a global lock.
-
-The live `.mg` remains tiny because history is not cognition. It is a projection of the surviving frontier:
+The live .mg remains small because history is not cognition:
 
     event DAG -> merge -> verify -> compress -> .mg
 
-## Verified compilation demo
-
-Run:
-
-    python demo.py
-
-The graph-colouring demo starts with empty `MG1` memory and a fresh problem. Exact 3-colour search fails; the kernel minimizes the residual, recognizes one reusable obstruction, verifies it, and compiles it.
-
-A different larger graph then begins after that reasoning has already been paid for, so it requires zero 3-colour search nodes while its positive witness is still checked exactly.
-
 ## Trust boundary
 
-A proposer may be symbolic search, an LLM, a human, another kernel, or another `.mg`. It is not trusted.
+A proposer may be symbolic search, an LLM, a human, another kernel, or another .mg. It is not trusted.
 
     proposal != truth
     verified consequence -> earned structure
@@ -99,5 +131,6 @@ A proposer may be symbolic search, an LLM, a human, another kernel, or another `
     python -m unittest discover -s tests -v
     python demo.py
     python field_demo.py
+    python meta_world_demo.py
 
-CI runs all three on every push.
+CI runs all four on every push.
