@@ -13,6 +13,8 @@ concurrency:
 jobs:
   realitygraph:
     runs-on: ubuntu-latest
+    env:
+      REALITYGRAPH_RUN_SEED: ${{ github.sha }}-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,3 +26,5 @@ jobs:
         run: python demo.py
       - name: Compounding field demo
         run: python field_demo.py
+      - name: Blind meta-world transfer
+        run: python meta_world_demo.py
