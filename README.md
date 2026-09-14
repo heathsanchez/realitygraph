@@ -4,17 +4,44 @@
 
 RealityGraph is deliberately small:
 
-    raw world -> adapter/IR -> Kernel <-> .mg
-                              |
-                           verifier
+    raw world -> local kernels -> verifier/consequence
+                       |              |
+                       v              v
+                  causal ledger -> compressed .mg
 
-The Kernel is:
+The kernel is:
 
-    construct -> verify -> residual -> minimal repair -> compress -> reuse
+    MOVE -> COLLIDE -> SHIFT -> KEEP -> REPEAT
 
-`.mg` is not a transcript. It is the portable residue of lessons worth paying for only once.
+- **Move**: make the cheapest useful construction or action.
+- **Collide**: meet independently grounded consequence.
+- **Shift**: change only what that collision warrants.
+- **Keep**: retain only what changes future reach; preserve unresolved alternatives.
+- **Repeat**: begin from the changed present.
 
-## Verified demo
+## Ledger and .mg
+
+They are different objects.
+
+    Ledger = immutable causal evidence
+    .mg     = compressed consequential present
+
+Every consequential change is an event in a content-addressed causal DAG. Events carry parents, so RealityGraph knows whether two edits were sequential or genuinely concurrent without trusting wall-clock order.
+
+Concurrent edits never use last-write-wins:
+
+    K1: x -> A
+    K2: x -> B
+
+materializes as two live alternatives until consequence separates them.
+
+A revoke removes only versions it causally observed. A concurrent edit survives. Merge is deterministic set union over immutable events, so kernels can write locally and reconcile later without a global lock.
+
+The live `.mg` remains tiny because history is not cognition. It is a projection of the surviving frontier:
+
+    event DAG -> merge -> verify -> compress -> .mg
+
+## Verified learning demo
 
 Run:
 
@@ -28,19 +55,9 @@ A fresh 4-color witness is verified. Then a different, larger graph arrives. The
 
 > **The second problem begins after the reasoning required for the first one.**
 
-## Memory
-
-Canonical memory is tiny:
-
-    MG1
-    v:proper_k_coloring
-    +ow:hub(oddcycle)->chi>=4@finite-simple#5c01292aeda9
-
-History is discarded after it compiles into reusable structure. If two `.mg` files disagree about one identifier, merge preserves the disagreement rather than silently choosing.
-
 ## Trust boundary
 
-The proposer may be symbolic search, an LLM, a human, or another `.mg`. It is not trusted.
+The proposer may be symbolic search, an LLM, a human, another kernel, or another `.mg`. It is not trusted.
 
     proposal != truth
     verified consequence -> earned structure
