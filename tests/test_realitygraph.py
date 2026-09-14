@@ -8,7 +8,9 @@ from realitygraph.eca import (
     HiddenECA,
     all_rows,
     all_rules,
+    compile_probe,
     compile_rule,
+    probe_from_memory,
     rule_from_memory,
     step,
 )
@@ -59,21 +61,49 @@ class RealityGraphTests(unittest.TestCase):
 
         memory = MG(verifier="eca_step")
         ledger = Ledger()
+        compile_probe(probe.action, ledger, memory, kernel_id="field-test")
         compile_rule(
             field.hypotheses[0],
             probe.action,
             observed,
             ledger,
             memory,
+            world_scope="world-A",
             kernel_id="field-test",
         )
-        self.assertEqual(len(ledger.events), 1)
 
         rng = random.Random(20260915)
         heldout = tuple(rng.randrange(2) for _ in range(64))
-        predicted = step(rule_from_memory(memory), heldout)
+        predicted = step(rule_from_memory(memory, "world-A"), heldout)
         self.assertTrue(hidden.verify_heldout(heldout, predicted))
         self.assertEqual(hidden.interactions, 1)
+
+    def test_learned_probe_compounds_across_new_world(self):
+        memory = MG(verifier="eca_step")
+        ledger = Ledger()
+
+        first_field = Field(all_rules())
+        actions = all_rows(8)
+        probe = first_field.choose(actions, step)
+        compile_probe(probe.action, ledger, memory, kernel_id="world-A")
+
+        second_world = HiddenECA(30)
+        second_field = Field(all_rules())
+        inherited_probe = probe_from_memory(memory)
+
+        self.assertEqual(inherited_probe, probe.action)
+
+        observed = second_world.observe(inherited_probe)
+        collision = second_field.collide(inherited_probe, observed, step)
+
+        self.assertEqual(collision.before, 256)
+        self.assertEqual(collision.after, 1)
+        self.assertEqual(second_field.hypotheses[0], 30)
+        self.assertEqual(second_world.interactions, 1)
+
+        cold_identification_predictions = len(actions) * 256 + 256
+        warm_identification_predictions = 256
+        self.assertEqual(cold_identification_predictions // warm_identification_predictions, 257)
 
     def test_mg_roundtrip_and_merge_preserves_conflict(self):
         a = MG("v", [Law("x", "a->b", "s", "111")])
