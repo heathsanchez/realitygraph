@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from realitygraph import Kernel, Law, MG
+from realitygraph import Event, Kernel, Law, Ledger, MG
 from realitygraph.graph_coloring import GraphColoring, odd_wheel_with_leaves
 
 
@@ -35,6 +35,44 @@ class RealityGraphTests(unittest.TestCase):
             merged.save(p)
             again = MG.load(p)
             self.assertEqual(again.text(), merged.text())
+
+    def test_ledger_merges_concurrent_edits_without_overwrite(self):
+        base = Event.add(Law("x", "base", "s", "seed"), "seed")
+        left = Ledger([base])
+        right = Ledger([base])
+
+        left.append_add(Law("x", "left", "s", "left"), "K-left", parents=[base.id])
+        right.append_add(Law("x", "right", "s", "right"), "K-right", parents=[base.id])
+
+        merged = left.merge(right)
+        present = merged.materialize("v")
+
+        self.assertEqual(len(present.laws), 2)
+        self.assertEqual(
+            {law.expr for law in present.laws.values()},
+            {"left", "right"},
+        )
+        self.assertEqual(merged.digest(), right.merge(left).digest())
+
+    def test_revoke_only_kills_versions_it_causally_observed(self):
+        base = Event.add(Law("x", "base", "s", "seed"), "seed")
+
+        revoke_branch = Ledger([base])
+        revoke_branch.append_revoke("x", "K-revoke", "bad here", parents=[base.id])
+
+        edit_branch = Ledger([base])
+        newer = edit_branch.append_add(
+            Law("x", "concurrent-new", "s", "new"),
+            "K-edit",
+            parents=[base.id],
+        )
+
+        merged = revoke_branch.merge(edit_branch)
+        present = merged.materialize("v")
+        self.assertEqual([law.expr for law in present.laws.values()], ["concurrent-new"])
+
+        merged.append_revoke("x", "K-later", "now observed", parents=[newer.id])
+        self.assertEqual(merged.materialize("v").laws, {})
 
 
 if __name__ == "__main__":
