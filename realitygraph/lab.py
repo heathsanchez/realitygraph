@@ -63,11 +63,11 @@ def design_separating_batch(
     actions: Sequence[Action],
     predict: Predict,
 ) -> BatchPlan:
-    """Design all required experiments before spending a real interaction.
+    """Design a joint experiment before spending a real interaction.
 
-    The search is consequence-only: it sees opaque hypotheses/actions through
-    their predicted observations. It greedily maximizes the joint quotient of
-    the hypothesis frontier. No family-specific rule is used.
+    Every hypothesis/action consequence is computed at most once. Refinement
+    then happens over the shared consequence field rather than repeatedly
+    calling the predictor along a linear search path.
     """
     hypotheses = tuple(hypotheses)
     remaining = list(actions)
@@ -76,23 +76,29 @@ def design_separating_batch(
     if not remaining and len(hypotheses) > 1:
         raise ValueError("actions cannot distinguish the frontier")
 
+    # One broad counterfactual pass. The rest of experiment design is quotient
+    # algebra over cached consequences, not repeated model evaluation.
+    columns: dict[Action, tuple[Observation, ...]] = {
+        action: tuple(predict(hypothesis, action) for hypothesis in hypotheses)
+        for action in remaining
+    }
+    predictions = len(hypotheses) * len(remaining)
+
     signatures: list[tuple[Observation, ...]] = [()] * len(hypotheses)
     chosen: list[Action] = []
     progress: list[int] = []
-    predictions = 0
 
     while len(set(signatures)) < len(hypotheses):
         best_action = None
         best_signatures = None
         best_key = None
 
-        # All candidate probes are counterfactual: reality is untouched here.
         for action in remaining:
+            column = columns[action]
             candidate = [
-                signatures[i] + (predict(hypothesis, action),)
-                for i, hypothesis in enumerate(hypotheses)
+                signatures[i] + (column[i],)
+                for i in range(len(hypotheses))
             ]
-            predictions += len(hypotheses)
             counts = Counter(candidate)
             key = (
                 len(counts),
