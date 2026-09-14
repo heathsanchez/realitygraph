@@ -1,8 +1,17 @@
+import random
 import tempfile
 import unittest
 from pathlib import Path
 
-from realitygraph import Event, Kernel, Law, Ledger, MG
+from realitygraph import Event, Field, Kernel, Law, Ledger, MG
+from realitygraph.eca import (
+    HiddenECA,
+    all_rows,
+    all_rules,
+    compile_rule,
+    rule_from_memory,
+    step,
+)
 from realitygraph.graph_coloring import GraphColoring, odd_wheel_with_leaves
 
 
@@ -28,6 +37,43 @@ class RealityGraphTests(unittest.TestCase):
         self.assertTrue(second.reused_memory)
         self.assertEqual(second.search_nodes, 0)
         self.assertEqual(len(ledger.events), 1)
+
+    def test_one_collision_identifies_world_law_and_transfers(self):
+        hidden = HiddenECA(110)
+        field = Field(all_rules())
+        actions = all_rows(8)
+
+        probe = field.choose(actions, step)
+        self.assertEqual(probe.outcome_classes, 256)
+        self.assertEqual(probe.largest_class, 1)
+        self.assertEqual(probe.expected_survivors, 1.0)
+
+        observed = hidden.observe(probe.action)
+        collision = field.collide(probe.action, observed, step)
+
+        self.assertEqual(collision.before, 256)
+        self.assertEqual(collision.after, 1)
+        self.assertTrue(field.resolved())
+        self.assertEqual(field.hypotheses[0], 110)
+        self.assertEqual(hidden.interactions, 1)
+
+        memory = MG(verifier="eca_step")
+        ledger = Ledger()
+        compile_rule(
+            field.hypotheses[0],
+            probe.action,
+            observed,
+            ledger,
+            memory,
+            kernel_id="field-test",
+        )
+        self.assertEqual(len(ledger.events), 1)
+
+        rng = random.Random(20260915)
+        heldout = tuple(rng.randrange(2) for _ in range(64))
+        predicted = step(rule_from_memory(memory), heldout)
+        self.assertTrue(hidden.verify_heldout(heldout, predicted))
+        self.assertEqual(hidden.interactions, 1)
 
     def test_mg_roundtrip_and_merge_preserves_conflict(self):
         a = MG("v", [Law("x", "a->b", "s", "111")])
