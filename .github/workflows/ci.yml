@@ -2,7 +2,13 @@ name: verify
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: realitygraph-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   realitygraph:
@@ -16,5 +22,5 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Verified learning demo
         run: python demo.py
-      - name: One-collision field demo
+      - name: Compounding field demo
         run: python field_demo.py
