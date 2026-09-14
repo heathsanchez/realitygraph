@@ -29,7 +29,13 @@ This is the strongest current experiment.
 
 The learner receives only finite hypotheses, available actions, and predicted consequences. The generic experiment designer has no family-specific branch for lookup tables, binary affine laws, modular affine laws, local cellular dynamics, or the held-out quadratic family.
 
-Before touching the hidden world it evaluates candidate consequences and designs a **joint separating batch**. The whole batch is then applied in one interaction round rather than paying for a linear observe/reason/observe loop.
+Before touching the hidden world it computes the full counterfactual consequence field **once**:
+
+    hypotheses x actions -> predicted consequences
+
+Every hypothesis/action consequence is paid for at most once. All later refinement is quotienting over that shared field; the predictor is not called again for the same counterfactual just because the frontier has been refined.
+
+From that field RealityGraph designs a **joint separating batch**. The whole batch is then applied in one interaction round rather than paying for a linear observe/reason/observe loop.
 
 Current frozen families:
 
@@ -39,9 +45,9 @@ Current frozen families:
     modular affine/17              289        17           2
     cyclic local dynamics/8        256       256           1
 
-For those four families, cold experiment design requires exactly:
+For those four families, the complete cold counterfactual field is:
 
-    649,537 counterfactual predictions
+    152,369 predictions
 
 Once a separating batch has been exhaustively verified, RealityGraph compiles it into two layers:
 
@@ -56,9 +62,9 @@ Fresh worlds in the same verified model family then require:
 
 The demo solves 64 fresh hidden worlds this way.
 
-A restart that discards the derived decoder but retains only .mg can rebuild the decoder from the retained batch without repeating experiment search. For the four training families the rebuild requires 52,034 predictions instead of 649,537 cold design predictions: about **12.48x less work** before the first new observation.
+A restart that discards the derived decoder but retains only .mg can rebuild the decoder from the retained batch without repeating experiment search. For the four training families the rebuild requires 52,034 predictions rather than reconstructing the whole 152,369-prediction consequence field.
 
-Ablating retained capability restores the expensive path.
+Ablating retained capability restores the cold design path.
 
 ### Held-out-after-freeze control
 
@@ -68,7 +74,7 @@ The fifth family is absent from memory when the test begins:
     343 possible laws
     7 candidate actions
 
-The same generic machinery discovers a 3-action separating batch using 6,174 counterfactual predictions, identifies the hidden law in one batch round, verifies it across the full finite action set, and retains the batch.
+The same generic machinery computes its entire 2,401-entry counterfactual field once, discovers a 3-action separating batch, identifies the hidden law in one batch round, verifies it across the full finite action set, and retains the batch.
 
 The next hidden world from that newly encountered family starts from compiled capability:
 
@@ -84,7 +90,7 @@ so the concrete hidden worlds are chosen only after the tested commit already ex
 
 This is still a bounded finite experiment. It does **not** establish universal system identification or autonomous ontology invention. It establishes a narrower, testable claim:
 
-> **Expensive model discrimination can be moved off the linear interaction path, verified once, compiled, and reused until a new consequence forces further development.**
+> **Compute the consequence field once. Move model discrimination off the linear interaction path. Verify the smallest separating experiment. Compile it. Never pay for that discrimination again unless consequence forces it.**
 
 ## Compounding field demo
 
