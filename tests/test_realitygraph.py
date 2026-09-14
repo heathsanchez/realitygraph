@@ -9,7 +9,8 @@ from realitygraph.graph_coloring import GraphColoring, odd_wheel_with_leaves
 class RealityGraphTests(unittest.TestCase):
     def test_learn_then_reuse_without_repaying_search(self):
         memory = MG(verifier=GraphColoring.verifier_name)
-        kernel = Kernel(memory)
+        ledger = Ledger()
+        kernel = Kernel(memory, ledger, kernel_id="test")
         domain = GraphColoring()
 
         a = odd_wheel_with_leaves(7, 6, 20260915, "A")
@@ -18,12 +19,15 @@ class RealityGraphTests(unittest.TestCase):
         self.assertGreater(first.search_nodes, 0)
         self.assertFalse(first.reused_memory)
         self.assertIn("ow", memory.laws)
+        self.assertIsNotNone(first.ledger_event)
+        self.assertEqual(len(ledger.events), 1)
 
         b = odd_wheel_with_leaves(9, 7, 20260916, "B")
         second = kernel.solve(domain, b)
         self.assertEqual(second.consequence, "chi=4")
         self.assertTrue(second.reused_memory)
         self.assertEqual(second.search_nodes, 0)
+        self.assertEqual(len(ledger.events), 1)
 
     def test_mg_roundtrip_and_merge_preserves_conflict(self):
         a = MG("v", [Law("x", "a->b", "s", "111")])
