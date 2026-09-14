@@ -21,11 +21,11 @@ from realitygraph.meta_worlds import (
 class MetaWorldTests(unittest.TestCase):
     def test_generic_batch_sizes_and_exact_identification(self):
         cases = [
-            (lookup_bits(12), 12, 319488),
-            (affine_binary(7), 8, 254976),
-            (affine_mod(17), 2, 9537),
+            (lookup_bits(12), 12, 49152),
+            (affine_binary(7), 8, 32768),
+            (affine_mod(17), 2, 4913),
             (eca8(), 1, 65536),
-            (quadratic_mod(7), 3, 6174),
+            (quadratic_mod(7), 3, 2401),
         ]
 
         for family, expected_batch, expected_design in cases:
@@ -53,6 +53,25 @@ class MetaWorldTests(unittest.TestCase):
                 self.assertEqual(world.rounds, 1)
                 self.assertEqual(world.actions_spent, expected_batch)
                 self.assertTrue(world.verify(learned, family.actions))
+
+    def test_counterfactual_field_is_paid_for_once(self):
+        family = affine_binary(7)
+        calls = [0]
+
+        def counted(hypothesis, action):
+            calls[0] += 1
+            return family.predict(hypothesis, action)
+
+        plan = design_separating_batch(
+            family.hypotheses,
+            family.actions,
+            counted,
+        )
+
+        full_field = len(family.hypotheses) * len(family.actions)
+        self.assertEqual(calls[0], full_field)
+        self.assertEqual(plan.design_predictions, full_field)
+        self.assertEqual(len(plan.actions), 8)
 
     def test_keep_rebuild_and_ablation(self):
         family = affine_binary(7)
@@ -115,6 +134,7 @@ class MetaWorldTests(unittest.TestCase):
         learned = identify(world, compiled)
 
         self.assertEqual(len(plan.actions), 3)
+        self.assertEqual(plan.design_predictions, 2401)
         self.assertEqual(world.rounds, 1)
         self.assertTrue(world.verify(learned, heldout.actions))
 
