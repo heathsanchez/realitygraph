@@ -19,34 +19,41 @@ The kernel is:
 - **Keep**: retain only what changes future reach; preserve unresolved alternatives.
 - **Repeat**: begin from the changed present.
 
-## One collision can update a whole field
+## Compounding field demo
 
 Run:
 
     python field_demo.py
 
-The learner starts with all 256 elementary binary radius-1 world-laws as live hypotheses. It is not told which law is true.
+World A starts with all 256 elementary binary radius-1 world-laws as live hypotheses. The learner is not told which law is true.
 
-It evaluates all 256 possible 8-cell experiments against all 256 hypotheses:
+It evaluates every 8-cell experiment against every possible law:
 
     256 candidate experiments
     x 256 possible world-laws
     = 65,536 internal predictions
 
-The generic field chooses the experiment whose predicted consequences maximally separate the surviving laws. For this finite family it finds a perfect separator: 256 distinct predicted outcomes.
+The generic field selects the experiment whose predicted consequences maximally separate the frontier. It discovers a perfect separator: one real observation collapses 256 lawful worlds to one.
 
-Then it spends one real interaction.
+That experiment is then independently verified against the entire declared 256-rule family and compiled into `.mg` as a reusable learning capability.
 
-    256 lawful worlds
-      -> one chosen move
-      -> one observed consequence
-      -> 1 surviving world-law
+World B is a different hidden law. It inherits the compiled probe instead of searching 256 experiments again:
 
-The survivor is compiled through the causal ledger into `.mg`. A fresh 64-cell world is then predicted exactly from the retained law with zero additional learning interactions. The held-out verifier checks the prediction without revealing the hidden law to the learner.
+    cold identification:
+      65,536 probe-search predictions
+      + 256 collision predictions
 
-This is a bounded finite demonstration, not a claim of universal system identification. The point is architectural:
+    inherited identification:
+      0 probe-search predictions
+      + 256 collision predictions
 
-> **parallelize counterfactual reasoning; economize contact with reality; make the collision update the whole frontier.**
+    reduction = 257x
+
+Both worlds require one real interaction. Each identified law is kept only in its own world scope; the probe alone is promoted across the whole verified family. Fresh 64-cell states are then predicted exactly from the retained instance laws without another acquisition interaction.
+
+This is a bounded finite demonstration, not universal system identification. The point is architectural:
+
+> **A solved world can teach the system how to learn the next world.**
 
 ## Ledger and .mg
 
