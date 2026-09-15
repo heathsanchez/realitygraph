@@ -9,7 +9,7 @@ PMLB="https://raw.githubusercontent.com/EpistasisLab/pmlb/7c1f4bdc00136dc2e55c87
 
 def stem(x):
     s=str(x).lower().replace("-","_").replace(" ","_")
-    s=re.sub(r"_seed_\d+.*$","",s)
+    s=re.sub(r"_seed_\d+.*$","",s)\n    s=re.sub(r"_reproduced.*$","",s)
     return re.sub(r"[^a-z0-9]+","",s)
 def n(x): return str(x).lower().replace("_","").replace(" ","")
 def col(df,*xs):
