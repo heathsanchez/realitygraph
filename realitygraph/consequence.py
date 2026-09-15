@@ -139,28 +139,30 @@ class ConsequenceModel:
         exact_status, exact_target = self.exact_model.predict(row)
         if exact_status == "ACCEPT" and exact_target is not None:
             return Consequence("EXACT", (exact_target,))
-        if not self.regression_enabled:
-            return Consequence("UNKNOWN")
 
-        point = self.metric.encode(row)
-        neighbors = sorted(
-            (
-                self.metric.distance(point, train_row),
-                float(target),
+        if self.regression_enabled:
+            point = self.metric.encode(row)
+            neighbors = sorted(
+                (
+                    self.metric.distance(point, train_row),
+                    float(target),
+                )
+                for train_row, target in zip(self.train_rows, self.train_targets)
             )
-            for train_row, target in zip(self.train_rows, self.train_targets)
-        )
-        if not neighbors:
-            return Consequence("UNKNOWN")
-        k = min(self.regression_k, len(neighbors))
-        local_values = [value for _, value in neighbors[:k]]
-        margin = self.regression_radius
-        low = min(local_values) - margin
-        high = max(local_values) + margin
-        if high <= low:
-            return Consequence("UNKNOWN")
-        if self.numeric_target_span > 0 and (high - low) < self.numeric_target_span:
-            return Consequence("INTERVAL", low=low, high=high)
+            if neighbors:
+                k = min(self.regression_k, len(neighbors))
+                local_values = [value for _, value in neighbors[:k]]
+                margin = self.regression_radius
+                low = min(local_values) - margin
+                high = max(local_values) + margin
+                if (
+                    high > low
+                    and (
+                        self.numeric_target_span <= 0
+                        or (high - low) < self.numeric_target_span
+                    )
+                ):
+                    return Consequence("INTERVAL", low=low, high=high)
 
         if self.numeric_band_model is not None:
             status, band = self.numeric_band_model.predict(row)
