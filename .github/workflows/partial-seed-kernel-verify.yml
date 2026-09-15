@@ -1,0 +1,40 @@
+name: partial-seed-kernel-verify
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - experiments/partial_seed_verify/*.lean
+      - experiments/structured_model_reuse/leanproj/**
+      - .github/workflows/partial-seed-kernel-verify.yml
+  workflow_dispatch:
+
+concurrency:
+  group: partial-seed-kernel-verify-v1
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - 2531_to_30128
+          - 2531_to_43283
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Prepare pinned Mathlib
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: |
+          lake update
+          lake exe cache get
+      - name: Kernel-check synthesized partial-completion certificate
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: lake env lean -j 1 -M 4096 ../../partial_seed_verify/${{ matrix.target }}.lean
