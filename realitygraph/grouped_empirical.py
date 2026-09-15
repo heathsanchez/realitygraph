@@ -6,6 +6,7 @@ import io
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,19 +31,15 @@ PARKINSONS_URL = (
     "https://archive.ics.uci.edu/ml/machine-learning-databases/"
     "parkinsons/parkinsons.data"
 )
-OCCUPANCY_URLS = (
-    "https://archive.ics.uci.edu/ml/machine-learning-databases/00357/datatraining.txt",
-    "https://archive.ics.uci.edu/ml/machine-learning-databases/00357/datatest.txt",
-    "https://archive.ics.uci.edu/ml/machine-learning-databases/00357/datatest2.txt",
+OCCUPANCY_URL = (
+    "https://archive.ics.uci.edu/ml/machine-learning-databases/"
+    "00357/occupancy_data.zip"
 )
+OCCUPANCY_MEMBERS = ("datatraining.txt", "datatest.txt", "datatest2.txt")
 
 # Filled from a frozen CI acquisition run, then enforced on every later run.
 PARKINSONS_SHA256 = ""
-OCCUPANCY_SHA256 = {
-    OCCUPANCY_URLS[0]: "",
-    OCCUPANCY_URLS[1]: "",
-    OCCUPANCY_URLS[2]: "",
-}
+OCCUPANCY_SHA256 = ""
 
 
 def _download(url: str, attempts: int = 4, timeout: int = 30) -> bytes:
@@ -177,22 +174,25 @@ def fetch_occupancy_grouped(
     cache_dir: str | Path = ".cache/grouped-real",
 ) -> GroupedBinaryDataset:
     cache = Path(cache_dir)
+    raw_zip, digest = _cached_bytes(
+        OCCUPANCY_URL,
+        cache,
+        OCCUPANCY_SHA256,
+    )
     values = []
     labels = []
     groups = []
-    hashes = []
 
-    for url in OCCUPANCY_URLS:
-        raw, digest = _cached_bytes(
-            url,
-            cache,
-            OCCUPANCY_SHA256[url],
-        )
-        hashes.append((url, digest))
-        for value, label, day in _occupancy_rows(raw):
-            values.append(value)
-            labels.append(label)
-            groups.append(day)
+    with zipfile.ZipFile(io.BytesIO(raw_zip)) as archive:
+        names = set(archive.namelist())
+        missing = [name for name in OCCUPANCY_MEMBERS if name not in names]
+        if missing:
+            raise ValueError(f"Occupancy archive missing members: {missing}")
+        for name in OCCUPANCY_MEMBERS:
+            for value, label, day in _occupancy_rows(archive.read(name)):
+                values.append(value)
+                labels.append(label)
+                groups.append(day)
 
     if len(values) < 20_000:
         raise ValueError("Occupancy source parsed too few rows")
@@ -207,9 +207,8 @@ def fetch_occupancy_grouped(
         tuple(values),
         tuple(labels),
         tuple(groups),
-        tuple(hashes),
+        ((OCCUPANCY_URL, digest),),
     )
-
 
 def grouped_real_datasets(
     cache_dir: str | Path = ".cache/grouped-real",
