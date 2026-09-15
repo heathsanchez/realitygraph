@@ -9,6 +9,7 @@ from realitygraph.lab import (
     HiddenFiniteWorld,
     batch_from_memory,
     compile_identifier,
+    compile_plan,
     design_separating_batch,
     identify,
     retain_batch,
@@ -41,12 +42,7 @@ def cold_compile(family, seed: str, memory: MG, ledger: Ledger):
     hypotheses = shuffled(family.hypotheses, seed, family.scope + ":h")
     actions = shuffled(family.actions, seed, family.scope + ":a")
     plan = design_separating_batch(hypotheses, actions, family.predict)
-    compiled = compile_identifier(
-        family.scope,
-        hypotheses,
-        plan.actions,
-        family.predict,
-    )
+    compiled = compile_plan(family.scope, plan)
     retain_batch(compiled, ledger, memory, kernel_id="meta-world")
     return plan, compiled
 
