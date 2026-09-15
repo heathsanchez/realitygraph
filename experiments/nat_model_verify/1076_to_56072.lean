@@ -384,4 +384,4 @@ def submission : Goal := submission.certificate
 
 -- Explicit verdict-specific target, independent of the Goal abbreviation.
 theorem certificate_1076_to_56072 : ∃ (G : Type) (_ : Magma G), EquationLHS G ∧ ¬ EquationRHS G := submission
-#print axioms certificate_1076_to_60478
+#print axioms certificate_1076_to_56072
