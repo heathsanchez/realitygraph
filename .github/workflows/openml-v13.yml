@@ -1,0 +1,31 @@
+name: openml-v13-adaptive-evidence
+on:
+  push:
+    branches:
+      - openml-v13
+  workflow_dispatch:
+concurrency:
+  group: openml-v13-adaptive-evidence
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_OPENML_V13_RESULT: openml-v13-summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml pandas
+      - name: Run untouched adaptive evidence V13 replication
+        run: python openml_v13.py
+      - name: Preserve V13 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openml-v13-evidence
+          path: openml-v13-summary.json
+          if-no-files-found: warn
+          retention-days: 14
