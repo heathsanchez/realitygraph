@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from .empirical import EmpiricalDataset
+from .evidence import certify_zero_failures
 
 
 @dataclass(frozen=True)
@@ -263,15 +264,76 @@ def _compile_categorical_balls(
     )
 
 
+def _categorical_promotion_supported(
+    training: EmpiricalDataset,
+    *,
+    replays: int,
+    confidence: float,
+    max_error: float,
+    min_calibration_support: int,
+    min_votes: int,
+) -> bool:
+    """Promote exact categorical regions only after quantified zero-failure replay."""
+    accepted = 0
+    for replay in range(replays):
+        shadow = sealed_split(training, f"shadow-selective-{replay}")
+        model = _compile_categorical_balls(
+            shadow.train,
+            shadow.calibration,
+            min_calibration_support=min_calibration_support,
+            min_votes=min_votes,
+        )
+        for row, target in zip(shadow.test.features, shadow.test.targets):
+            status, predicted = model.predict(row)
+            if status != "ACCEPT":
+                continue
+            if predicted != target:
+                return False
+            accepted += 1
+
+    return certify_zero_failures(
+        accepted,
+        confidence=confidence,
+        max_error=max_error,
+    ).accepted
+
+
 def compile_selective_model(
     train: EmpiricalDataset,
     calibration: EmpiricalDataset,
+    *,
+    promotion_replays: int = 8,
+    promotion_confidence: float = 0.95,
+    promotion_max_error: float = 0.05,
+    min_calibration_support: int = 2,
+    min_votes: int = 5,
 ) -> SelectiveModel:
     if train.source.target_kind != calibration.source.target_kind:
         raise ValueError("target kind mismatch")
     if train.source.target_kind == "numeric":
         return _compile_numeric_exact(train, calibration)
-    return _compile_categorical_balls(train, calibration)
+
+    if promotion_replays > 0 and not _categorical_promotion_supported(
+        train,
+        replays=promotion_replays,
+        confidence=promotion_confidence,
+        max_error=promotion_max_error,
+        min_calibration_support=min_calibration_support,
+        min_votes=min_votes,
+    ):
+        return SelectiveModel(
+            target_kind="categorical",
+            feature_scales=(),
+            balls=(),
+            min_votes=min_votes,
+        )
+
+    return _compile_categorical_balls(
+        train,
+        calibration,
+        min_calibration_support=min_calibration_support,
+        min_votes=min_votes,
+    )
 
 
 def evaluate_selective(
