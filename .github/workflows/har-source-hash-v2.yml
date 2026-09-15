@@ -1,9 +1,6 @@
 name: har-source-hash-v2
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - verified-developmental-tournament-v2
 jobs:
   hash:
     runs-on: ubuntu-latest
