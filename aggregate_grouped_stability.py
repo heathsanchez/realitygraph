@@ -30,6 +30,8 @@ def main():
         residual_gains = []
         probes = Counter()
         residual_probes = Counter()
+        single_probe_acceptance = Counter()
+        single_probe_gains = Counter()
         exposed = set()
         expected_groups = None
 
@@ -52,6 +54,15 @@ def main():
                     raise AssertionError(f"{name}: accepted residual contains group harm")
                 residual_probes.update(item["residual_probes"])
 
+            for probe, result in item.get("single_probes", {}).items():
+                if result["accepted"]:
+                    if result["group_harm"] > 1e-12:
+                        raise AssertionError(
+                            f"{name}/{probe}: accepted primitive contains group harm"
+                        )
+                    single_probe_acceptance[probe] += 1
+                    single_probe_gains[probe] += result["gain"]
+
         if len(exposed) != expected_groups:
             raise AssertionError(
                 f"{name}: sealed futures exposed {len(exposed)}/{expected_groups} groups"
@@ -69,6 +80,20 @@ def main():
         ]
         transferable = accepted == 16
         residual_transferable = residual_accepted == 16
+        primitive_transferable = [
+            probe
+            for probe, count in sorted(single_probe_acceptance.items())
+            if count == 16
+        ]
+        primitive_counts = [
+            [probe, count]
+            for probe, count in single_probe_acceptance.most_common()
+        ]
+        primitive_mean_gains = {
+            probe: single_probe_gains[probe] / count
+            for probe, count in single_probe_acceptance.items()
+            if count
+        }
 
         summary["datasets"][name] = {
             "accepted": accepted,
@@ -84,6 +109,9 @@ def main():
                 if residual_gains
                 else 0.0
             ),
+            "primitive_transferable": primitive_transferable,
+            "primitive_acceptance_counts": primitive_counts,
+            "primitive_mean_gains": primitive_mean_gains,
         }
 
         print(name)
@@ -91,6 +119,8 @@ def main():
         print(f"  residual_acceptance={residual_accepted}/16")
         print(f"  stable_probes_75pct={stable}")
         print(f"  stable_residual_probes_75pct={stable_residual}")
+        print(f"  primitive_acceptance_counts={primitive_counts}")
+        print(f"  primitive_transferable={primitive_transferable}")
         print(f"  distinct_groups_exposed={len(exposed)}/{expected_groups}")
         print(f"  transferable={transferable}")
         print(f"  residual_transferable={residual_transferable}")
