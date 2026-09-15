@@ -1,4 +1,4 @@
-name: meta-100x-adaptive-budget
+name: meta-100x-recursive-self-compilation
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sealed-adaptive-budget:
+  sealed-recursive-self-compilation:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -22,7 +22,10 @@ jobs:
 
       - name: Policy unit tests
         run: |
-          python -m unittest tests.test_meta_policy tests.test_adaptive_policy -v
+          python -m unittest \
+            tests.test_meta_policy \
+            tests.test_adaptive_policy \
+            tests.test_recursive_policy -v
 
       - name: Rebuild one hundred classification training worlds
         shell: bash
@@ -35,46 +38,159 @@ jobs:
             python pmlb_meta_world.py
           '
 
-      - name: Freeze exact rank policy and compile adaptive budget
+      - name: Freeze exact base memory before recursive history
         env:
           REALITYGRAPH_META_TRAIN_DIR: gathered-meta-train
           REALITYGRAPH_META_POLICY_DIR: meta-policy-out
         run: |
           set -euo pipefail
-          test ! -e gathered-meta-regression-next
+          test ! -e gathered-recursive-g1
+          test ! -e gathered-recursive-g2
+          test ! -e gathered-recursive-g3
           python learn_pmlb_meta_policy.py
           actual="$(shasum -a 256 meta-policy-out/meta_policy.mg | awk '{print $1}')"
           expected="f80932ec2ce05e85899787a9bd13da15ea7007a496526cb69c776c3bc56baf47"
           echo "base_policy_sha256=$actual"
           test "$actual" = "$expected"
           python learn_adaptive_budget.py
-          echo "NEXT_REGRESSION_BLOCK_NOT_YET_CONSTRUCTED"
+          echo "FUTURE_RECURSIVE_GENERATIONS_NOT_YET_CONSTRUCTED"
 
-      - name: Build next twenty untouched regression worlds
+      - name: Reconstruct already-open regression history 20-39
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p gathered-meta-regression-next
+          mkdir -p gathered-recursive-seed
           seq 20 39 | xargs -P 4 -I{} bash -c '
             export REALITYGRAPH_PMLB_REGRESSION_INDEX="{}"
-            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-meta-regression-next/pmlb-regression-world-{}.json"
+            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-recursive-seed/pmlb-regression-world-{}.json"
             python pmlb_regression_world.py
           '
 
-      - name: Restart adaptive memory in next unseen worlds
+      - name: Compile generation one memory before worlds 40-59 exist
         env:
-          REALITYGRAPH_REGRESSION_HELDOUT_DIR: gathered-meta-regression-next
-          REALITYGRAPH_META_POLICY_DIR: meta-policy-out
-        run: python evaluate_adaptive_budget.py
+          REALITYGRAPH_RECURSIVE_PAST_DIRS: gathered-recursive-seed
+          REALITYGRAPH_RECURSIVE_PARENT_MEMORY: meta-policy-out/adaptive_policy.mg
+          REALITYGRAPH_RECURSIVE_OUTPUT_MEMORY: recursive-out/g1.mg
+          REALITYGRAPH_RECURSIVE_GENERATION: '1'
+        run: |
+          set -euo pipefail
+          test ! -e gathered-recursive-g1
+          test ! -e gathered-recursive-g2
+          test ! -e gathered-recursive-g3
+          python compile_recursive_generation.py
+          echo "G1_MEMORY_FROZEN_BEFORE_40_59"
 
-      - name: Preserve adaptive-budget evidence
+      - name: Build untouched generation one worlds 40-59
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gathered-recursive-g1
+          seq 40 59 | xargs -P 4 -I{} bash -c '
+            export REALITYGRAPH_PMLB_REGRESSION_INDEX="{}"
+            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-recursive-g1/pmlb-regression-world-{}.json"
+            python pmlb_regression_world.py
+          '
+
+      - name: Evaluate generation one against its parent
+        env:
+          REALITYGRAPH_RECURSIVE_WORLD_DIR: gathered-recursive-g1
+          REALITYGRAPH_RECURSIVE_CURRENT_MEMORY: recursive-out/g1.mg
+          REALITYGRAPH_RECURSIVE_PARENT_MEMORY: meta-policy-out/adaptive_policy.mg
+          REALITYGRAPH_RECURSIVE_SUMMARY: recursive-g1-summary.json
+          REALITYGRAPH_RECURSIVE_GENERATION: '1'
+          REALITYGRAPH_RECURSIVE_START: '40'
+          REALITYGRAPH_RECURSIVE_END: '60'
+        run: python evaluate_recursive_generation.py
+
+      - name: Compile generation two memory before worlds 60-79 exist
+        env:
+          REALITYGRAPH_RECURSIVE_PAST_DIRS: gathered-recursive-seed:gathered-recursive-g1
+          REALITYGRAPH_RECURSIVE_PARENT_MEMORY: recursive-out/g1.mg
+          REALITYGRAPH_RECURSIVE_OUTPUT_MEMORY: recursive-out/g2.mg
+          REALITYGRAPH_RECURSIVE_GENERATION: '2'
+        run: |
+          set -euo pipefail
+          test ! -e gathered-recursive-g2
+          test ! -e gathered-recursive-g3
+          python compile_recursive_generation.py
+          echo "G2_MEMORY_FROZEN_BEFORE_60_79"
+
+      - name: Build untouched generation two worlds 60-79
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gathered-recursive-g2
+          seq 60 79 | xargs -P 4 -I{} bash -c '
+            export REALITYGRAPH_PMLB_REGRESSION_INDEX="{}"
+            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-recursive-g2/pmlb-regression-world-{}.json"
+            python pmlb_regression_world.py
+          '
+
+      - name: Evaluate generation two against its parent
+        env:
+          REALITYGRAPH_RECURSIVE_WORLD_DIR: gathered-recursive-g2
+          REALITYGRAPH_RECURSIVE_CURRENT_MEMORY: recursive-out/g2.mg
+          REALITYGRAPH_RECURSIVE_PARENT_MEMORY: recursive-out/g1.mg
+          REALITYGRAPH_RECURSIVE_SUMMARY: recursive-g2-summary.json
+          REALITYGRAPH_RECURSIVE_GENERATION: '2'
+          REALITYGRAPH_RECURSIVE_START: '60'
+          REALITYGRAPH_RECURSIVE_END: '80'
+        run: python evaluate_recursive_generation.py
+
+      - name: Compile generation three memory before worlds 80-99 exist
+        env:
+          REALITYGRAPH_RECURSIVE_PAST_DIRS: gathered-recursive-seed:gathered-recursive-g1:gathered-recursive-g2
+          REALITYGRAPH_RECURSIVE_PARENT_MEMORY: recursive-out/g2.mg
+          REALITYGRAPH_RECURSIVE_OUTPUT_MEMORY: recursive-out/g3.mg
+          REALITYGRAPH_RECURSIVE_GENERATION: '3'
+        run: |
+          set -euo pipefail
+          test ! -e gathered-recursive-g3
+          python compile_recursive_generation.py
+          echo "G3_MEMORY_FROZEN_BEFORE_80_99"
+
+      - name: Build untouched generation three worlds 80-99
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gathered-recursive-g3
+          seq 80 99 | xargs -P 4 -I{} bash -c '
+            export REALITYGRAPH_PMLB_REGRESSION_INDEX="{}"
+            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-recursive-g3/pmlb-regression-world-{}.json"
+            python pmlb_regression_world.py
+          '
+
+      - name: Evaluate generation three against its parent
+        env:
+          REALITYGRAPH_RECURSIVE_WORLD_DIR: gathered-recursive-g3
+          REALITYGRAPH_RECURSIVE_CURRENT_MEMORY: recursive-out/g3.mg
+          REALITYGRAPH_RECURSIVE_PARENT_MEMORY: recursive-out/g2.mg
+          REALITYGRAPH_RECURSIVE_SUMMARY: recursive-g3-summary.json
+          REALITYGRAPH_RECURSIVE_GENERATION: '3'
+          REALITYGRAPH_RECURSIVE_START: '80'
+          REALITYGRAPH_RECURSIVE_END: '100'
+        run: python evaluate_recursive_generation.py
+
+      - name: Verify the recursive consequence-per-search curve
+        env:
+          REALITYGRAPH_RECURSIVE_SUMMARIES: recursive-g1-summary.json:recursive-g2-summary.json:recursive-g3-summary.json
+        run: python evaluate_recursive_curve.py
+
+      - name: Preserve recursive self-compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: meta-100x-adaptive-budget-evidence
+          name: meta-100x-recursive-self-compilation-evidence
           path: |
             meta-policy-out
-            meta-adaptive-summary.json
-            gathered-meta-regression-next
+            recursive-out
+            recursive-g1-summary.json
+            recursive-g2-summary.json
+            recursive-g3-summary.json
+            recursive-curve-summary.json
+            gathered-recursive-seed
+            gathered-recursive-g1
+            gathered-recursive-g2
+            gathered-recursive-g3
           if-no-files-found: warn
           retention-days: 7
