@@ -1,0 +1,31 @@
+name: equational-2531-partial-seed
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_2531_partial_seed.py
+      - .github/workflows/equational-2531-partial-seed.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-2531-partial-seed-v1
+  cancel-in-progress: true
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Search exact partial completion seeds
+        run: python equational_2531_partial_seed.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-2531-partial-seed-v1
+          path: results/equational-2531-partial-seed-v1.json
+          if-no-files-found: error
+          retention-days: 3
