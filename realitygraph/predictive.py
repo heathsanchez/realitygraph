@@ -216,20 +216,40 @@ def binary_log_loss(labels: Sequence[Label], probabilities: Sequence[float]) -> 
 
 
 def binary_auc(labels: Sequence[Label], scores: Sequence[float]) -> float:
+    """Exact tie-aware ROC AUC in O(n log n).
+
+    Counts positive/negative pair wins by score blocks instead of comparing
+    every positive to every negative.
+    """
     if len(labels) != len(scores):
         raise ValueError("labels and scores must have equal length")
-    positive = [score for label, score in zip(labels, scores) if label == 1]
-    negative = [score for label, score in zip(labels, scores) if label == 0]
-    if not positive or not negative:
+    pairs = sorted(zip(scores, labels), key=lambda item: item[0])
+    positives = sum(1 for _, label in pairs if label == 1)
+    negatives = len(pairs) - positives
+    if positives == 0 or negatives == 0:
         return 0.5
+
     wins = 0.0
-    for p in positive:
-        for n in negative:
-            if p > n:
-                wins += 1.0
-            elif p == n:
-                wins += 0.5
-    return wins / (len(positive) * len(negative))
+    negatives_below = 0
+    i = 0
+    while i < len(pairs):
+        score = pairs[i][0]
+        block_pos = 0
+        block_neg = 0
+        j = i
+        while j < len(pairs) and pairs[j][0] == score:
+            if pairs[j][1] == 1:
+                block_pos += 1
+            else:
+                block_neg += 1
+            j += 1
+
+        wins += block_pos * negatives_below
+        wins += 0.5 * block_pos * block_neg
+        negatives_below += block_neg
+        i = j
+
+    return wins / (positives * negatives)
 
 
 def _candidate_thresholds(values: Sequence[float], max_thresholds: int) -> tuple[float, ...]:
