@@ -131,7 +131,7 @@ class _Parser:
         i = 0
         while i < len(compact):
             ch = compact[i]
-            if ch in "*()":
+            if ch in "*◇()":
                 self.tokens.append(ch)
                 i += 1
                 continue
@@ -153,7 +153,7 @@ class _Parser:
 
     def _expr(self):
         node = self._atom()
-        while self.pos < len(self.tokens) and self.tokens[self.pos] == "*":
+        while self.pos < len(self.tokens) and self.tokens[self.pos] in {"*", "◇"}:
             self.pos += 1
             node = ("*", node, self._atom())
         return node
@@ -169,7 +169,7 @@ class _Parser:
                 raise ValueError("missing closing parenthesis")
             self.pos += 1
             return node
-        if token in {"*", ")"}:
+        if token in {"*", "◇", ")"}:
             raise ValueError(f"unexpected token {token!r}")
         self.pos += 1
         return ("v", token)
