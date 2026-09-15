@@ -14,6 +14,7 @@ from .lab import (
 )
 from .ledger import Event, Ledger
 from .mg import Law, MG
+from .transfer import TransferAssessment, assess_transfer
 from .residual import (
     CompiledResidualModel,
     ResidualCertificate,
@@ -89,4 +90,6 @@ __all__ = [
     "compile_residual_model",
     "design_residual_batch",
     "evaluate_residual_model",
+    "TransferAssessment",
+    "assess_transfer",
 ]
