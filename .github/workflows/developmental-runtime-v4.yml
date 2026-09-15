@@ -1,0 +1,51 @@
+name: developmental-runtime-v4
+
+on:
+  push:
+    branches:
+      - developmental-runtime-v4
+  workflow_dispatch:
+
+concurrency:
+  group: developmental-runtime-v4
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REALITYGRAPH_RUNTIME_V4_RESULT: developmental-runtime-v4-summary.json
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify retained runtime machinery
+        run: |
+          python -m unittest             tests.test_transfer_memory             tests.test_retained_capability             tests.test_developmental_tournament -v
+
+      - name: Verify frozen policy bytes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path("frozen-meta/adaptive_policy.mg")
+          h = hashlib.sha256(p.read_bytes()).hexdigest()
+          print("frozen_policy_sha256=" + h)
+          assert h == "3da082adbcfcacc53c9745a0b6af42a4ea33655e43c3768bc755fdf41168fa92"
+          PY
+
+      - name: Run prospective developmental runtime
+        run: python developmental_runtime_v4.py
+
+      - name: Preserve V4 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: developmental-runtime-v4-evidence
+          path: developmental-runtime-v4-summary.json
+          if-no-files-found: warn
+          retention-days: 14
