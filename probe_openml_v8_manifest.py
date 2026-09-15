@@ -15,7 +15,7 @@ def col(df,*xs):
     raise KeyError(xs)
 
 def main():
-    tasks=openml.tasks.list_tasks(task_type_id=1,output_format="dataframe")
+    tasks=openml.tasks.list_tasks(type=1,output_format="dataframe")
     tc=col(tasks,"tid","task_id"); dc=col(tasks,"did","data_id"); nc=col(tasks,"name")
     rc=col(tasks,"NumberOfInstances"); fc=col(tasks,"NumberOfFeatures")
     cc=col(tasks,"NumberOfClasses"); xc=col(tasks,"NumberOfNumericFeatures")
