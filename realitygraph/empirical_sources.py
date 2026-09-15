@@ -46,6 +46,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             "mpg",
             cc,
             "48b830e11feee5572525f8f1691ddb9d38d3d7b7063edcd8fca672c2a5e17d8d",
+            "numeric",
         ),
         EmpiricalSource(
             "NASA airfoil self-noise",
@@ -63,6 +64,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             "sound_pressure_db",
             cc,
             "74c75fd71783f1e6b71f8a622b993dc592897a97cd689c5090a07147a1b097b3",
+            "numeric",
         ),
         EmpiricalSource(
             "Abalone physical measurements",
@@ -83,6 +85,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             "rings",
             cc,
             "de37cdcdcaaa50c309d514f248f7c2302a5f1f88c168905eba23fe2fbc78449f",
+            "numeric",
         ),
         EmpiricalSource(
             "Ionosphere radar",
@@ -123,5 +126,6 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             "residuary_resistance",
             cc,
             "00dfecc0fc01ddd4c90b558a3ac11b246df8ebcfea130724223475a9a67f0ea1",
+            "numeric",
         ),
     )
