@@ -92,6 +92,7 @@ class ConsequenceModel:
     exact_model: SelectiveModel
     class_labels: tuple[str, ...] = ()
     class_ratio: float = 1.0
+    class_fallback_enabled: bool = True
     regression_k: int = 7
     regression_radius: float = 0.0
     regression_enabled: bool = False
@@ -102,6 +103,9 @@ class ConsequenceModel:
             status, target = self.exact_model.predict(row)
             if status == "ACCEPT" and target is not None:
                 return Consequence("EXACT", (target,))
+
+            if not self.class_fallback_enabled:
+                return Consequence("UNKNOWN")
 
             point = self.metric.encode(row)
             distances: dict[str, float] = {}
@@ -220,6 +224,73 @@ def _regression_envelope(
     return min(values), max(values)
 
 
+def _class_distance_map(
+    metric: FeatureMetric,
+    train_rows: Sequence[tuple[float | str | None, ...]],
+    train_targets: Sequence[str],
+    row: tuple[str, ...],
+) -> dict[str, float]:
+    point = metric.encode(row)
+    by_class: dict[str, float] = {}
+    for train_row, target in zip(train_rows, train_targets):
+        distance = metric.distance(point, train_row)
+        old = by_class.get(target)
+        if old is None or distance < old:
+            by_class[target] = distance
+    return by_class
+
+
+def _categorical_fallback_stable(
+    metric: FeatureMetric,
+    train_rows: Sequence[tuple[float | str | None, ...]],
+    train_targets: Sequence[str],
+    calibration: EmpiricalDataset,
+    labels: Sequence[str],
+    safety_factor: float,
+) -> bool:
+    n = len(calibration.features)
+    if n < 4:
+        return False
+
+    ratios = [
+        _nearest_class_ratio(
+            metric, train_rows, train_targets, row, target
+        )
+        for row, target in zip(calibration.features, calibration.targets)
+    ]
+    folds = (
+        (tuple(range(0, n, 2)), tuple(range(1, n, 2))),
+        (tuple(range(1, n, 2)), tuple(range(0, n, 2))),
+    )
+    for fit_indices, audit_indices in folds:
+        fit = [ratios[i] for i in fit_indices if math.isfinite(ratios[i])]
+        if len(fit) != len(fit_indices):
+            return False
+        threshold_ratio = max(fit, default=1.0) * safety_factor
+
+        for i in audit_indices:
+            by_class = _class_distance_map(
+                metric,
+                train_rows,
+                train_targets,
+                calibration.features[i],
+            )
+            if not by_class:
+                continue
+            nearest = min(by_class.values())
+            threshold = nearest * threshold_ratio + 1e-15
+            predicted = {
+                label for label, distance in by_class.items()
+                if distance <= threshold
+            }
+            # Empty/all-class outcomes are UNKNOWN, therefore safe. Only a
+            # proper informative set can falsify the fallback.
+            if predicted and len(predicted) < len(labels):
+                if calibration.targets[i] not in predicted:
+                    return False
+    return True
+
+
 def _regression_miss(
     metric: FeatureMetric,
     train_rows: Sequence[tuple[float | str | None, ...]],
@@ -307,10 +378,22 @@ def compile_consequence_model(
             for row, target in zip(calibration.features, calibration.targets)
         ]
         finite = [ratio for ratio in ratios if math.isfinite(ratio)]
-        if len(finite) != len(ratios):
-            class_ratio = math.inf
-        else:
-            class_ratio = max(finite, default=1.0) * class_safety_factor
+        stable = (
+            len(finite) == len(ratios)
+            and _categorical_fallback_stable(
+                metric,
+                train_rows,
+                train.targets,
+                calibration,
+                labels,
+                class_safety_factor,
+            )
+        )
+        class_ratio = (
+            max(finite, default=1.0) * class_safety_factor
+            if stable
+            else 1.0
+        )
         return ConsequenceModel(
             "categorical",
             metric,
@@ -319,6 +402,7 @@ def compile_consequence_model(
             exact_model,
             class_labels=labels,
             class_ratio=class_ratio,
+            class_fallback_enabled=stable,
         )
 
     numeric_targets = [float(value) for value in train.targets + calibration.targets]
