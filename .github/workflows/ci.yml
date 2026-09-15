@@ -26,3 +26,5 @@ jobs:
         run: python meta_world_demo.py
       - name: Real-world mechanism stress suite
         run: python real_world_demo.py
+      - name: Real measured dataset audit
+        run: python real_data_demo.py
