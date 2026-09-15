@@ -1,5 +1,5 @@
 from __future__ import annotations
-import csv,hashlib,io,json,urllib.request
+import csv,hashlib,io,json,re,urllib.request
 from pathlib import Path
 import openml
 
@@ -7,6 +7,10 @@ SEED="realitygraph-openml-v8-source-only"
 OLD={40981,41027,23,1464,40982,41156,1049,40983,42733,1487,188,1461,1494,31,40984,4538,1067,40498,40900,1475}
 PMLB="https://raw.githubusercontent.com/EpistasisLab/pmlb/7c1f4bdc00136dc2e55c87fa6b8ba6e8af6d1a68/pmlb/all_summary_stats.tsv"
 
+def stem(x):
+    s=str(x).lower().replace("-","_").replace(" ","_")
+    s=re.sub(r"_seed_\\d+.*$","",s)
+    return re.sub(r"[^a-z0-9]+","",s)
 def n(x): return str(x).lower().replace("_","").replace(" ","")
 def col(df,*xs):
     t={n(c):c for c in df.columns}
@@ -28,7 +32,7 @@ def main():
             tid=int(x[tc]); did=int(x[dc]); rows=int(float(x[rc])); f=int(float(x[fc])); c=int(float(x[cc])); num=int(float(x[xc]))
         except Exception:continue
         name=str(x[nc])
-        if did in OLD or name in oldnames or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
+        if did in OLD or stem(name) in oldnames or stem(name) in v7names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":f,"classes":c,"numeric_features":num}
         if did not in bydata or tid<bydata[did]["task_id"]:bydata[did]=z
     a=list(bydata.values())
