@@ -94,6 +94,7 @@ class ConsequenceModel:
     class_ratio: float = 1.0
     regression_k: int = 7
     regression_radius: float = 0.0
+    regression_enabled: bool = False
     numeric_target_span: float = 0.0
 
     def predict(self, row: tuple[str, ...]) -> Consequence:
@@ -124,7 +125,7 @@ class ConsequenceModel:
         exact_status, exact_target = self.exact_model.predict(row)
         if exact_status == "ACCEPT" and exact_target is not None:
             return Consequence("EXACT", (exact_target,))
-        if self.regression_radius <= 0:
+        if not self.regression_enabled:
             return Consequence("UNKNOWN")
 
         point = self.metric.encode(row)
@@ -351,6 +352,7 @@ def compile_consequence_model(
         exact_model,
         regression_k=regression_k,
         regression_radius=radius,
+        regression_enabled=stable,
         numeric_target_span=span,
     )
 
