@@ -56,8 +56,9 @@ def _hash(seed: str, value: str) -> bytes:
 
 
 def corpus_manifest(summary_raw: bytes) -> list[dict]:
-    reader = csv.DictReader(io.StringIO(summary_raw.decode("utf-8")), delimiter="	")
-    eligible = []
+    reader = csv.DictReader(io.StringIO(summary_raw.decode("utf-8")), delimiter="\t")
+    primary = []
+    extension = []
     for row in reader:
         if row.get("task") != "classification":
             continue
@@ -70,29 +71,32 @@ def corpus_manifest(summary_raw: bytes) -> list[dict]:
             c = int(float(row["n_classes"]))
         except (TypeError, ValueError):
             continue
-        if not (80 <= n <= 20000):
-            continue
-        if not (2 <= f <= 180):
-            continue
-        if not (2 <= c <= 26):
-            continue
-        eligible.append({
+        meta = {
             "dataset": name,
             "n_instances": n,
             "n_features": f,
             "n_classes": c,
-        })
+        }
+        if 80 <= n <= 20000 and 2 <= f <= 180 and 2 <= c <= 26:
+            primary.append(meta)
+        elif 40 <= n <= 100000 and 2 <= f <= 1000 and 2 <= c <= 100:
+            extension.append(meta)
 
-    eligible.sort(
-        key=lambda row: (
-            _hash(CORPUS_SEED, row["dataset"]),
-            row["dataset"],
+    def order_key(row):
+        return (_hash(CORPUS_SEED, row["dataset"]), row["dataset"])
+
+    primary.sort(key=order_key)
+    extension.sort(key=order_key)
+    if len(primary) != 126:
+        raise AssertionError(
+            f"frozen PMLB primary corpus drifted: expected 126, got {len(primary)}"
         )
-    )
+    eligible = primary + extension
     if len(eligible) < 140:
-        raise AssertionError(f"PMLB eligibility produced only {len(eligible)} datasets")
+        raise AssertionError(
+            f"extended PMLB eligibility produced only {len(eligible)} datasets"
+        )
     return eligible[:140]
-
 
 def _parse_dataset(raw_gz: bytes) -> tuple[list[str], list[list[float]], list[float]]:
     text = gzip.decompress(raw_gz).decode("utf-8")
