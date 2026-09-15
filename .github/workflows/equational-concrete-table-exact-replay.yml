@@ -1,0 +1,35 @@
+name: equational-concrete-table-exact-replay
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_concrete_table_exact_replay.py
+      - equational_concrete_table_bank.py
+      - equational_residual_demo.py
+      - equational_transition_demo.py
+      - equational_internal_lemma_bank.py
+      - .github/workflows/equational-concrete-table-exact-replay.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-concrete-table-exact-replay-v1
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exhaustively replay cheap inherited table targets
+        run: python equational_concrete_table_exact_replay.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-concrete-table-exact-replay-v1
+          path: results/equational-concrete-table-exact-replay-v1.json
+          if-no-files-found: error
+          retention-days: 3
