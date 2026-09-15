@@ -36,7 +36,7 @@ def extended_manifest(summary_raw: bytes) -> list[dict]:
             primary.append(meta)
         elif 40 <= n <= 100000 and 2 <= f <= 1000 and 2 <= c <= 100:
             extension.append(meta)
-        elif 40 <= n <= 500000 and 2 <= f <= 5000 and 2 <= c <= 1000:
+        else:
             wide.append(meta)
 
     def order_key(row):
@@ -54,7 +54,7 @@ def extended_manifest(summary_raw: bytes) -> list[dict]:
             f"original extended corpus drifted: {len(primary)+len(extension)}"
         )
     if len(eligible) < 160:
-        raise AssertionError(f"wide eligibility produced only {len(eligible)} datasets")
+        raise AssertionError(f"all classification metadata produced only {len(eligible)} datasets")
     return eligible
 
 
