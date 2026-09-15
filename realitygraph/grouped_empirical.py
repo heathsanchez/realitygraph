@@ -81,6 +81,25 @@ def _cached_bytes(
     return raw, digest
 
 
+def _parkinsons_rows(raw: bytes):
+    text = raw.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames is None:
+        raise ValueError("Parkinsons source has no header")
+    probe_names = tuple(
+        name for name in reader.fieldnames if name not in {"name", "status"}
+    )
+    for row in reader:
+        recording = row["name"]
+        subject = recording.rsplit("_", 1)[0]
+        yield (
+            probe_names,
+            tuple(float(row[name]) for name in probe_names),
+            int(row["status"]),
+            subject,
+        )
+
+
 def fetch_parkinsons_grouped(
     cache_dir: str | Path = ".cache/grouped-real",
 ) -> GroupedBinaryDataset:
@@ -89,22 +108,14 @@ def fetch_parkinsons_grouped(
         Path(cache_dir),
         PARKINSONS_SHA256,
     )
-    text = raw.decode("utf-8")
-    reader = csv.DictReader(io.StringIO(text))
-    if reader.fieldnames is None:
-        raise ValueError("Parkinsons source has no header")
-    probe_names = tuple(
-        name for name in reader.fieldnames if name not in {"name", "status"}
-    )
     values = []
     labels = []
     groups = []
-    for row in reader:
-        recording = row["name"]
-        subject = recording.rsplit("_", 1)[0]
-        values.append(tuple(float(row[name]) for name in probe_names))
-        labels.append(int(row["status"]))
-        groups.append(subject)
+    probe_names: tuple[str, ...] = ()
+    for probe_names, value, label, group in _parkinsons_rows(raw):
+        values.append(value)
+        labels.append(label)
+        groups.append(group)
 
     if not values:
         raise ValueError("Parkinsons source parsed no rows")
