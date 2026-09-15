@@ -96,7 +96,7 @@ def corpus_manifest(summary_raw: bytes) -> list[dict]:
 
 def _parse_dataset(raw_gz: bytes) -> tuple[list[str], list[list[float]], list[float]]:
     text = gzip.decompress(raw_gz).decode("utf-8")
-    reader = csv.reader(io.StringIO(text), delimiter="	")
+    reader = csv.reader(io.StringIO(text), delimiter="\t")
     header = next(reader)
     if "target" not in header:
         raise ValueError("PMLB dataset lacks target column")
@@ -104,33 +104,55 @@ def _parse_dataset(raw_gz: bytes) -> tuple[list[str], list[list[float]], list[fl
     feature_names = [name for i, name in enumerate(header) if i != target_i]
     rows = []
     targets = []
+
     for row in reader:
-        if not row:
+        if not row or target_i >= len(row):
             continue
         try:
-            values = [
-                float(cell)
-                for i, cell in enumerate(row)
-                if i != target_i and cell.strip() != ""
-            ]
-            feature_cells = [
-                cell for i, cell in enumerate(row)
-                if i != target_i
-            ]
-            if len(values) != len(feature_cells) or row[target_i].strip() == "":
-                continue
             target = float(row[target_i])
-        except ValueError:
-            continue
-        if any(not math.isfinite(value) for value in values):
+        except (ValueError, TypeError):
             continue
         if not math.isfinite(target):
             continue
+
+        values = []
+        for i in range(len(header)):
+            if i == target_i:
+                continue
+            cell = row[i].strip() if i < len(row) else ""
+            try:
+                value = float(cell) if cell != "" else float("nan")
+            except ValueError:
+                value = float("nan")
+            values.append(value)
         rows.append(values)
         targets.append(target)
+
     if len(rows) < 20:
-        raise ValueError("too few finite rows")
-    return feature_names, rows, targets
+        raise ValueError("too few target-valid rows")
+
+    keep = []
+    medians = {}
+    for j in range(len(feature_names)):
+        finite = sorted(
+            row[j] for row in rows
+            if j < len(row) and math.isfinite(row[j])
+        )
+        if not finite:
+            continue
+        keep.append(j)
+        medians[j] = finite[len(finite) // 2]
+
+    if len(keep) < 2:
+        raise ValueError("fewer than two usable feature columns")
+
+    cleaned = []
+    for row in rows:
+        cleaned.append([
+            row[j] if math.isfinite(row[j]) else medians[j]
+            for j in keep
+        ])
+    return [feature_names[j] for j in keep], cleaned, targets
 
 
 def _binary_labels(targets: list[float]) -> list[int]:
