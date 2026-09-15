@@ -19,6 +19,8 @@ class BatchPlan:
     actions: tuple[Action, ...]
     design_predictions: int
     class_progress: tuple[int, ...]
+    decoder: dict[tuple[Observation, ...], Hypothesis]
+    action_classes: int
 
 
 @dataclass(frozen=True)
@@ -58,16 +60,27 @@ class HiddenFiniteWorld:
         )
 
 
+def _signatures(
+    hypotheses: Sequence[Hypothesis],
+    actions: Sequence[Action],
+    columns: dict[Action, tuple[Observation, ...]],
+) -> list[tuple[Observation, ...]]:
+    return [
+        tuple(columns[action][i] for action in actions)
+        for i in range(len(hypotheses))
+    ]
+
+
 def design_separating_batch(
     hypotheses: Sequence[Hypothesis],
     actions: Sequence[Action],
     predict: Predict,
 ) -> BatchPlan:
-    """Design a joint experiment before spending a real interaction.
+    """Design and compile a joint experiment from one counterfactual pass.
 
-    Every hypothesis/action consequence is computed at most once. Refinement
-    then happens over the shared consequence field rather than repeatedly
-    calling the predictor along a linear search path.
+    Every hypothesis/action consequence is computed exactly once. All selection,
+    quotienting, backward minimization, and cold compilation happen over that
+    cached field. No selected consequence is recomputed on the cold path.
     """
     hypotheses = tuple(hypotheses)
     remaining = list(actions)
@@ -76,17 +89,15 @@ def design_separating_batch(
     if not remaining and len(hypotheses) > 1:
         raise ValueError("actions cannot distinguish the frontier")
 
-    # One broad counterfactual pass. The rest of experiment design is quotient
-    # algebra over cached consequences, not repeated model evaluation.
     columns: dict[Action, tuple[Observation, ...]] = {
         action: tuple(predict(hypothesis, action) for hypothesis in hypotheses)
         for action in remaining
     }
     predictions = len(hypotheses) * len(remaining)
+    action_classes = len(set(columns.values()))
 
     signatures: list[tuple[Observation, ...]] = [()] * len(hypotheses)
     chosen: list[Action] = []
-    progress: list[int] = []
 
     while len(set(signatures)) < len(hypotheses):
         best_action = None
@@ -118,9 +129,41 @@ def design_separating_batch(
         chosen.append(best_action)
         remaining.remove(best_action)
         signatures = best_signatures
-        progress.append(len(set(signatures)))
 
-    return BatchPlan(tuple(chosen), predictions, tuple(progress))
+    # Backward deletion turns the greedy separator into an irreducible one:
+    # no retained action can be removed without merging two live worlds.
+    for action in tuple(reversed(chosen)):
+        trial = [candidate for candidate in chosen if candidate != action]
+        trial_signatures = _signatures(hypotheses, trial, columns)
+        if len(set(trial_signatures)) == len(hypotheses):
+            chosen = trial
+
+    progress: list[int] = []
+    running: list[Action] = []
+    for action in chosen:
+        running.append(action)
+        progress.append(len(set(_signatures(hypotheses, running, columns))))
+
+    final_signatures = _signatures(hypotheses, chosen, columns)
+    decoder = {
+        signature: hypothesis
+        for signature, hypothesis in zip(final_signatures, hypotheses)
+    }
+    if len(decoder) != len(hypotheses):
+        raise ValueError("final batch is not separating")
+
+    return BatchPlan(
+        tuple(chosen),
+        predictions,
+        tuple(progress),
+        decoder,
+        action_classes,
+    )
+
+
+def compile_plan(scope: str, plan: BatchPlan) -> CompiledIdentifier:
+    """Compile directly from the cached cold design with zero extra predictions."""
+    return CompiledIdentifier(scope, plan.actions, dict(plan.decoder), 0)
 
 
 def compile_identifier(
@@ -129,7 +172,7 @@ def compile_identifier(
     batch: Sequence[Action],
     predict: Predict,
 ) -> CompiledIdentifier:
-    """Compile a verified separating batch into direct signature lookup."""
+    """Rebuild a decoder from retained probes after the cold field is gone."""
     decoder: dict[tuple[Observation, ...], Hypothesis] = {}
     predictions = 0
 
