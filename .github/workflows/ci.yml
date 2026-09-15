@@ -114,3 +114,22 @@ jobs:
           path: .cache/grouped-real
       - name: Subject/day separated predictive consequence
         run: python grouped_predictive_demo.py
+
+  grouped-stability:
+    needs: datasets
+    name: natural-group-stability
+    runs-on: ubuntu-slim
+    timeout-minutes: 20
+    env:
+      REALITYGRAPH_GROUP_STABILITY_SEED: ${{ github.sha }}-natural-groups
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinned-grouped
+          path: .cache/grouped-real
+      - name: Sixteen natural-group futures
+        run: python grouped_stability_demo.py
