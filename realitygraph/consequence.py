@@ -121,6 +121,12 @@ class ConsequenceModel:
                 return Consequence("UNKNOWN")
             return Consequence("EXACT" if len(labels) == 1 else "SET", labels)
 
+        exact_status, exact_target = self.exact_model.predict(row)
+        if exact_status == "ACCEPT" and exact_target is not None:
+            return Consequence("EXACT", (exact_target,))
+        if self.regression_radius <= 0:
+            return Consequence("UNKNOWN")
+
         point = self.metric.encode(row)
         neighbors = sorted(
             (
@@ -213,6 +219,72 @@ def _regression_envelope(
     return min(values), max(values)
 
 
+def _regression_miss(
+    metric: FeatureMetric,
+    train_rows: Sequence[tuple[float | str | None, ...]],
+    train_targets: Sequence[str],
+    row: tuple[str, ...],
+    target: str,
+    k: int,
+) -> tuple[float, float, float]:
+    low, high = _regression_envelope(metric, train_rows, train_targets, row, k)
+    value = float(target)
+    miss = max(low - value, value - high, 0.0)
+    return low, high, miss
+
+
+def _numeric_interval_stable(
+    metric: FeatureMetric,
+    train_rows: Sequence[tuple[float | str | None, ...]],
+    train_targets: Sequence[str],
+    calibration: EmpiricalDataset,
+    target_span: float,
+    k: int,
+    safety_factor: float,
+) -> bool:
+    n = len(calibration.features)
+    if n < 4:
+        return False
+
+    folds = (
+        (tuple(range(0, n, 2)), tuple(range(1, n, 2))),
+        (tuple(range(1, n, 2)), tuple(range(0, n, 2))),
+    )
+    for fit_indices, audit_indices in folds:
+        fit_misses = [
+            _regression_miss(
+                metric,
+                train_rows,
+                train_targets,
+                calibration.features[i],
+                calibration.targets[i],
+                k,
+            )[2]
+            for i in fit_indices
+        ]
+        margin = max(fit_misses, default=0.0) * safety_factor
+
+        for i in audit_indices:
+            low, high, _ = _regression_miss(
+                metric,
+                train_rows,
+                train_targets,
+                calibration.features[i],
+                calibration.targets[i],
+                k,
+            )
+            low -= margin
+            high += margin
+            # A vacuous interval would be UNKNOWN in production, so it cannot
+            # count as a successful audit consequence.
+            if target_span > 0 and (high - low) >= target_span:
+                continue
+            value = float(calibration.targets[i])
+            if not (low <= value <= high):
+                return False
+    return True
+
+
 def compile_consequence_model(
     train: EmpiricalDataset,
     calibration: EmpiricalDataset,
@@ -248,16 +320,29 @@ def compile_consequence_model(
             class_ratio=class_ratio,
         )
 
-    residuals = []
-    for row, target in zip(calibration.features, calibration.targets):
-        low, high = _regression_envelope(
-            metric, train_rows, train.targets, row, regression_k
-        )
-        value = float(target)
-        residuals.append(max(low - value, value - high, 0.0))
-    radius = max(residuals, default=0.0) * regression_safety_factor
     numeric_targets = [float(value) for value in train.targets + calibration.targets]
     span = max(numeric_targets) - min(numeric_targets) if numeric_targets else 0.0
+
+    stable = _numeric_interval_stable(
+        metric,
+        train_rows,
+        train.targets,
+        calibration,
+        span,
+        regression_k,
+        regression_safety_factor,
+    )
+    residuals = [
+        _regression_miss(
+            metric, train_rows, train.targets, row, target, regression_k
+        )[2]
+        for row, target in zip(calibration.features, calibration.targets)
+    ]
+    radius = (
+        max(residuals, default=0.0) * regression_safety_factor
+        if stable
+        else 0.0
+    )
     return ConsequenceModel(
         "numeric",
         metric,
