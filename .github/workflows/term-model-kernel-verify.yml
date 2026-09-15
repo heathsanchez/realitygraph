@@ -1,0 +1,53 @@
+name: term-model-kernel-verify
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - experiments/term_model_verify/*.lean
+      - experiments/structured_model_reuse/leanproj/**
+      - .github/workflows/term-model-kernel-verify.yml
+  workflow_dispatch:
+
+concurrency:
+  group: term-model-kernel-verify-v1
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target:
+          - 5837_to_122
+          - 5837_to_41902
+          - 5837_to_41919
+          - 5837_to_42832
+          - 5837_to_46900
+          - 5837_to_482
+          - 5837_to_4917
+          - 5837_to_53919
+          - 5837_to_53946
+          - 5837_to_54617
+          - 5837_to_549
+          - 5837_to_56437
+          - 5837_to_587
+          - 5837_to_998
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Prepare pinned Mathlib
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: |
+          lake update
+          lake exe cache get
+      - name: Kernel-check compiled term-model certificate
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: lake env lean -j 1 -M 4096 ../../term_model_verify/${{ matrix.target }}.lean
