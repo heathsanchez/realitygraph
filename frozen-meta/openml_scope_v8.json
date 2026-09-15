@@ -1,0 +1,15 @@
+{
+  "version": "openml-scope-v8-v1",
+  "training_evidence_run": 35011307417,
+  "training_artifact_sha256": "7ee604cbc5d71c009350b2b1946f85c345924c1e2265c54e221c5c961afa1290",
+  "grammar": "adaptive_cal_gain >= gain_threshold AND cold_search_cost/adaptive_search_cost <= search_ratio_threshold",
+  "gain_threshold": 0.01599671357125708,
+  "search_ratio_threshold": 10.355555555555554,
+  "training_worlds": 20,
+  "training_precision": 0.7857142857142857,
+  "training_recall": 1.0,
+  "training_promoted": 14,
+  "loo_precision": 0.6923076923076923,
+  "loo_recall": 0.8181818181818182,
+  "v8_target_outcomes_used": false
+}
