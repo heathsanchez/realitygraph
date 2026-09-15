@@ -1,0 +1,28 @@
+name: verify-internal-theory-certificate
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - certificates/22268_to_22436.lean
+      - .github/workflows/verify-internal-theory-certificate.yml
+  workflow_dispatch:
+
+concurrency:
+  group: verify-internal-theory-certificate-v1
+  cancel-in-progress: true
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Install Lean 4.33.1
+        run: elan toolchain install leanprover/lean4:v4.33.1
+      - name: Kernel-check internal-theory certificate
+        run: lean +leanprover/lean4:v4.33.1 -j 1 -M 4096 certificates/22268_to_22436.lean
