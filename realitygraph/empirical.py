@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import shlex
+import time
 import urllib.request
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -63,13 +64,27 @@ class TargetPlan:
         return self.unresolved_signatures == 0
 
 
-def _download(url: str, timeout: int = 30) -> bytes:
+def _download(
+    url: str,
+    timeout: int = 30,
+    attempts: int = 4,
+) -> bytes:
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "RealityGraph/1.0 dataset verifier"},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except (TimeoutError, OSError, urllib.error.URLError) as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(2 ** attempt)
+    raise RuntimeError(
+        f"dataset download failed after {attempts} attempts: {url}"
+    ) from last_error
 
 
 def fetch_dataset(
