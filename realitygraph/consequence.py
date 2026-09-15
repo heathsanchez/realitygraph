@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from bisect import bisect_left
+from dataclasses import dataclass, replace
 from typing import Sequence
 
 from .empirical import EmpiricalDataset
-from .selective import SelectiveModel, compile_selective_model, sealed_split
+from .selective import (
+    SelectiveModel,
+    compile_selective_model,
+    evaluate_selective,
+    sealed_split,
+)
 
 
 @dataclass(frozen=True)
@@ -56,7 +62,9 @@ class Consequence:
             return target in self.labels
         if self.kind == "INTERVAL":
             value = float(target)
-            return self.low is not None and self.high is not None and self.low <= value <= self.high
+            lower_ok = self.low is None or value >= self.low
+            upper_ok = self.high is None or value <= self.high
+            return lower_ok and upper_ok
         return False
 
 
@@ -97,6 +105,8 @@ class ConsequenceModel:
     regression_radius: float = 0.0
     regression_enabled: bool = False
     numeric_target_span: float = 0.0
+    numeric_band_model: SelectiveModel | None = None
+    numeric_band_edges: tuple[float, ...] = ()
 
     def predict(self, row: tuple[str, ...]) -> Consequence:
         if self.target_kind == "categorical":
@@ -149,9 +159,21 @@ class ConsequenceModel:
         high = max(local_values) + margin
         if high <= low:
             return Consequence("UNKNOWN")
-        if self.numeric_target_span > 0 and (high - low) >= self.numeric_target_span:
-            return Consequence("UNKNOWN")
-        return Consequence("INTERVAL", low=low, high=high)
+        if self.numeric_target_span > 0 and (high - low) < self.numeric_target_span:
+            return Consequence("INTERVAL", low=low, high=high)
+
+        if self.numeric_band_model is not None:
+            status, band = self.numeric_band_model.predict(row)
+            if status == "ACCEPT" and band is not None:
+                index = int(band.split(":", 1)[1])
+                low_edge = self.numeric_band_edges[index - 1] if index > 0 else None
+                high_edge = (
+                    self.numeric_band_edges[index]
+                    if index < len(self.numeric_band_edges)
+                    else None
+                )
+                return Consequence("INTERVAL", low=low_edge, high=high_edge)
+        return Consequence("UNKNOWN")
 
 
 def _compile_metric(dataset: EmpiricalDataset) -> FeatureMetric:
@@ -473,6 +495,90 @@ def _numeric_shadow_promotion(
     return True
 
 
+def _quantile_edges(values: Sequence[float], bins: int) -> tuple[float, ...]:
+    ordered = sorted(values)
+    if len(ordered) < bins:
+        return ()
+    edges: list[float] = []
+    n = len(ordered)
+    for j in range(1, bins):
+        cut = min(n - 1, max(1, (j * n) // bins))
+        left = ordered[cut - 1]
+        right = ordered[cut]
+        edge = (left + right) / 2 if left != right else left
+        if not edges or edge > edges[-1]:
+            edges.append(edge)
+    return tuple(edges)
+
+
+def _band_label(value: str, edges: Sequence[float]) -> str:
+    return f"bin:{bisect_left(edges, float(value))}"
+
+
+def _band_dataset(dataset: EmpiricalDataset, edges: Sequence[float]) -> EmpiricalDataset:
+    source = replace(
+        dataset.source,
+        target_kind="categorical",
+        target_name=f"{dataset.source.target_name}_band",
+    )
+    return EmpiricalDataset(
+        source,
+        dataset.features,
+        tuple(_band_label(value, edges) for value in dataset.targets),
+        dataset.source_sha256,
+    )
+
+
+def _promote_numeric_bands(
+    training: EmpiricalDataset,
+    calibration: EmpiricalDataset,
+    replays: int,
+    candidate_bins: Sequence[int] = (8, 6, 4, 3, 2),
+    minimum_shadow_coverage: float = 0.03,
+) -> tuple[SelectiveModel | None, tuple[float, ...]]:
+    training_values = [float(value) for value in training.targets]
+
+    for bins in candidate_bins:
+        edges = _quantile_edges(training_values, bins)
+        if len(edges) < 1:
+            continue
+        transformed_training = _band_dataset(training, edges)
+        shadow_correct = 0
+        shadow_total = 0
+        failed = False
+
+        for replay in range(replays):
+            shadow = sealed_split(
+                transformed_training,
+                f"shadow-band-{bins}-{replay}",
+            )
+            model = compile_selective_model(
+                shadow.train,
+                shadow.calibration,
+            )
+            result = evaluate_selective(shadow.test, model)
+            if result.wrong:
+                failed = True
+                break
+            shadow_correct += result.correct
+            shadow_total += result.total
+
+        if failed:
+            continue
+        coverage = shadow_correct / shadow_total if shadow_total else 0.0
+        if coverage < minimum_shadow_coverage:
+            continue
+
+        transformed_calibration = _band_dataset(calibration, edges)
+        model = compile_selective_model(
+            transformed_training,
+            transformed_calibration,
+        )
+        return model, edges
+
+    return None, ()
+
+
 def compile_consequence_model(
     train: EmpiricalDataset,
     calibration: EmpiricalDataset,
@@ -557,6 +663,11 @@ def compile_consequence_model(
         if stable
         else 0.0
     )
+    band_model, band_edges = _promote_numeric_bands(
+        train,
+        calibration,
+        promotion_replays,
+    )
     return ConsequenceModel(
         "numeric",
         metric,
@@ -567,6 +678,8 @@ def compile_consequence_model(
         regression_radius=radius,
         regression_enabled=stable,
         numeric_target_span=span,
+        numeric_band_model=band_model,
+        numeric_band_edges=band_edges,
     )
 
 
@@ -594,7 +707,8 @@ def evaluate_consequences(
             total_label_slots += len(consequence.labels)
         elif consequence.kind == "INTERVAL":
             interval += 1
-            interval_width_sum += float(consequence.high - consequence.low)
+            if consequence.low is not None and consequence.high is not None:
+                interval_width_sum += float(consequence.high - consequence.low)
 
     return ConsequenceEvaluation(
         exact,
