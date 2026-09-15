@@ -37,6 +37,18 @@ class GroupedEmpiricalTests(unittest.TestCase):
         self.assertEqual(rows[2][1], 0)
         self.assertEqual(len(rows[0][0]), 5)
 
+    def test_occupancy_archive_shape_with_implicit_row_index(self):
+        raw = (
+            '"date","Temperature","Humidity","Light","CO2","HumidityRatio","Occupancy"\n'
+            '"1","2015-02-04 17:51:00",23.18,27.27,426,721.25,0.00479,1\n'
+            '"2","2015-02-05 08:00:00",20.00,30.00,0,500.00,0.00400,0\n'
+        ).encode()
+        rows = list(_occupancy_rows(raw))
+        self.assertEqual(rows[0][2], "2015-02-04")
+        self.assertEqual(rows[0][0][0], 23.18)
+        self.assertEqual(rows[0][1], 1)
+        self.assertEqual(rows[1][2], "2015-02-05")
+
 
 if __name__ == "__main__":
     unittest.main()
