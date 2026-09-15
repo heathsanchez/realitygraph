@@ -53,8 +53,8 @@ def extended_manifest(summary_raw: bytes) -> list[dict]:
         raise AssertionError(
             f"original extended corpus drifted: {len(primary)+len(extension)}"
         )
-    if len(eligible) < 160:
-        raise AssertionError(f"all classification metadata produced only {len(eligible)} datasets")
+    if len(eligible) != 146:
+        raise AssertionError(f"classification universe drifted: {len(eligible)} datasets")
     return eligible
 
 
@@ -62,7 +62,7 @@ def main():
     raw = _download(SUMMARY_URL)
     summary_sha = hashlib.sha256(raw).hexdigest()
     manifest = extended_manifest(raw)
-    block = manifest[140:160]
+    block = manifest[140:146]
     digest = hashlib.sha256(
         "\n".join(
             f"{140+i}|{row['dataset']}|{row['n_instances']}|"
@@ -77,7 +77,7 @@ def main():
         "eligible_count": len(manifest),
         "original_eligible_count": 141,
         "block_start": 140,
-        "block_stop": 160,
+        "block_stop": 146,
         "block_digest": digest,
         "datasets": [
             {"index": 140 + i, **row}
