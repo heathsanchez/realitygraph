@@ -1,0 +1,33 @@
+name: equational-true-closure
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_true_closure.py
+      - equational_residual_demo.py
+      - equational_transition_demo.py
+      - .github/workflows/equational-true-closure.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-true-closure-v1
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile verified theorem graph
+        run: python equational_true_closure.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-true-closure-v1
+          path: results/equational-true-closure-v1.json
+          if-no-files-found: error
+          retention-days: 3
