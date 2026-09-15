@@ -1,0 +1,35 @@
+name: equational-transition
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_transition_demo.py
+      - equational_residual_demo.py
+      - realitygraph/predictive.py
+      - .github/workflows/equational-transition.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-transition-v1
+  cancel-in-progress: true
+
+jobs:
+  development-transition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify predictive core
+        run: python -m unittest tests.test_predictive_field -v
+      - name: Run developmental transition experiment
+        run: python equational_transition_demo.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-development-transition-v1
+          path: results/equational-development-transition-v1.json
+          if-no-files-found: error
+          retention-days: 3
