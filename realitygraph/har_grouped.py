@@ -63,7 +63,12 @@ def source_digest(
 
 
 def _member_by_suffix(archive: zipfile.ZipFile, suffix: str) -> str:
-    matches = [name for name in archive.namelist() if name.endswith(suffix)]
+    matches = [
+        name for name in archive.namelist()
+        if name.endswith(suffix)
+        and "__MACOSX/" not in name
+        and "/._" not in name
+    ]
     if len(matches) != 1:
         raise ValueError(
             f"expected one HAR archive member ending {suffix!r}, got {matches}"
