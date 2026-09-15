@@ -1,0 +1,44 @@
+name: prospective-capability-compounding-v1
+
+on:
+  push:
+    branches: [prospective-capability-compounding-v1]
+  workflow_dispatch:
+
+concurrency:
+  group: prospective-capability-compounding-v1
+  cancel-in-progress: true
+
+jobs:
+  prospective-external-recurrence:
+    runs-on: ubuntu-slim
+    timeout-minutes: 25
+    env:
+      REALITYGRAPH_COMPOUNDING_SEED: ${{ github.sha }}-prospective-v1
+      REALITYGRAPH_COMPOUNDING_RESULT: prospective-capability-compounding-summary.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify retained capability machinery
+        run: |
+          python -m unittest             tests.test_transfer_memory             tests.test_retained_capability -v
+
+      - name: Acquire pinned external grouped worlds
+        run: python prepare_grouped_datasets.py
+
+      - name: Run prospective retained-capability recurrence
+        run: python prospective_capability_compounding.py
+
+      - name: Preserve prospective evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prospective-capability-compounding-v1-evidence
+          path: prospective-capability-compounding-summary.json
+          if-no-files-found: warn
+          retention-days: 7
