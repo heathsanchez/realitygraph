@@ -1,0 +1,1 @@
+Trigger untouched V13 adaptive-evidence replication after V12 PASS.
