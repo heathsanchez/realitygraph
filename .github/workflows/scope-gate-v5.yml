@@ -1,0 +1,47 @@
+name: scope-gate-v5
+
+on:
+  push:
+    branches:
+      - scope-gate-v5
+  workflow_dispatch:
+
+concurrency:
+  group: scope-gate-v5
+  cancel-in-progress: true
+
+jobs:
+  scope-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REALITYGRAPH_SCOPE_V5_RESULT: scope-gate-v5-summary.json
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify frozen acquisition policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path("frozen-meta/adaptive_policy.mg")
+          h = hashlib.sha256(p.read_bytes()).hexdigest()
+          print("frozen_policy_sha256=" + h)
+          assert h == "3da082adbcfcacc53c9745a0b6af42a4ea33655e43c3768bc755fdf41168fa92"
+          PY
+
+      - name: Run learned promotion scope
+        run: python scope_gate_v5.py
+
+      - name: Preserve V5 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scope-gate-v5-evidence
+          path: scope-gate-v5-summary.json
+          if-no-files-found: warn
+          retention-days: 14
