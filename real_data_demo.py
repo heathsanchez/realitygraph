@@ -66,7 +66,7 @@ def main():
         print(source.name)
         print(
             f"  domain={source.domain} rows={rows} features={len(source.feature_names)} "
-            f"sha256={dataset.source_sha256[:16]}..."
+            f"sha256={dataset.source_sha256}"
         )
         print(
             f"  observational classes={unique} duplicate/UNKNOWN rows={identity_unknown}"
