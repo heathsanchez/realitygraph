@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from .empirical import EmpiricalDataset
-from .selective import SelectiveModel, compile_selective_model
+from .selective import SelectiveModel, compile_selective_model, sealed_split
 
 
 @dataclass(frozen=True)
@@ -357,6 +357,122 @@ def _numeric_interval_stable(
     return True
 
 
+def _categorical_shadow_promotion(
+    training: EmpiricalDataset,
+    safety_factor: float,
+    replays: int,
+) -> bool:
+    """Require repeated zero-wrong fallback transfer inside outer training."""
+    for replay in range(replays):
+        shadow = sealed_split(training, f"shadow-class-{replay}")
+        metric = _compile_metric(shadow.train)
+        train_rows = tuple(metric.encode(row) for row in shadow.train.features)
+        labels = tuple(sorted(set(shadow.train.targets)))
+        ratios = [
+            _nearest_class_ratio(
+                metric, train_rows, shadow.train.targets, row, target
+            )
+            for row, target in zip(
+                shadow.calibration.features, shadow.calibration.targets
+            )
+        ]
+        finite = [ratio for ratio in ratios if math.isfinite(ratio)]
+        stable = (
+            len(finite) == len(ratios)
+            and _categorical_fallback_stable(
+                metric,
+                train_rows,
+                shadow.train.targets,
+                shadow.calibration,
+                labels,
+                safety_factor,
+            )
+        )
+        if not stable:
+            return False
+        ratio = max(finite, default=1.0) * safety_factor
+
+        for row, target in zip(shadow.test.features, shadow.test.targets):
+            by_class = _class_distance_map(
+                metric, train_rows, shadow.train.targets, row
+            )
+            if not by_class:
+                continue
+            nearest = min(by_class.values())
+            threshold = nearest * ratio + 1e-15
+            predicted = {
+                label
+                for label, distance in by_class.items()
+                if distance <= threshold
+            }
+            if predicted and len(predicted) < len(labels) and target not in predicted:
+                return False
+    return True
+
+
+def _numeric_shadow_promotion(
+    training: EmpiricalDataset,
+    k: int,
+    safety_factor: float,
+    replays: int,
+) -> bool:
+    """Require repeated zero-wrong interval transfer inside outer training."""
+    for replay in range(replays):
+        shadow = sealed_split(training, f"shadow-numeric-{replay}")
+        metric = _compile_metric(shadow.train)
+        train_rows = tuple(metric.encode(row) for row in shadow.train.features)
+        numeric_targets = [
+            float(value)
+            for value in shadow.train.targets + shadow.calibration.targets
+        ]
+        span = (
+            max(numeric_targets) - min(numeric_targets)
+            if numeric_targets
+            else 0.0
+        )
+        stable = _numeric_interval_stable(
+            metric,
+            train_rows,
+            shadow.train.targets,
+            shadow.calibration,
+            span,
+            k,
+            safety_factor,
+        )
+        if not stable:
+            return False
+
+        residuals = [
+            _regression_miss(
+                metric,
+                train_rows,
+                shadow.train.targets,
+                row,
+                target,
+                k,
+            )[2]
+            for row, target in zip(
+                shadow.calibration.features, shadow.calibration.targets
+            )
+        ]
+        margin = max(residuals, default=0.0) * safety_factor
+
+        for row, target in zip(shadow.test.features, shadow.test.targets):
+            low, high = _regression_envelope(
+                metric, train_rows, shadow.train.targets, row, k
+            )
+            low -= margin
+            high += margin
+            if high <= low:
+                continue
+            if span > 0 and (high - low) >= span:
+                continue
+            value = float(target)
+            if not (low <= value <= high):
+                return False
+    return True
+
+
 def compile_consequence_model(
     train: EmpiricalDataset,
     calibration: EmpiricalDataset,
@@ -364,6 +480,7 @@ def compile_consequence_model(
     class_safety_factor: float = 1.10,
     regression_k: int = 7,
     regression_safety_factor: float = 1.25,
+    promotion_replays: int = 4,
 ) -> ConsequenceModel:
     metric = _compile_metric(train)
     train_rows = tuple(metric.encode(row) for row in train.features)
@@ -378,8 +495,14 @@ def compile_consequence_model(
             for row, target in zip(calibration.features, calibration.targets)
         ]
         finite = [ratio for ratio in ratios if math.isfinite(ratio)]
+        shadow_promoted = _categorical_shadow_promotion(
+            train,
+            class_safety_factor,
+            promotion_replays,
+        )
         stable = (
-            len(finite) == len(ratios)
+            shadow_promoted
+            and len(finite) == len(ratios)
             and _categorical_fallback_stable(
                 metric,
                 train_rows,
@@ -408,7 +531,13 @@ def compile_consequence_model(
     numeric_targets = [float(value) for value in train.targets + calibration.targets]
     span = max(numeric_targets) - min(numeric_targets) if numeric_targets else 0.0
 
-    stable = _numeric_interval_stable(
+    shadow_promoted = _numeric_shadow_promotion(
+        train,
+        regression_k,
+        regression_safety_factor,
+        promotion_replays,
+    )
+    stable = shadow_promoted and _numeric_interval_stable(
         metric,
         train_rows,
         train.targets,
