@@ -1,0 +1,16 @@
+name: v4-metadata
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - developmental-runtime-v4
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sed -i 's/return eligible\[:140\]/return eligible[:160]/' pmlb_meta_world.py
+      - run: python -c "import pmlb_meta_world as p; r=p._download(p.SUMMARY_URL); m=p.corpus_manifest(r); [print(i,m[i]) for i in range(140,160)]"
