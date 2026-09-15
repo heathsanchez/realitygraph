@@ -1,0 +1,16 @@
+{
+  "version": "openml-capability-state-v11-v1",
+  "development_evidence_runs": [35011307417, 35035115639, 35035644644, 35036069137],
+  "candidate_gain_floor": 0.01599671357125708,
+  "direct_gain_threshold": 0.05718096689694352,
+  "evidence_microshards": 3,
+  "deployment_microshards": 5,
+  "microshard_assignment": "target-blind deterministic hash",
+  "verifier_pass": "group gain > 0.0001",
+  "direct_activation": "at least 2 of 3 evidence microshards pass",
+  "borderline_activation": "all 3 evidence microshards pass",
+  "states": ["PROBATION", "ACTIVE", "SUSPENDED", "REVOKED"],
+  "hard_restart_before_deployment": true,
+  "search_after_acquisition": false,
+  "v11_target_outcomes_used": false
+}
