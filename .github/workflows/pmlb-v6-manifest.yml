@@ -1,0 +1,27 @@
+name: pmlb-v6-manifest
+
+on:
+  push:
+    branches:
+      - v6-scope
+  workflow_dispatch:
+
+concurrency:
+  group: pmlb-v6-manifest
+  cancel-in-progress: true
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python probe_extended_pmlb_v6.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pmlb-v6-manifest
+          path: pmlb-v6-manifest.json
+          retention-days: 14
