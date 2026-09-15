@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   unit:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
   meta-train-world:
     needs: unit
     name: train-${{ matrix.index }}
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -51,7 +51,7 @@ jobs:
   meta-heldout-world:
     needs: unit
     name: heldout-${{ matrix.index }}
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -77,7 +77,7 @@ jobs:
 
   learn-policy:
     needs: meta-train-world
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +100,7 @@ jobs:
 
   heldout-verifier:
     needs: [learn-policy, meta-heldout-world]
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
