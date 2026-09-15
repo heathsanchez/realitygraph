@@ -6,6 +6,7 @@ from realitygraph.predictive import (
     build_probe_field,
     certify_predictive_batch,
     field_from_matrix,
+    leave_one_group_out_split,
     sealed_group_split,
 )
 
@@ -54,6 +55,23 @@ class PredictiveFieldTests(unittest.TestCase):
         self.assertFalse(train_groups & cal_groups)
         self.assertFalse(train_groups & test_groups)
         self.assertFalse(cal_groups & test_groups)
+
+    def test_leave_one_group_out_seals_exact_named_group(self):
+        groups = tuple(f"g{i // 3}" for i in range(30))
+        split = leave_one_group_out_split(groups, "g4", "logo")
+
+        train_groups = {groups[i] for i in split.train}
+        cal_groups = {groups[i] for i in split.calibration}
+        test_groups = {groups[i] for i in split.test}
+
+        self.assertEqual(test_groups, {"g4"})
+        self.assertFalse(train_groups & cal_groups)
+        self.assertFalse(train_groups & test_groups)
+        self.assertFalse(cal_groups & test_groups)
+        self.assertEqual(
+            train_groups | cal_groups | test_groups,
+            set(groups),
+        )
 
     def test_stable_separator_survives_and_duplicate_is_deleted(self):
         values = []
