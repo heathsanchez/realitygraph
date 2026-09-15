@@ -12,6 +12,7 @@ from realitygraph.predictive import (
     sealed_group_split,
 )
 from realitygraph.residual import certify_residual_batch
+from realitygraph.transfer import assess_transfer
 
 
 def sealed_row_split(labels, seed: str) -> PredictiveSplit:
@@ -109,6 +110,7 @@ def main():
             residual_accepted += 1
             if residual.sealed_metrics.max_group_harm > 1e-12:
                 raise AssertionError(f"{dataset.name}: residual harmed a sealed group")
+        transfer = assess_transfer(row_certificate, certificate)
         if certificate.accepted:
             accepted += 1
             if not (
@@ -150,6 +152,11 @@ def main():
         print(
             f"  grouping_penalty_LL="
             f"{certificate.sealed_metrics.log_loss - row_certificate.sealed_metrics.log_loss:.6f}"
+        )
+        print(
+            f"  transfer_status={transfer.status} "
+            f"row_gain={transfer.row_gain:.6f} "
+            f"group_gain={transfer.group_gain:.6f}"
         )
         print(
             f"  residual_from_prior: retained="
