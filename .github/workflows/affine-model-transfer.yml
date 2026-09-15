@@ -1,0 +1,45 @@
+name: affine-model-transfer
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - experiments/affine_model_transfer/*.lean
+      - experiments/structured_model_reuse/leanproj/**
+      - .github/workflows/affine-model-transfer.yml
+  workflow_dispatch:
+
+concurrency:
+  group: affine-model-transfer-v1
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target:
+          - 10164_to_203
+          - 10352_to_38021
+          - 23212_to_2644
+          - 24088_to_26712
+          - 26723_to_34616
+          - 9448_to_20481
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Prepare pinned Mathlib
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: |
+          lake update
+          lake exe cache get
+      - name: Exhaustively test inherited finite model
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: lake env lean -j 1 -M 4096 ../../affine_model_transfer/${{ matrix.target }}.lean
