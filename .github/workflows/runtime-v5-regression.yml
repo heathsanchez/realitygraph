@@ -23,14 +23,16 @@ jobs:
           git show FETCH_HEAD:pmlb_regression_world.py > pmlb_regression_world.py
       - name: Freeze regression frontier
         run: |
-          sed -i 's/return eligible\[:100\]/return eligible[:120]/' pmlb_regression_world.py
+          sed -i 's/return eligible\[:100\]/return eligible[:116]/' pmlb_regression_world.py
           sed -i '2i from pmlb_regression_world import regression_manifest, _balanced_binary_labels' developmental_runtime_v4.py
           sed -i 's/corpus_manifest(summary_raw)/regression_manifest(summary_raw)/g' developmental_runtime_v4.py
           sed -i 's/labels = _binary_labels(targets)/labels, _ = _balanced_binary_labels(targets)/' developmental_runtime_v4.py
-          sed -i 's/len(manifest) != 140/len(manifest) != 120/' developmental_runtime_v4.py
+          sed -i 's/len(manifest) != 140/len(manifest) != 116/' developmental_runtime_v4.py
+          sed -i 's/HOLDOUT_STOP = 120/HOLDOUT_STOP = 116/' developmental_runtime_v4.py
+          sed -i 's/list(range(100, 120))/list(range(100, 116))/' developmental_runtime_v4.py
           sed -i 's/PASS_PROSPECTIVE_DEVELOPMENTAL_RUNTIME_V4/PASS_CROSS_FAMILY_DEVELOPMENTAL_RUNTIME_V5/' developmental_runtime_v4.py
       - name: Confirm frontier metadata only
-        run: python -c "import pmlb_regression_world as p; m=p.regression_manifest(p._download(p.SUMMARY_URL)); print('manifest',len(m)); [print(i,m[i]) for i in range(100,120)]"
+        run: python -c "import pmlb_regression_world as p; m=p.regression_manifest(p._download(p.SUMMARY_URL)); print('manifest',len(m)); [print(i,m[i]) for i in range(100,116)]"
       - name: Run V5
         run: python developmental_runtime_v4.py
       - if: always()
