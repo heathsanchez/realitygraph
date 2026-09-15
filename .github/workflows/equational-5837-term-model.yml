@@ -1,0 +1,31 @@
+name: equational-5837-term-model
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_5837_term_model.py
+      - .github/workflows/equational-5837-term-model.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-5837-term-model-v1
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay compiled 5837 term model
+        run: python equational_5837_term_model.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-5837-term-model-v1
+          path: results/equational-5837-term-model-v1.json
+          if-no-files-found: error
+          retention-days: 3
