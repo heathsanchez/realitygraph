@@ -1,0 +1,33 @@
+name: equational-internal-lemma-bank
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_internal_lemma_bank.py
+      - equational_residual_demo.py
+      - equational_transition_demo.py
+      - .github/workflows/equational-internal-lemma-bank.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-internal-lemma-bank-v1
+  cancel-in-progress: true
+
+jobs:
+  mine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mine and replay closed internal verified lemmas
+        run: python equational_internal_lemma_bank.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-internal-lemma-bank-v1
+          path: results/equational-internal-lemma-bank-v1.json
+          if-no-files-found: error
+          retention-days: 3
