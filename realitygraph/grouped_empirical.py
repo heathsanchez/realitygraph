@@ -38,8 +38,8 @@ OCCUPANCY_URL = (
 OCCUPANCY_MEMBERS = ("datatraining.txt", "datatest.txt", "datatest2.txt")
 
 # Filled from a frozen CI acquisition run, then enforced on every later run.
-PARKINSONS_SHA256 = ""
-OCCUPANCY_SHA256 = ""
+PARKINSONS_SHA256 = "a36116c2deac07895b79ce97a2f99a1b3720ac4892995ff5c3b9ccb397ed2bc5"
+OCCUPANCY_SHA256 = "4ae3f46aa98eedff564a9f6924d1635173e2fd2c816004342a9be93076d3a81a"
 
 
 def _download(url: str, attempts: int = 4, timeout: int = 30) -> bytes:
