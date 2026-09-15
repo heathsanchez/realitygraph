@@ -22,10 +22,18 @@ jobs:
           python-version: '3.12'
       - name: Download and hash-verify sources once
         run: python prepare_datasets.py
+      - name: Download grouped real sources once
+        run: python prepare_grouped_datasets.py
       - uses: actions/upload-artifact@v4
         with:
           name: pinned-uci
           path: .cache/real-datasets
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinned-grouped
+          path: .cache/grouped-real
           if-no-files-found: error
           retention-days: 1
 
@@ -87,3 +95,22 @@ jobs:
           path: .cache/real-datasets
       - name: Independent sealed consequence replay
         run: python stability_seed_demo.py
+
+  grouped-predictive:
+    needs: datasets
+    name: grouped-real-prediction
+    runs-on: ubuntu-slim
+    timeout-minutes: 12
+    env:
+      REALITYGRAPH_GROUP_SEED: ${{ github.sha }}-grouped
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinned-grouped
+          path: .cache/grouped-real
+      - name: Subject/day separated predictive consequence
+        run: python grouped_predictive_demo.py
