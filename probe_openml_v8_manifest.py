@@ -41,7 +41,9 @@ def main():
         name=str(x[nc])
         if did in OLD or stem(name) in oldnames or stem(name) in v7names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":f,"classes":c,"numeric_features":num}
-        family=stem(name)\n        if family not in bydata or tid<bydata[family]["task_id"]:bydata[family]=z
+        family=stem(name)
+        if family not in bydata or tid<bydata[family]["task_id"]:
+            bydata[family]=z
     a=list(bydata.values())
     a.sort(key=lambda z:(hashlib.sha256(f"{SEED}|{z['task_id']}|{z['data_id']}|{z['name']}|{z['instances']}|{z['features']}|{z['classes']}".encode()).digest(),z["task_id"]))
     block=a[:20]
