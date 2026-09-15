@@ -19,6 +19,55 @@ The kernel is:
 - **Keep**: retain only what changes future reach; preserve unresolved alternatives.
 - **Repeat**: begin from the changed present.
 
+## Real measured datasets
+
+Run:
+
+    python real_data_demo.py
+
+RealityGraph now audits **8 live measured UCI datasets** spanning biology, chemistry, transport, aerodynamics, radar, sonar, and hydrodynamics:
+
+- Iris measurements
+- Wine chemistry
+- Auto MPG
+- NASA Airfoil Self-Noise
+- Abalone physical measurements
+- Ionosphere radar
+- Sonar returns
+- Yacht hydrodynamics
+
+All eight sources are CC BY 4.0 UCI datasets. Their exact upstream bytes are SHA-256 pinned in `realitygraph/empirical_sources.py`; an upstream change is therefore a hard verification failure, not a silent experiment change.
+
+On the frozen green run:
+
+    datasets                         8
+    measured rows                 7,273
+    declared features               137
+    observational classes          7,269
+    identity UNKNOWN rows              7
+    identity field predictions    72,847
+    retained identity probes          26
+    target field predictions      72,893
+    retained target probes            21
+    target correct                7,273
+    target UNKNOWN                    0
+    target wrong                      0
+
+The empirical kernel does not use row IDs to manufacture distinctions. It first forms the observational quotient
+
+    records / equality-on-measured-features
+
+so exact duplicate measurements remain the same empirical state. On Iris and Ionosphere this produces **7 records that cannot be uniquely identified from the declared measurements**; RealityGraph returns `UNKNOWN` for those identity queries instead of inventing a distinction.
+
+It then asks a second, weaker question:
+
+    what is the smallest irreducible feature set that preserves
+    the dataset's declared target consequence exactly?
+
+This directly compares full environmental identity with consequence-specific state. Across these eight finite datasets, 137 declared features compress to **26 retained identity probes** and **21 retained target probes**, with **zero wrong target verdicts** on the complete frozen datasets.
+
+This is a finite-dataset certificate, not a claim of out-of-sample predictive generalization. A target rule is retained only when exact consequence over the frozen dataset justifies it; unresolved ambiguity remains `UNKNOWN`.
+
 ## Real-world mechanism stress suite
 
 Run:
