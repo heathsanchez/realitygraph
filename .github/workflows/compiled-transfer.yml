@@ -1,0 +1,28 @@
+name: compiled-transfer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: compiled-transfer-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-transfer:
+    runs-on: ubuntu-slim
+    timeout-minutes: 20
+    env:
+      REALITYGRAPH_TRANSFER_COMPILE_SEED: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify transfer-memory codec
+        run: python -m unittest tests.test_transfer_memory -v
+      - name: Acquire pinned grouped worlds
+        run: python prepare_grouped_datasets.py
+      - name: Compile experience into future capability
+        run: python compiled_transfer_demo.py
