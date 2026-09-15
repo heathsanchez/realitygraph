@@ -25,7 +25,14 @@ def main():
     cc=col(tasks,"NumberOfClasses"); xc=col(tasks,"NumberOfNumericFeatures")
     req=urllib.request.Request(PMLB,headers={"User-Agent":"RealityGraph V8 manifest"})
     with urllib.request.urlopen(req,timeout=60) as r: raw=r.read()
-    oldnames={x["dataset"] for x in csv.DictReader(io.StringIO(raw.decode()),delimiter="\t") if x.get("task")=="classification"}
+    oldnames={stem(x["dataset"]) for x in csv.DictReader(io.StringIO(raw.decode()),delimiter="\t") if x.get("task")=="classification"}
+    v7names={stem(x) for x in (
+        "Australian","jungle_chess_2pcs_raw_endgame_complete","cmc",
+        "blood-transfusion-service-center","steel-plates-fault","ada","pc4","wilt",
+        "Click_prediction_small","ozone-level-8hr","eucalyptus","bank-marketing",
+        "qsar-biodeg","credit-g","segment","GesturePhaseSegmentationProcessed",
+        "kc1","wine-quality-white","Satellite","first-order-theorem-proving"
+    )}
     bydata={}
     for _,x in tasks.iterrows():
         try:
