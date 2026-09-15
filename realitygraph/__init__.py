@@ -14,6 +14,25 @@ from .lab import (
 )
 from .ledger import Event, Ledger
 from .mg import Law, MG
+from .predictive import (
+    CandidateTrial,
+    CompiledPredictiveModel,
+    PredictiveCertificate,
+    PredictiveMetrics,
+    PredictivePlan,
+    PredictiveSplit,
+    ProbeField,
+    ThresholdRule,
+    binary_auc,
+    binary_log_loss,
+    build_probe_field,
+    certify_predictive_batch,
+    compile_predictive_model,
+    design_predictive_batch,
+    evaluate_predictive_model,
+    field_from_matrix,
+    sealed_group_split,
+)
 
 __all__ = [
     "Collision",
@@ -35,4 +54,21 @@ __all__ = [
     "Ledger",
     "Law",
     "MG",
+    "CandidateTrial",
+    "CompiledPredictiveModel",
+    "PredictiveCertificate",
+    "PredictiveMetrics",
+    "PredictivePlan",
+    "PredictiveSplit",
+    "ProbeField",
+    "ThresholdRule",
+    "binary_auc",
+    "binary_log_loss",
+    "build_probe_field",
+    "certify_predictive_batch",
+    "compile_predictive_model",
+    "design_predictive_batch",
+    "evaluate_predictive_model",
+    "field_from_matrix",
+    "sealed_group_split",
 ]
