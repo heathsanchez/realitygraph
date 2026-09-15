@@ -60,11 +60,11 @@ def regression_manifest(summary_raw: bytes) -> list[dict]:
     eligible.sort(
         key=lambda row: (_hash(row["dataset"]), row["dataset"])
     )
-    if len(eligible) < 20:
+    if len(eligible) < 40:
         raise AssertionError(
             f"regression eligibility produced only {len(eligible)} datasets"
         )
-    return eligible[:20]
+    return eligible[:40]
 
 
 def _balanced_binary_labels(targets: list[float]) -> tuple[list[int], float]:

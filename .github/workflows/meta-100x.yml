@@ -1,4 +1,4 @@
-name: meta-100x-cross-task
+name: meta-100x-adaptive-budget
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sealed-cross-task:
+  sealed-adaptive-budget:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -20,8 +20,9 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Meta-policy unit tests
-        run: python -m unittest tests.test_meta_policy -v
+      - name: Policy unit tests
+        run: |
+          python -m unittest tests.test_meta_policy tests.test_adaptive_policy -v
 
       - name: Rebuild one hundred classification training worlds
         shell: bash
@@ -34,46 +35,46 @@ jobs:
             python pmlb_meta_world.py
           '
 
-      - name: Freeze exact previously verified policy
+      - name: Freeze exact rank policy and compile adaptive budget
         env:
           REALITYGRAPH_META_TRAIN_DIR: gathered-meta-train
           REALITYGRAPH_META_POLICY_DIR: meta-policy-out
         run: |
           set -euo pipefail
-          test ! -e gathered-meta-regression
+          test ! -e gathered-meta-regression-next
           python learn_pmlb_meta_policy.py
           actual="$(shasum -a 256 meta-policy-out/meta_policy.mg | awk '{print $1}')"
           expected="f80932ec2ce05e85899787a9bd13da15ea7007a496526cb69c776c3bc56baf47"
-          echo "policy_sha256=$actual"
+          echo "base_policy_sha256=$actual"
           test "$actual" = "$expected"
-          echo "FROZEN_POLICY_MATCHES_PRIOR_VERIFIED_BYTES"
-          echo "REGRESSION_HELDOUT_NOT_YET_CONSTRUCTED"
+          python learn_adaptive_budget.py
+          echo "NEXT_REGRESSION_BLOCK_NOT_YET_CONSTRUCTED"
 
-      - name: Build twenty untouched regression-family worlds
+      - name: Build next twenty untouched regression worlds
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p gathered-meta-regression
-          seq 0 19 | xargs -P 4 -I{} bash -c '
+          mkdir -p gathered-meta-regression-next
+          seq 20 39 | xargs -P 4 -I{} bash -c '
             export REALITYGRAPH_PMLB_REGRESSION_INDEX="{}"
-            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-meta-regression/pmlb-regression-world-{}.json"
+            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-meta-regression-next/pmlb-regression-world-{}.json"
             python pmlb_regression_world.py
           '
 
-      - name: Restart frozen mg in unseen task family
+      - name: Restart adaptive memory in next unseen worlds
         env:
-          REALITYGRAPH_REGRESSION_HELDOUT_DIR: gathered-meta-regression
+          REALITYGRAPH_REGRESSION_HELDOUT_DIR: gathered-meta-regression-next
           REALITYGRAPH_META_POLICY_DIR: meta-policy-out
-        run: python evaluate_pmlb_cross_task.py
+        run: python evaluate_adaptive_budget.py
 
-      - name: Preserve cross-task evidence
+      - name: Preserve adaptive-budget evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: meta-100x-cross-task-evidence
+          name: meta-100x-adaptive-budget-evidence
           path: |
             meta-policy-out
-            meta-cross-task-summary.json
-            gathered-meta-regression
+            meta-adaptive-summary.json
+            gathered-meta-regression-next
           if-no-files-found: warn
           retention-days: 7
