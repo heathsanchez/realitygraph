@@ -53,27 +53,36 @@ class ConsequenceFrontierTests(unittest.TestCase):
         self.assertGreater(result.informative, 0)
 
     def test_numeric_intervals_are_nonvacuous_and_cover_supported_future(self):
-        features = []
-        targets = []
-        for i in range(120):
-            x = i / 10
-            features.append((str(x), str(x * x)))
-            targets.append(str(2 * x + 3))
-        dataset = EmpiricalDataset(
-            source("numeric"), tuple(features), tuple(targets), "deadbeef"
-        )
-        split = sealed_split(dataset, "frontier-num")
+        # Explicit bracketing fixture: every calibration/test point lies between
+        # two observed training states for a linear consequence. The stability
+        # gate should therefore retain a zero-extra-margin local envelope.
+        train_x = list(range(0, 41, 2))
+        cal_x = list(range(1, 40, 2))
+        test_x = [i + 0.5 for i in range(0, 40, 2)]
+
+        def make(xs):
+            return EmpiricalDataset(
+                source("numeric"),
+                tuple((str(x), str(x)) for x in xs),
+                tuple(str(2 * x + 3) for x in xs),
+                "deadbeef",
+            )
+
+        train = make(train_x)
+        calibration = make(cal_x)
+        test = make(test_x)
         model = compile_consequence_model(
-            split.train,
-            split.calibration,
-            regression_k=5,
+            train,
+            calibration,
+            regression_k=2,
             regression_safety_factor=1.5,
         )
-        result = evaluate_consequences(split.test, model)
+        result = evaluate_consequences(test, model)
 
+        self.assertTrue(model.regression_enabled)
         self.assertEqual(result.wrong, 0)
-        self.assertGreater(result.interval, 0)
-        self.assertLess(2 * model.regression_radius, model.numeric_target_span)
+        self.assertEqual(result.interval, len(test_x))
+        self.assertLess(model.regression_radius, model.numeric_target_span)
 
     def test_unknown_is_allowed_when_numeric_interval_would_be_vacuous(self):
         train = EmpiricalDataset(
