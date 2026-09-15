@@ -22,7 +22,7 @@ def _load_worlds(root: Path):
 def _rank_targets(candidates):
     ordered = sorted(
         candidates,
-        key=lambda item: (item["cal_gain"], -item["feature"]),
+        key=lambda item: (item["test_gain"], -item["feature"]),
     )
     n = len(ordered)
     target = {}
