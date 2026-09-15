@@ -74,6 +74,41 @@ def main():
         if residual.accepted and residual.sealed_metrics.max_group_harm > 1e-12:
             raise AssertionError(f"{dataset.name}: residual harmed sealed group")
 
+        single_probes = {}
+        for probe_index, probe_name in enumerate(dataset.probe_names):
+            single_values = tuple(
+                (row[probe_index],)
+                for row in dataset.values
+            )
+            single_field = field_from_matrix(
+                (probe_name,),
+                single_values,
+                dataset.labels,
+                dataset.groups,
+            )
+            single = certify_predictive_batch(
+                single_field,
+                split,
+                max_probes=1,
+                min_calibration_gain=1e-4,
+                min_sealed_gain=1e-4,
+                max_group_harm=0.0,
+                min_support=4,
+            )
+            single_gain = (
+                single.sealed_baseline_metrics.log_loss
+                - single.sealed_metrics.log_loss
+            )
+            if single.accepted and single.sealed_metrics.max_group_harm > 1e-12:
+                raise AssertionError(
+                    f"{dataset.name}/{probe_name}: single probe harmed sealed group"
+                )
+            single_probes[probe_name] = {
+                "accepted": single.accepted,
+                "gain": single_gain,
+                "group_harm": single.sealed_metrics.max_group_harm,
+            }
+
         result["datasets"][dataset.name] = {
             "groups": dataset.group_count,
             "test_groups": test_groups,
@@ -85,13 +120,15 @@ def main():
             "residual_gain": residual_gain,
             "residual_group_harm": residual.sealed_metrics.max_group_harm,
             "residual_probes": [rule.probe_name for rule in residual.plan.rules],
+            "single_probes": single_probes,
         }
 
         print(
             f"{dataset.name} replay={replay:02d} "
             f"accepted={certificate.accepted} gain={gain:.6f} "
             f"residual={residual.accepted} residual_gain={residual_gain:.6f} "
-            f"sealed_groups={len(test_groups)}"
+            f"sealed_groups={len(test_groups)} "
+            f"single_accepts={sum(1 for item in single_probes.values() if item['accepted'])}"
         )
 
     out_path.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
