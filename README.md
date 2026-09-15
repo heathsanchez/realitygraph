@@ -19,6 +19,52 @@ The kernel is:
 - **Keep**: retain only what changes future reach; preserve unresolved alternatives.
 - **Repeat**: begin from the changed present.
 
+## Real-world mechanism stress suite
+
+Run:
+
+    python real_world_demo.py
+
+RealityGraph now includes **45 exact mechanism-grounded worlds** across **12 application categories** and **16 mechanism classes**. These are finite models of real engineering mechanisms—sensing/calibration, control, safety interlocks, energy monitoring, signal mixing, timing/phase, communications, networking, coding/parity, hardware routing, maintenance logic, and imaging correction. They are not presented as empirical field measurements.
+
+The same generic learner handles every family. There is no thermometer-specific, relay-specific, packet-specific, wiring-specific, or controller-specific experiment selector.
+
+On the frozen CI run:
+
+    families                                45
+    categories                              12
+    mechanism classes                       16
+    cold consequence predictions       180,544
+    cold compile extra predictions           0
+    candidate actions                     1,128
+    retained separating actions             244
+    action compression                     4.62x
+    fresh hidden worlds solved               360
+    warm experiment-design predictions         0
+    warm hypothesis-scan predictions           0
+    restart decoder predictions           43,315
+    restart vs cold field                  4.17x
+    ledger events                              45
+    retained .mg bytes                     3,794
+
+Cold compilation now reuses the already-computed consequence field directly:
+
+    consequence field
+        -> quotient candidate actions
+        -> choose separating batch
+        -> backward-delete redundant probes
+        -> build signature decoder
+
+so a cold compile performs **zero additional model predictions** after experiment design.
+
+Every retained batch is also checked for irreducibility: removing any retained probe must merge at least two previously distinguishable worlds. The 45 families include gain/offset calibration, polynomial sensor curves, multi-channel linear mixers, thresholds, operating windows, cyclic phase shifts, affine symbol maps, lane rotations, wiring permutations, Boolean controller tables, binary/ternary finite controllers, and parity/LFSR-style feedback.
+
+Eight fresh hidden parameterizations are then drawn per family after freeze, for **360 fresh worlds**. They are solved exactly from compiled signature decoders with no experiment search and no hypothesis scan.
+
+The measured lesson is:
+
+> **Compute each counterfactual consequence once, retain only an irreducible separating experiment, and turn the resulting distinction into direct future capability.**
+
 ## Blind meta-world transfer
 
 Run:
