@@ -1,0 +1,36 @@
+name: structured-model-reuse
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - experiments/structured_model_reuse/*.lean
+      - .github/workflows/structured-model-reuse.yml
+  workflow_dispatch:
+
+concurrency:
+  group: structured-model-reuse-v1
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - 22505_to_40367
+          - 2531_to_30128
+          - 2531_to_43283
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Install Lean 4.33.1
+        run: elan toolchain install leanprover/lean4:v4.33.1
+      - name: Test exact structured-model reuse
+        run: lean +leanprover/lean4:v4.33.1 -j 1 -M 4096 experiments/structured_model_reuse/${{ matrix.target }}.lean
