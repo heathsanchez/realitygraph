@@ -1,14 +1,48 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
 from realitygraph.grouped_empirical import grouped_real_datasets
 from realitygraph.predictive import (
+    PredictiveSplit,
     certify_predictive_batch,
     field_from_matrix,
     sealed_group_split,
 )
+
+
+def sealed_row_split(labels, seed: str) -> PredictiveSplit:
+    by_label = {0: [], 1: []}
+    for i, label in enumerate(labels):
+        by_label[int(label)].append(i)
+
+    train = []
+    calibration = []
+    test = []
+    for label, members in by_label.items():
+        ordered = sorted(
+            members,
+            key=lambda i: hashlib.sha256(
+                f"{seed}|{label}|{i}".encode()
+            ).digest(),
+        )
+        n = len(ordered)
+        n_train = max(1, int(0.60 * n))
+        n_cal = max(1, int(0.20 * n))
+        if n_train + n_cal >= n:
+            n_cal = max(1, n - n_train - 1)
+        train.extend(ordered[:n_train])
+        calibration.extend(ordered[n_train:n_train + n_cal])
+        test.extend(ordered[n_train + n_cal:])
+
+    return PredictiveSplit(
+        tuple(sorted(train)),
+        tuple(sorted(calibration)),
+        tuple(sorted(test)),
+        hashlib.sha256(seed.encode()).hexdigest()[:16],
+    )
 
 
 def main():
@@ -47,6 +81,14 @@ def main():
             max_group_harm=0.0,
             min_support=4,
         )
+        row_certificate = certify_predictive_batch(
+            field,
+            sealed_row_split(dataset.labels, f"{seed}|{dataset.name}|row"),
+            max_probes=8,
+            min_calibration_gain=1e-4,
+            min_sealed_gain=1e-4,
+            min_support=4,
+        )
         if certificate.accepted:
             accepted += 1
             if not (
@@ -77,6 +119,17 @@ def main():
         print(
             f"  max_sealed_group_harm={certificate.sealed_metrics.max_group_harm:.6f} "
             f"accepted={certificate.accepted}"
+        )
+        print(
+            f"  naive_row_split: baseline_LL="
+            f"{row_certificate.sealed_baseline_metrics.log_loss:.6f} "
+            f"candidate_LL={row_certificate.sealed_metrics.log_loss:.6f} "
+            f"AUC={row_certificate.sealed_metrics.auc:.6f} "
+            f"accepted={row_certificate.accepted}"
+        )
+        print(
+            f"  grouping_penalty_LL="
+            f"{certificate.sealed_metrics.log_loss - row_certificate.sealed_metrics.log_loss:.6f}"
         )
         for url, digest in dataset.source_hashes:
             print(f"  sha256={digest} url={url}")
