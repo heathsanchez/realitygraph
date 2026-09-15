@@ -1,0 +1,74 @@
+name: exhaustive natural groups
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: realitygraph-logo-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  grouped-data:
+    runs-on: ubuntu-slim
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Acquire pinned natural-group datasets
+        run: python prepare_grouped_datasets.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logo-grouped-data
+          path: .cache/grouped-real
+          if-no-files-found: error
+          retention-days: 1
+
+  logo:
+    needs: grouped-data
+    name: logo-${{ matrix.dataset }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        dataset: [parkinsons, occupancy]
+    env:
+      REALITYGRAPH_LOGO_DATASET: ${{ matrix.dataset }}
+      REALITYGRAPH_LOGO_SEED: ${{ github.sha }}-logo
+      REALITYGRAPH_LOGO_RESULT: results/logo-${{ matrix.dataset }}.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: logo-grouped-data
+          path: .cache/grouped-real
+      - name: Seal every natural group exactly once
+        run: python logo_group_demo.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logo-${{ matrix.dataset }}
+          path: results/logo-${{ matrix.dataset }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  aggregate:
+    needs: logo
+    if: always()
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: logo-*
+          path: gathered-logo
+          merge-multiple: true
+      - name: Aggregate exhaustive natural-group evidence
+        run: python aggregate_logo_groups.py
