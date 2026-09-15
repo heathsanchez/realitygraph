@@ -1,0 +1,31 @@
+name: openml-v10-selective-escalation
+on:
+  push:
+    branches:
+      - openml-v10
+  workflow_dispatch:
+concurrency:
+  group: openml-v10-selective-escalation
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_OPENML_V10_RESULT: openml-v10-summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml pandas
+      - name: Run selective escalation V10
+        run: python openml_v10.py
+      - name: Preserve V10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openml-v10-evidence
+          path: openml-v10-summary.json
+          if-no-files-found: warn
+          retention-days: 14
