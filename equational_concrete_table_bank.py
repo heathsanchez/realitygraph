@@ -56,6 +56,16 @@ def _parse_identity(formula):
 def _extract_tables(text):
     out = []
 
+    # Ignore embedded helper/documentation examples. Only scan the actual
+    # submission/corrected-submission body where a countermodel is constructed.
+    markers = [
+        text.rfind("-- Original submission body"),
+        text.rfind("-- Aurora-accepted corrected submission body"),
+    ]
+    body_start = max(markers)
+    if body_start >= 0:
+        text = text[body_start:]
+
     # finOpTable string syntax.
     for m in re.finditer(
         r"let\s+\w+\s*:\s*Magma\s*\(Fin\s+(\d+)\)\s*:=\s*\{\s*"
