@@ -15,6 +15,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             ("sepal_length", "sepal_width", "petal_length", "petal_width"),
             "species",
             cc,
+            "6f608b71a7317216319b4d27b4d9bc84e6abd734eda7872b71a458569e2656c0",
         ),
         EmpiricalSource(
             "Wine chemistry",
@@ -25,6 +26,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             tuple(f"chemical_{i}" for i in range(1, 14)),
             "cultivar",
             cc,
+            "6be6b1203f3d51df0b553a70e57b8a723cd405683958204f96d23d7cd6aea659",
         ),
         EmpiricalSource(
             "Auto MPG",
@@ -43,6 +45,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             ),
             "mpg",
             cc,
+            "48b830e11feee5572525f8f1691ddb9d38d3d7b7063edcd8fca672c2a5e17d8d",
         ),
         EmpiricalSource(
             "NASA airfoil self-noise",
@@ -59,6 +62,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             ),
             "sound_pressure_db",
             cc,
+            "74c75fd71783f1e6b71f8a622b993dc592897a97cd689c5090a07147a1b097b3",
         ),
         EmpiricalSource(
             "Abalone physical measurements",
@@ -78,6 +82,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             ),
             "rings",
             cc,
+            "de37cdcdcaaa50c309d514f248f7c2302a5f1f88c168905eba23fe2fbc78449f",
         ),
         EmpiricalSource(
             "Ionosphere radar",
@@ -88,6 +93,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             tuple(f"radar_{i}" for i in range(1, 35)),
             "return_class",
             cc,
+            "46d52186b84e20be52918adb93e8fb9926b34795ff7504c24350ae0616a04bbd",
         ),
         EmpiricalSource(
             "Sonar returns",
@@ -98,6 +104,7 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             tuple(f"band_{i}" for i in range(1, 61)),
             "object_class",
             cc,
+            "e90434cdbf00fcf93ffa911fe447ae25606979658e60f1d32e155c3b5240234d",
         ),
         EmpiricalSource(
             "Yacht hydrodynamics",
@@ -115,5 +122,6 @@ def uci_sources() -> tuple[EmpiricalSource, ...]:
             ),
             "residuary_resistance",
             cc,
+            "00dfecc0fc01ddd4c90b558a3ac11b246df8ebcfea130724223475a9a67f0ea1",
         ),
     )
