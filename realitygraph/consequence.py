@@ -9,7 +9,6 @@ from .empirical import EmpiricalDataset
 from .selective import (
     SelectiveModel,
     compile_selective_model,
-    evaluate_selective,
     sealed_split,
 )
 
@@ -48,6 +47,34 @@ class FeatureMetric:
             else:
                 terms.append(0.0 if a == b else 1.0)
         return math.sqrt(sum(terms) / len(terms)) if terms else 0.0
+
+
+@dataclass(frozen=True)
+class BandBall:
+    center: tuple[float | str | None, ...]
+    target: str
+    radius: float
+
+
+@dataclass(frozen=True)
+class BandModel:
+    metric: FeatureMetric
+    balls: tuple[BandBall, ...]
+    min_votes: int = 3
+
+    def predict(self, row: tuple[str, ...]) -> tuple[str, str | None]:
+        point = self.metric.encode(row)
+        votes = [
+            ball.target
+            for ball in self.balls
+            if self.metric.distance(point, ball.center) <= ball.radius
+        ]
+        if len(votes) < self.min_votes:
+            return "UNKNOWN", None
+        labels = set(votes)
+        if len(labels) != 1:
+            return "UNKNOWN", None
+        return "ACCEPT", votes[0]
 
 
 @dataclass(frozen=True)
@@ -105,7 +132,7 @@ class ConsequenceModel:
     regression_radius: float = 0.0
     regression_enabled: bool = False
     numeric_target_span: float = 0.0
-    numeric_band_model: SelectiveModel | None = None
+    numeric_band_model: BandModel | None = None
     numeric_band_edges: tuple[float, ...] = ()
 
     def predict(self, row: tuple[str, ...]) -> Consequence:
@@ -497,6 +524,53 @@ def _numeric_shadow_promotion(
     return True
 
 
+def _compile_band_model(
+    train: EmpiricalDataset,
+    calibration: EmpiricalDataset,
+    margin_fraction: float = 0.80,
+    min_calibration_support: int = 1,
+    min_votes: int = 3,
+) -> BandModel:
+    metric = _compile_metric(train)
+    train_rows = tuple(metric.encode(row) for row in train.features)
+    cal_rows = tuple(metric.encode(row) for row in calibration.features)
+    balls: list[BandBall] = []
+
+    for center, target in zip(train_rows, train.targets):
+        opposing = [
+            metric.distance(center, other)
+            for other, other_target in zip(train_rows, train.targets)
+            if other_target != target
+        ]
+        if not opposing:
+            continue
+        safe_radius = min(opposing) * 0.5 * margin_fraction
+        if safe_radius <= 0:
+            continue
+
+        support = []
+        contradicted = False
+        for point, cal_target in zip(cal_rows, calibration.targets):
+            distance = metric.distance(center, point)
+            if distance <= safe_radius:
+                if cal_target != target:
+                    contradicted = True
+                    break
+                support.append(distance)
+
+        if contradicted or len(support) < min_calibration_support:
+            continue
+        radius = max(support)
+        if radius <= 0:
+            continue
+        balls.append(BandBall(center, target, radius))
+
+    unique: dict[tuple[tuple[float | str | None, ...], str, float], BandBall] = {}
+    for ball in balls:
+        unique[(ball.center, ball.target, ball.radius)] = ball
+    return BandModel(metric, tuple(unique.values()), min_votes)
+
+
 def _quantile_edges(values: Sequence[float], bins: int) -> tuple[float, ...]:
     ordered = sorted(values)
     if len(ordered) < bins:
@@ -554,16 +628,23 @@ def _promote_numeric_bands(
                 transformed_training,
                 f"shadow-band-{bins}-{replay}",
             )
-            model = compile_selective_model(
+            model = _compile_band_model(
                 shadow.train,
                 shadow.calibration,
             )
-            result = evaluate_selective(shadow.test, model)
-            if result.wrong:
+            correct = wrong = 0
+            for row, target in zip(shadow.test.features, shadow.test.targets):
+                status, predicted = model.predict(row)
+                if status == "ACCEPT":
+                    if predicted == target:
+                        correct += 1
+                    else:
+                        wrong += 1
+            if wrong:
                 failed = True
                 break
-            shadow_correct += result.correct
-            shadow_total += result.total
+            shadow_correct += correct
+            shadow_total += len(shadow.test.features)
 
         if failed:
             continue
@@ -572,7 +653,7 @@ def _promote_numeric_bands(
             continue
 
         transformed_calibration = _band_dataset(calibration, edges)
-        model = compile_selective_model(
+        model = _compile_band_model(
             transformed_training,
             transformed_calibration,
         )
