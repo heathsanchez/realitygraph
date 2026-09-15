@@ -1,0 +1,33 @@
+name: equational-zmod77-replay
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_zmod77_replay.py
+      - equational_residual_demo.py
+      - equational_transition_demo.py
+      - .github/workflows/equational-zmod77-replay.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-zmod77-replay-v1
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay compiled 77-element structured model
+        run: python equational_zmod77_replay.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-zmod77-replay-v1
+          path: results/equational-zmod77-replay-v1.json
+          if-no-files-found: error
+          retention-days: 3
