@@ -47,8 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      REALITYGRAPH_HAR_COMPOUNDING_SEED: ${{ github.sha }}-har-v1
-      REALITYGRAPH_HAR_COMPOUNDING_RESULT: har-compounding-probe-v1-summary.json
+      REALITYGRAPH_HAR_COMPOUNDING_V2_SEED: ${{ github.sha }}-har-v2
+      REALITYGRAPH_HAR_COMPOUNDING_V2_RESULT: har-compounding-probe-v2-summary.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,13 +57,13 @@ jobs:
       - name: Verify memory machinery
         run: |
           python -m unittest             tests.test_transfer_memory             tests.test_retained_capability             tests.test_residual             tests.test_residual_memory -v
-      - name: Run external HAR two-generation probe
-        run: python har_compounding_probe_v1.py
+      - name: Run Phase-A-ranked external HAR two-generation probe
+        run: python har_compounding_probe_v2.py
       - name: Preserve HAR evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: har-compounding-probe-v1-evidence
-          path: har-compounding-probe-v1-summary.json
+          name: har-compounding-probe-v2-evidence
+          path: har-compounding-probe-v2-summary.json
           if-no-files-found: warn
           retention-days: 7
