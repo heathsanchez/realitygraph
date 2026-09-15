@@ -22,6 +22,7 @@ class EmpiricalSource:
     target_name: str
     license: str = "CC BY 4.0"
     expected_sha256: str = ""
+    target_kind: str = "categorical"
 
 
 @dataclass(frozen=True)
