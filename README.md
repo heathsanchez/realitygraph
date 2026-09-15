@@ -19,6 +19,43 @@ The kernel is:
 - **Keep**: retain only what changes future reach; preserve unresolved alternatives.
 - **Repeat**: begin from the changed present.
 
+## Predictive consequence fields
+
+Run:
+
+    python predictive_field_demo.py
+
+RealityGraph can now apply the same consequence-first discipline to noisy binary prediction rather than only exact finite identification.
+
+A predictive field is computed once:
+
+    rows x candidate probes -> cached probe field
+
+The learner then:
+
+    discover thresholds on train groups
+        -> collide with independent calibration groups
+        -> preserve the best surviving alternatives
+        -> backward-delete probes that no longer earn their place
+        -> compile a tiny signature decoder
+        -> touch sealed groups once
+
+The objective is consequence-specific rather than environmental identity. Candidate probes may be arbitrary measurable properties: local image regions, morphology, threshold persistence, symmetry, template residuals, ratios, or any other deterministic observation.
+
+Selection is driven by held-out log loss; AUC, worst-group log loss, and maximum group harm are reported as diagnostics. A caller may also provide an existing baseline probability for every row. Unsupported compiled signatures then fall back to that present rather than manufacturing certainty.
+
+The sealed certificate is intentionally allowed to reject a model that looked perfect during discovery and calibration. The demo includes a site-specific trap that is calibration-perfect but reverses on sealed groups; RealityGraph marks it `accepted=False`.
+
+For the Parkinson imaging use case that motivated this path:
+
+    scan                           -> empirical state
+    image property                 -> probe
+    property value                 -> observation
+    pathologic / normal            -> consequence
+    hospital / acquisition regime  -> group
+
+The purpose is not to guess comma length, posterior uptake, or a neural architecture in advance. Generate a broad lawful probe field, let positive/negative consequence nominate the separators, and retain only distinctions that survive independent environments.
+
 ## Real measured datasets
 
 Run:
@@ -233,5 +270,6 @@ A proposer may be symbolic search, an LLM, a human, another kernel, or another .
     python demo.py
     python field_demo.py
     python meta_world_demo.py
+    python predictive_field_demo.py
 
-CI runs all four on every push.
+CI runs the unit suite and frozen demos on every push.
