@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from statistics import median
 from typing import Sequence
 
 from .empirical import EmpiricalDataset
@@ -133,13 +132,15 @@ class ConsequenceModel:
         if not neighbors:
             return Consequence("UNKNOWN")
         k = min(self.regression_k, len(neighbors))
-        center = median(value for _, value in neighbors[:k])
-        radius = self.regression_radius
-        if radius <= 0:
+        local_values = [value for _, value in neighbors[:k]]
+        margin = self.regression_radius
+        low = min(local_values) - margin
+        high = max(local_values) + margin
+        if high <= low:
             return Consequence("UNKNOWN")
-        if self.numeric_target_span > 0 and 2 * radius >= self.numeric_target_span:
+        if self.numeric_target_span > 0 and (high - low) >= self.numeric_target_span:
             return Consequence("UNKNOWN")
-        return Consequence("INTERVAL", low=center - radius, high=center + radius)
+        return Consequence("INTERVAL", low=low, high=high)
 
 
 def _compile_metric(dataset: EmpiricalDataset) -> FeatureMetric:
@@ -193,13 +194,13 @@ def _nearest_class_ratio(
     return true_distance / nearest
 
 
-def _regression_point(
+def _regression_envelope(
     metric: FeatureMetric,
     train_rows: Sequence[tuple[float | str | None, ...]],
     train_targets: Sequence[str],
     row: tuple[str, ...],
     k: int,
-) -> float:
+) -> tuple[float, float]:
     point = metric.encode(row)
     neighbors = sorted(
         (
@@ -208,7 +209,8 @@ def _regression_point(
         )
         for train_row, target in zip(train_rows, train_targets)
     )
-    return median(value for _, value in neighbors[: min(k, len(neighbors))])
+    values = [value for _, value in neighbors[: min(k, len(neighbors))]]
+    return min(values), max(values)
 
 
 def compile_consequence_model(
@@ -248,10 +250,11 @@ def compile_consequence_model(
 
     residuals = []
     for row, target in zip(calibration.features, calibration.targets):
-        center = _regression_point(
+        low, high = _regression_envelope(
             metric, train_rows, train.targets, row, regression_k
         )
-        residuals.append(abs(float(target) - center))
+        value = float(target)
+        residuals.append(max(low - value, value - high, 0.0))
     radius = max(residuals, default=0.0) * regression_safety_factor
     numeric_targets = [float(value) for value in train.targets + calibration.targets]
     span = max(numeric_targets) - min(numeric_targets) if numeric_targets else 0.0
