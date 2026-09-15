@@ -1,0 +1,25 @@
+name: openml-v8-manifest
+on:
+  push:
+    branches:
+      - openml-v8
+  workflow_dispatch:
+concurrency:
+  group: openml-v8-manifest
+  cancel-in-progress: true
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml
+      - run: python probe_openml_v8_manifest.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openml-v8-manifest
+          path: openml-v8-manifest.json
+          retention-days: 14
