@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Sequence
 
 from .empirical import EmpiricalDataset
+from .evidence import certify_zero_failures
 from .selective import (
     SelectiveModel,
     compile_selective_model,
@@ -613,6 +614,8 @@ def _promote_numeric_bands(
     minimum_shadow_coverage: float = 0.03,
     min_calibration_support: int = 2,
     min_votes: int = 5,
+    promotion_confidence: float = 0.95,
+    promotion_max_error: float = 0.05,
 ) -> tuple[SelectiveModel | None, tuple[float, ...]]:
     training_values = [float(value) for value in training.targets]
 
@@ -655,6 +658,12 @@ def _promote_numeric_bands(
         coverage = shadow_correct / shadow_total if shadow_total else 0.0
         if coverage < minimum_shadow_coverage:
             continue
+        if not certify_zero_failures(
+            shadow_correct,
+            confidence=promotion_confidence,
+            max_error=promotion_max_error,
+        ).accepted:
+            continue
 
         transformed_calibration = _band_dataset(calibration, edges)
         model = _compile_band_model(
@@ -675,7 +684,9 @@ def compile_consequence_model(
     class_safety_factor: float = 1.10,
     regression_k: int = 7,
     regression_safety_factor: float = 1.25,
-    promotion_replays: int = 4,
+    promotion_replays: int = 8,
+    promotion_confidence: float = 0.95,
+    promotion_max_error: float = 0.05,
 ) -> ConsequenceModel:
     metric = _compile_metric(train)
     train_rows = tuple(metric.encode(row) for row in train.features)
@@ -756,6 +767,8 @@ def compile_consequence_model(
         train,
         calibration,
         promotion_replays,
+        promotion_confidence=promotion_confidence,
+        promotion_max_error=promotion_max_error,
     )
     return ConsequenceModel(
         "numeric",
