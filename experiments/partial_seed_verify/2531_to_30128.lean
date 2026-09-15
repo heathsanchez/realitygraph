@@ -418,14 +418,20 @@ theorem source:EquationLHS D:=by
  exact e.eq1076 (x:=x) (y:=y)
 theorem counter:¬EquationRHS D:=by
  intro h
+ have h00 : (0:D) ◇ (0:D) = 1 := by
+  change @Magma.op H (instMagma e) 0 0 = 1
+  exact ev rfl 0 0 1
+ have h10 : (1:D) ◇ (0:D) = 2 := by
+  change @Magma.op H (instMagma e) 0 1 = 2
+  exact ev rfl 0 1 2
+ have h02 : (0:D) ◇ (2:D) = 3 := by
+  change @Magma.op H (instMagma e) 2 0 = 3
+  exact ev rfl 2 0 3
+ have h03 : (0:D) ◇ (3:D) = 1 := by
+  change @Magma.op H (instMagma e) 3 0 = 1
+  exact ev rfl 3 0 1
  have t:=h (0:D)
- change (0:H)=@Magma.op H (instMagma e) (@Magma.op H (instMagma e) (@Magma.op H (instMagma e) 0 1) 0) 0 at t
- rw [
-  show @Magma.op H (instMagma e) 0 1=2 from ev rfl 0 1 2,
-  show @Magma.op H (instMagma e) 2 0=3 from ev rfl 2 0 3,
-  show @Magma.op H (instMagma e) 3 0=1 from ev rfl 3 0 1,
-  show @Magma.op H (instMagma e) 0 1=2 from ev rfl 0 1 2
- ] at t
+ simp only [h00,h10,h02,h03] at t
  have u:(0:Nat)=2:=t
  omega
 end Q
