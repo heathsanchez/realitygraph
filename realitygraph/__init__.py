@@ -14,6 +14,16 @@ from .lab import (
 )
 from .ledger import Event, Ledger
 from .mg import Law, MG
+from .residual import (
+    CompiledResidualModel,
+    ResidualCertificate,
+    ResidualPlan,
+    baseline_metrics,
+    certify_residual_batch,
+    compile_residual_model,
+    design_residual_batch,
+    evaluate_residual_model,
+)
 from .predictive import (
     CandidateTrial,
     CompiledPredictiveModel,
@@ -71,4 +81,12 @@ __all__ = [
     "evaluate_predictive_model",
     "field_from_matrix",
     "sealed_group_split",
+    "CompiledResidualModel",
+    "ResidualCertificate",
+    "ResidualPlan",
+    "baseline_metrics",
+    "certify_residual_batch",
+    "compile_residual_model",
+    "design_residual_batch",
+    "evaluate_residual_model",
 ]
