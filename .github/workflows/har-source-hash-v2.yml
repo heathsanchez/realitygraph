@@ -1,0 +1,15 @@
+name: har-source-hash-v2
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - verified-developmental-tournament-v2
+jobs:
+  hash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python prepare_har_source.py
