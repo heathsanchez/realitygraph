@@ -1,0 +1,126 @@
+name: meta-100x
+
+on:
+  push:
+    branches: [meta-100x-v1]
+  workflow_dispatch:
+
+concurrency:
+  group: meta-100x-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Meta-policy unit tests
+        run: python -m unittest tests.test_meta_policy -v
+
+  meta-train-world:
+    needs: unit
+    name: train-${{ matrix.index }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+    env:
+      REALITYGRAPH_PMLB_INDEX: ${{ matrix.index }}
+      REALITYGRAPH_PMLB_RESULT: results/pmlb-world-${{ matrix.index }}.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build one past dataset world
+        run: python pmlb_meta_world.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-train-${{ matrix.index }}
+          path: results/pmlb-world-${{ matrix.index }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  meta-heldout-world:
+    needs: unit
+    name: heldout-${{ matrix.index }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        index: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119]
+    env:
+      REALITYGRAPH_PMLB_INDEX: ${{ matrix.index }}
+      REALITYGRAPH_PMLB_RESULT: results/pmlb-world-${{ matrix.index }}.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build one sealed held-out dataset world
+        run: python pmlb_meta_world.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-heldout-${{ matrix.index }}
+          path: results/pmlb-world-${{ matrix.index }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  learn-policy:
+    needs: meta-train-world
+    runs-on: ubuntu-slim
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meta-train-*
+          path: gathered-meta-train
+          merge-multiple: true
+      - name: Learn only from one hundred past datasets
+        run: python learn_pmlb_meta_policy.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frozen-meta-policy
+          path: meta-policy-out
+          if-no-files-found: error
+          retention-days: 1
+
+  heldout-verifier:
+    needs: [learn-policy, meta-heldout-world]
+    runs-on: ubuntu-slim
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meta-heldout-*
+          path: gathered-meta-heldout
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: frozen-meta-policy
+          path: meta-policy-in
+      - name: Restart from mg and enter twenty unseen domains
+        run: python evaluate_pmlb_meta_policy.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-100x-heldout-summary
+          path: meta-heldout-summary.json
+          if-no-files-found: error
+          retention-days: 7
