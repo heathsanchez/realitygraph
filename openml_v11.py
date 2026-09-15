@@ -13,7 +13,7 @@ from scope_gate_v5 import eval_group
 POLICY_PATH=Path("frozen-meta/adaptive_policy.mg")
 POLICY_SHA="3da082adbcfcacc53c9745a0b6af42a4ea33655e43c3768bc755fdf41168fa92"
 CFG_PATH=Path("frozen-meta/openml_state_v11.json")
-MANIFEST_SHA="TO_BE_FROZEN"
+MANIFEST_SHA="02db015eaf28db8fdae23d73809b06bf8083fb4ce7fe908a32da4829684cc024"
 
 def h(seed,value):
     return hashlib.sha256(f"{seed}|{value}".encode()).digest()
