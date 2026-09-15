@@ -9,7 +9,7 @@ PMLB="https://raw.githubusercontent.com/EpistasisLab/pmlb/7c1f4bdc00136dc2e55c87
 
 def stem(x):
     s=str(x).lower().replace("-","_").replace(" ","_")
-    s=re.sub(r"_seed_\\d+.*$","",s)
+    s=re.sub(r"_seed_\d+.*$","",s)
     return re.sub(r"[^a-z0-9]+","",s)
 def n(x): return str(x).lower().replace("_","").replace(" ","")
 def col(df,*xs):
@@ -25,7 +25,7 @@ def main():
     cc=col(tasks,"NumberOfClasses"); xc=col(tasks,"NumberOfNumericFeatures")
     req=urllib.request.Request(PMLB,headers={"User-Agent":"RealityGraph V8 manifest"})
     with urllib.request.urlopen(req,timeout=60) as r: raw=r.read()
-    oldnames={stem(x["dataset"]) for x in csv.DictReader(io.StringIO(raw.decode()),delimiter="\t") if x.get("task")=="classification"}
+    oldnames={stem(x["dataset"]) for x in csv.DictReader(io.StringIO(raw.decode()),delimiter="\t")}
     v7names={stem(x) for x in (
         "Australian","jungle_chess_2pcs_raw_endgame_complete","cmc",
         "blood-transfusion-service-center","steel-plates-fault","ada","pc4","wilt",
@@ -41,7 +41,7 @@ def main():
         name=str(x[nc])
         if did in OLD or stem(name) in oldnames or stem(name) in v7names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":f,"classes":c,"numeric_features":num}
-        if did not in bydata or tid<bydata[did]["task_id"]:bydata[did]=z
+        family=stem(name)\n        if family not in bydata or tid<bydata[family]["task_id"]:bydata[family]=z
     a=list(bydata.values())
     a.sort(key=lambda z:(hashlib.sha256(f"{SEED}|{z['task_id']}|{z['data_id']}|{z['name']}|{z['instances']}|{z['features']}|{z['classes']}".encode()).digest(),z["task_id"]))
     block=a[:20]
