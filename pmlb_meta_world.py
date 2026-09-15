@@ -89,9 +89,9 @@ def corpus_manifest(summary_raw: bytes) -> list[dict]:
             row["dataset"],
         )
     )
-    if len(eligible) < 120:
+    if len(eligible) < 140:
         raise AssertionError(f"PMLB eligibility produced only {len(eligible)} datasets")
-    return eligible[:120]
+    return eligible[:140]
 
 
 def _parse_dataset(raw_gz: bytes) -> tuple[list[str], list[list[float]], list[float]]:

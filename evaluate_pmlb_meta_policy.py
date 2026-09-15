@@ -54,12 +54,16 @@ def main():
     policy_dir = Path(
         os.environ.get("REALITYGRAPH_META_POLICY_DIR", "meta-policy-in")
     )
+    heldout_start = int(
+        os.environ.get("REALITYGRAPH_META_HELDOUT_START", "100")
+    )
+    heldout_stop = heldout_start + 20
 
     worlds = _load_worlds(heldout_root)
     if len(worlds) != 20:
         raise AssertionError(f"expected 20 held-out worlds, got {len(worlds)}")
     if any(
-        world["role"] != "heldout" or not 100 <= world["index"] < 120
+        world["role"] != "heldout" or not heldout_start <= world["index"] < heldout_stop
         for world in worlds
     ):
         raise AssertionError("training dataset leaked into held-out evaluation")
@@ -92,6 +96,7 @@ def main():
     print("--------------------------------------------------")
     print(f"frozen_policy_training_worlds={policy.training_worlds}")
     print(f"heldout_worlds={len(worlds)}")
+    print(f"heldout_range={heldout_start}:{heldout_stop}")
     print(f"learned_search_budget={policy.budget}")
     print(f"policy_memory_bytes={len(memory_text.encode())}")
     print()
