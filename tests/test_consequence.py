@@ -46,7 +46,7 @@ class ConsequenceFrontierTests(unittest.TestCase):
             targets.append("C")
         dataset = EmpiricalDataset(source(), tuple(features), tuple(targets), "deadbeef")
         split = sealed_split(dataset, "frontier-cat")
-        model = compile_consequence_model(split.train, split.calibration)
+        model = compile_consequence_model(split.train, split.calibration, promotion_replays=0)
         result = evaluate_consequences(split.test, model)
 
         self.assertEqual(result.wrong, 0)
@@ -76,6 +76,7 @@ class ConsequenceFrontierTests(unittest.TestCase):
             calibration,
             regression_k=2,
             regression_safety_factor=1.5,
+            promotion_replays=0,
         )
         result = evaluate_consequences(test, model)
 
@@ -97,7 +98,7 @@ class ConsequenceFrontierTests(unittest.TestCase):
             ("1000", "-1000"),
             "deadbeef",
         )
-        model = compile_consequence_model(train, calibration)
+        model = compile_consequence_model(train, calibration, promotion_replays=0)
         status = model.predict(("1.5", "1.5"))
         self.assertEqual(status.kind, "UNKNOWN")
 
