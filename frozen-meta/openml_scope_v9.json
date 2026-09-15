@@ -1,0 +1,14 @@
+{
+  "version": "openml-scope-v9-probation-v1",
+  "training_evidence": [
+    {"run": 35011307417, "artifact_sha256": "7ee604cbc5d71c009350b2b1946f85c345924c1e2265c54e221c5c961afa1290"},
+    {"run": 35035115639, "artifact_sha256": "2481d2f2c300d184c5d690564b725d7474895a6a5d6730f4df76a775fc273962"}
+  ],
+  "candidate_precondition": "adaptive_cal_gain >= 0.01599671357125708",
+  "gain_threshold": 0.01599671357125708,
+  "probation_groups": 1,
+  "probation_verifier": "future_group_gain > 0.0001",
+  "deployment_groups": "all future groups after probation",
+  "search_during_probation": false,
+  "v9_target_outcomes_used": false
+}
