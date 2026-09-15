@@ -49,34 +49,71 @@ def _parse_identity(formula):
     return lhs, rhs, variables
 
 
-def _eval(node, env, n, a, b, c):
-    if node[0] == "v":
-        return env[node[1]]
-    x = _eval(node[1], env, n, a, b, c)
-    y = _eval(node[2], env, n, a, b, c)
-    return (a * x + b * y + c) % n
+def _linear_form(node, variables, n, a, b, c):
+    width = len(variables)
+    index = {name: i for i, name in enumerate(variables)}
+
+    def rec(term):
+        if term[0] == "v":
+            coeffs = [0] * width
+            coeffs[index[term[1]]] = 1
+            return coeffs, 0
+        lc, lk = rec(term[1])
+        rc, rk = rec(term[2])
+        coeffs = [
+            (a * x + b * y) % n
+            for x, y in zip(lc, rc)
+        ]
+        const = (a * lk + b * rk + c) % n
+        return coeffs, const
+
+    return rec(node)
+
+
+def _difference(identity, n, a, b, c):
+    lhs, rhs, variables = identity
+    lc, lk = _linear_form(lhs, variables, n, a, b, c)
+    rc, rk = _linear_form(rhs, variables, n, a, b, c)
+    coeffs = tuple((x - y) % n for x, y in zip(lc, rc))
+    const = (lk - rk) % n
+    return variables, coeffs, const
 
 
 def _holds(identity, n, a, b, c):
-    lhs, rhs, variables = identity
-    for vals in itertools.product(range(n), repeat=len(variables)):
-        env = dict(zip(variables, vals))
-        if _eval(lhs, env, n, a, b, c) != _eval(rhs, env, n, a, b, c):
-            return False
-    return True
+    _, coeffs, const = _difference(identity, n, a, b, c)
+    return const == 0 and all(value == 0 for value in coeffs)
+
+
+def _eval_term(node, env, n, a, b, c):
+    if node[0] == "v":
+        return env[node[1]]
+    x = _eval_term(node[1], env, n, a, b, c)
+    y = _eval_term(node[2], env, n, a, b, c)
+    return (a * x + b * y + c) % n
 
 
 def _failure(identity, n, a, b, c):
     lhs, rhs, variables = identity
-    checked = 0
-    for vals in itertools.product(range(n), repeat=len(variables)):
-        checked += 1
-        env = dict(zip(variables, vals))
-        lv = _eval(lhs, env, n, a, b, c)
-        rv = _eval(rhs, env, n, a, b, c)
-        if lv != rv:
-            return {"assignment": env, "lhs": lv, "rhs": rv, "checked": checked}
-    return None
+    _, coeffs, const = _difference(identity, n, a, b, c)
+    if const == 0 and all(value == 0 for value in coeffs):
+        return None
+    env = {name: 0 for name in variables}
+    if const == 0:
+        for name, coeff in zip(variables, coeffs):
+            if coeff != 0:
+                env[name] = 1
+                break
+    lv = _eval_term(lhs, env, n, a, b, c)
+    rv = _eval_term(rhs, env, n, a, b, c)
+    if lv == rv:
+        raise AssertionError("symbolic affine witness construction failed")
+    return {
+        "assignment": env,
+        "lhs": lv,
+        "rhs": rv,
+        "coefficient_difference": dict(zip(variables, coeffs)),
+        "constant_difference": const,
+    }
 
 
 def main():
