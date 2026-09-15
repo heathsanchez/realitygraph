@@ -3,6 +3,7 @@ name: verify
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -33,3 +34,5 @@ jobs:
         run: python future_data_demo.py
       - name: Adaptive consequence frontier
         run: python consequence_future_demo.py
+      - name: Predictive consequence field
+        run: python predictive_field_demo.py
