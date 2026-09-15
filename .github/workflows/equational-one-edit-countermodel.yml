@@ -1,0 +1,103 @@
+name: equational-one-edit-countermodel
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_one_edit_countermodel_shard.py
+      - aggregate_equational_one_edit_countermodel.py
+      - equational_countermodel_bank.py
+      - equational_residual_demo.py
+      - .github/workflows/equational-one-edit-countermodel.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-one-edit-countermodel-v1
+  cancel-in-progress: true
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Acquire pinned external corpus once
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib, urllib.request
+          url = "https://codeload.github.com/YanbiaoLab/equational-challenges/tar.gz/bed33e36c33fca139d902addd8cb77cd4172fe64"
+          expected = "284b45196a9e8a31f1bd3aeb05040c451a615fed2ca8ba724d7a14a833e842eb"
+          req = urllib.request.Request(url, headers={"User-Agent":"RealityGraph/1.0 passive pinned corpus"})
+          with urllib.request.urlopen(req, timeout=90) as response:
+              raw = response.read()
+          got = hashlib.sha256(raw).hexdigest()
+          if got != expected:
+              raise SystemExit(f"archive hash mismatch: {got}")
+          path = pathlib.Path(".cache/equational/equational-challenges.tar.gz")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_bytes(raw)
+          print(got)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinned-equational-corpus-one-edit
+          path: .cache/equational/equational-challenges.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  repair:
+    needs: acquire
+    name: repair-${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    env:
+      REALITYGRAPH_SHARD: ${{ matrix.shard }}
+      REALITYGRAPH_SHARDS: 16
+      REALITYGRAPH_EQUATIONAL_ARCHIVE: .cache/equational/equational-challenges.tar.gz
+      REALITYGRAPH_SHARD_RESULT: results/one-edit-countermodel-shard-${{ matrix.shard }}.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinned-equational-corpus-one-edit
+          path: .cache/equational
+      - name: Mutate source-valid verified models by one operation entry
+        run: python equational_one_edit_countermodel_shard.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: one-edit-countermodel-shard-${{ matrix.shard }}
+          path: results/one-edit-countermodel-shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 2
+
+  aggregate:
+    needs: repair
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: one-edit-countermodel-shard-*
+          path: gathered-one-edit
+          merge-multiple: true
+      - name: Aggregate minimal verified-model repairs
+        run: python aggregate_equational_one_edit_countermodel.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-one-edit-countermodel-v1
+          path: results/equational-one-edit-countermodel-v1.json
+          if-no-files-found: error
+          retention-days: 3
