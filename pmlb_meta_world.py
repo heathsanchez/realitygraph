@@ -107,8 +107,21 @@ def _parse_dataset(raw_gz: bytes) -> tuple[list[str], list[list[float]], list[fl
     for row in reader:
         if not row:
             continue
-        values = [float(cell) for i, cell in enumerate(row) if i != target_i]
-        target = float(row[target_i])
+        try:
+            values = [
+                float(cell)
+                for i, cell in enumerate(row)
+                if i != target_i and cell.strip() != ""
+            ]
+            feature_cells = [
+                cell for i, cell in enumerate(row)
+                if i != target_i
+            ]
+            if len(values) != len(feature_cells) or row[target_i].strip() == "":
+                continue
+            target = float(row[target_i])
+        except ValueError:
+            continue
         if any(not math.isfinite(value) for value in values):
             continue
         if not math.isfinite(target):
