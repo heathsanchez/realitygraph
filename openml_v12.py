@@ -64,7 +64,7 @@ def adaptive_run(worlds,cfg):
     events=[]
     for w in worlds:
         for j,g in enumerate(w["micro_groups"][3:],start=3):
-            events.append((h("openml-v12-deploy",f"{w['task_id']}|{j}"),w,j,g))
+            events.append((h("openml-v11-deploy",f"{w['task_id']}|{j}"),w,j,g))
     events.sort(key=lambda x:(x[0],x[1]["task_id"],x[2]))
 
     active=restarted; verified=deploy_causal=failures=unknown=0
