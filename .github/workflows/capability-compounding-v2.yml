@@ -1,0 +1,44 @@
+name: capability-compounding-v2
+
+on:
+  push:
+    branches: [capability-compounding-v2]
+  workflow_dispatch:
+
+concurrency:
+  group: capability-compounding-v2
+  cancel-in-progress: true
+
+jobs:
+  recursive-compounding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REALITYGRAPH_COMPOUNDING_V2_SEED: ${{ github.sha }}-v2
+      REALITYGRAPH_COMPOUNDING_V2_RESULT: capability-compounding-v2-summary.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify compounding memory
+        run: |
+          python -m unittest             tests.test_transfer_memory             tests.test_retained_capability             tests.test_residual             tests.test_residual_memory -v
+
+      - name: Acquire pinned grouped worlds
+        run: python prepare_grouped_datasets.py
+
+      - name: Run second-generation capability compounding
+        run: python recursive_capability_compounding_v2.py
+
+      - name: Preserve V2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-compounding-v2-evidence
+          path: capability-compounding-v2-summary.json
+          if-no-files-found: warn
+          retention-days: 7
