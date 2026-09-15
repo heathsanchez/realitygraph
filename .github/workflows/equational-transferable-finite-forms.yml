@@ -1,0 +1,34 @@
+name: equational-transferable-finite-forms
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_transferable_finite_forms.py
+      - equational_residual_demo.py
+      - equational_transition_demo.py
+      - equational_internal_lemma_bank.py
+      - .github/workflows/equational-transferable-finite-forms.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-transferable-finite-forms-v1
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Classify remaining finite constructor forms
+        run: python equational_transferable_finite_forms.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-transferable-finite-forms-v1
+          path: results/equational-transferable-finite-forms-v1.json
+          if-no-files-found: error
+          retention-days: 3
