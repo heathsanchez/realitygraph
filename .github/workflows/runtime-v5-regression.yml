@@ -1,0 +1,42 @@
+name: runtime-v5-regression
+on:
+  push:
+    branches:
+      - runtime-v5
+  workflow_dispatch:
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_RUNTIME_V4_RESULT: runtime-v5-regression-summary.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bring in existing regression world
+        run: |
+          git fetch origin meta-100x-v1 --depth=1
+          git show FETCH_HEAD:pmlb_regression_world.py > pmlb_regression_world.py
+      - name: Freeze regression frontier
+        run: |
+          sed -i 's/return eligible\[:100\]/return eligible[:120]/' pmlb_regression_world.py
+          sed -i '2i from pmlb_regression_world import regression_manifest, _balanced_binary_labels' developmental_runtime_v4.py
+          sed -i 's/corpus_manifest(summary_raw)/regression_manifest(summary_raw)/g' developmental_runtime_v4.py
+          sed -i 's/labels = _binary_labels(targets)/labels, _ = _balanced_binary_labels(targets)/' developmental_runtime_v4.py
+          sed -i 's/len(manifest) != 140/len(manifest) != 120/' developmental_runtime_v4.py
+          sed -i 's/PASS_PROSPECTIVE_DEVELOPMENTAL_RUNTIME_V4/PASS_CROSS_FAMILY_DEVELOPMENTAL_RUNTIME_V5/' developmental_runtime_v4.py
+      - name: Confirm frontier metadata only
+        run: python -c "import pmlb_regression_world as p; m=p.regression_manifest(p._download(p.SUMMARY_URL)); print('manifest',len(m)); [print(i,m[i]) for i in range(100,120)]"
+      - name: Run V5
+        run: python developmental_runtime_v4.py
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-v5-regression-evidence
+          path: runtime-v5-regression-summary.json
+          if-no-files-found: warn
+          retention-days: 14
