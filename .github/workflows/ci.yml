@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 15
     env:
       REALITYGRAPH_RUN_SEED: ${{ github.sha }}-${{ github.run_id }}
+      REALITYGRAPH_FREEZE_SEED: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,3 +29,5 @@ jobs:
         run: python real_world_demo.py
       - name: Real measured dataset audit
         run: python real_data_demo.py
+      - name: Sealed future measurement benchmark
+        run: python future_data_demo.py
