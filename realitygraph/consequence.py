@@ -137,6 +137,8 @@ class ConsequenceModel:
         radius = self.regression_radius
         if radius <= 0:
             return Consequence("UNKNOWN")
+        if self.numeric_target_span > 0 and 2 * radius >= self.numeric_target_span:
+            return Consequence("UNKNOWN")
         return Consequence("INTERVAL", low=center - radius, high=center + radius)
 
 
