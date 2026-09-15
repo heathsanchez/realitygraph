@@ -243,11 +243,7 @@ def submission : Goal := by
   · intro x y z
     change x = submission.op (submission.op (y) (submission.op (x) (y))) (submission.op (submission.op (z) (z)) (z))
     rw [submission.staticSourceConst0 z] <;> exact submission.staticSourceResidual x y
-  · intro h
-    have bad := h submission.e0 submission.e1
-    have badBit := congrArg submission.separates bad
-    change true = false at badBit
-    exact Bool.noConfusion badBit
+  · decideFin!
 
 -- Explicit verdict-specific target, independent of the Goal abbreviation.
 theorem certificate_22505_to_40367 : ∃ (G : Type) (_ : Magma G), EquationLHS G ∧ ¬ EquationRHS G := submission
