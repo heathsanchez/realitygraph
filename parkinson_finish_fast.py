@@ -8,7 +8,6 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import log_loss, roc_auc_score
 
 
 WORK = Path("/workspace")
@@ -41,6 +40,39 @@ MAX_THRESHOLDS = 31
 
 def clip_p(p):
     return np.clip(np.asarray(p, dtype=float), 1e-6, 1 - 1e-6)
+
+
+def log_loss(y_true, y_prob):
+    y = np.asarray(y_true, dtype=float)
+    p = clip_p(y_prob)
+    return float(np.mean(-(y * np.log(p) + (1 - y) * np.log(1 - p))))
+
+
+def roc_auc_score(y_true, y_score):
+    y = np.asarray(y_true, dtype=int)
+    s = np.asarray(y_score, dtype=float)
+    n = len(y)
+    n1 = int(np.sum(y == 1))
+    n0 = n - n1
+    if n0 == 0 or n1 == 0:
+        raise ValueError("AUC requires both classes")
+
+    order = np.argsort(s, kind="mergesort")
+    ranks = np.empty(n, dtype=float)
+    sorted_s = s[order]
+    i = 0
+    while i < n:
+        j = i + 1
+        while j < n and sorted_s[j] == sorted_s[i]:
+            j += 1
+        avg_rank = 0.5 * ((i + 1) + j)
+        ranks[order[i:j]] = avg_rank
+        i = j
+
+    return float(
+        (np.sum(ranks[y == 1]) - n1 * (n1 + 1) / 2.0)
+        / (n1 * n0)
+    )
 
 
 def logit(p):
