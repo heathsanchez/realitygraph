@@ -54,7 +54,11 @@ class SelectiveFutureTests(unittest.TestCase):
             targets.append("B")
         dataset = EmpiricalDataset(source(), tuple(features), tuple(targets), "deadbeef")
         split = sealed_split(dataset, "clustered")
-        model = compile_selective_model(split.train, split.calibration)
+        model = compile_selective_model(
+            split.train,
+            split.calibration,
+            promotion_replays=0,
+        )
         result = evaluate_selective(split.test, model)
 
         self.assertEqual(result.wrong, 0)
