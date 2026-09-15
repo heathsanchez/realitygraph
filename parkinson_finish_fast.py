@@ -132,6 +132,14 @@ def load_exact_candidate_field():
         node
         for node in tree.body
         if getattr(node, "end_lineno", 0) <= feature_node.end_lineno
+        and not (
+            isinstance(node, ast.ImportFrom)
+            and (node.module or "").startswith("sklearn")
+        )
+        and not (
+            isinstance(node, ast.Import)
+            and any(alias.name.startswith("sklearn") for alias in node.names)
+        )
     ]
     prefix = ast.Module(body=prefix_nodes, type_ignores=[])
     ast.fix_missing_locations(prefix)
