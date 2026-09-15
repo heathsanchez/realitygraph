@@ -611,6 +611,8 @@ def _promote_numeric_bands(
     replays: int,
     candidate_bins: Sequence[int] = (8, 6, 4, 3, 2),
     minimum_shadow_coverage: float = 0.03,
+    min_calibration_support: int = 2,
+    min_votes: int = 5,
 ) -> tuple[SelectiveModel | None, tuple[float, ...]]:
     training_values = [float(value) for value in training.targets]
 
@@ -631,6 +633,8 @@ def _promote_numeric_bands(
             model = _compile_band_model(
                 shadow.train,
                 shadow.calibration,
+                min_calibration_support=min_calibration_support,
+                min_votes=min_votes,
             )
             correct = wrong = 0
             for row, target in zip(shadow.test.features, shadow.test.targets):
@@ -656,6 +660,8 @@ def _promote_numeric_bands(
         model = _compile_band_model(
             transformed_training,
             transformed_calibration,
+            min_calibration_support=min_calibration_support,
+            min_votes=min_votes,
         )
         return model, edges
 
