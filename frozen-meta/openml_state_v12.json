@@ -1,0 +1,16 @@
+{
+  "version": "openml-capability-state-v12-adaptive-evidence-v1",
+  "parent_protocol": "openml-capability-state-v11-v1",
+  "development_evidence_run": 35036822832,
+  "candidate_gain_floor": 0.01599671357125708,
+  "direct_gain_threshold": 0.05718096689694352,
+  "max_evidence_microshards": 3,
+  "deployment_microshards": 5,
+  "microshard_assignment": "target-blind deterministic hash",
+  "verifier_pass": "group gain > 0.0001",
+  "direct_rule": "ACTIVE immediately after two passes; SUSPENDED immediately after two failures; otherwise use third shard and require at least two of three passes",
+  "borderline_rule": "SUSPENDED immediately on any failure; ACTIVE only after three passes",
+  "hard_restart_before_deployment": true,
+  "search_after_acquisition": false,
+  "v12_target_outcomes_used": false
+}
