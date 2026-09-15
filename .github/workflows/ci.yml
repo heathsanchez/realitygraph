@@ -117,11 +117,18 @@ jobs:
 
   grouped-stability:
     needs: datasets
-    name: natural-group-stability
+    name: natural-group-${{ matrix.replay }}
     runs-on: ubuntu-slim
-    timeout-minutes: 20
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        replay: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     env:
       REALITYGRAPH_GROUP_STABILITY_SEED: ${{ github.sha }}-natural-groups
+      REALITYGRAPH_GROUP_REPLAY: ${{ matrix.replay }}
+      REALITYGRAPH_GROUP_RESULT: results/grouped-stability-${{ matrix.replay }}.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -131,5 +138,27 @@ jobs:
         with:
           name: pinned-grouped
           path: .cache/grouped-real
-      - name: Sixteen natural-group futures
-        run: python grouped_stability_demo.py
+      - name: One sealed natural-group future
+        run: python grouped_stability_seed.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grouped-stability-${{ matrix.replay }}
+          path: results/grouped-stability-${{ matrix.replay }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  grouped-stability-aggregate:
+    needs: grouped-stability
+    if: always()
+    name: natural-group-aggregate
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: grouped-stability-*
+          path: gathered-group
+          merge-multiple: true
+      - name: Aggregate transfer certificates
+        run: python aggregate_grouped_stability.py
