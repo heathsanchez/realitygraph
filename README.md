@@ -62,7 +62,7 @@ Fresh worlds in the same verified model family then require:
 
 The demo solves 64 fresh hidden worlds this way.
 
-A restart that discards the derived decoder but retains only .mg can rebuild the decoder from the retained batch without repeating experiment search. For the four training families the rebuild requires 52,034 predictions rather than reconstructing the whole 152,369-prediction consequence field.
+A restart that discards the derived decoder but retains only .mg can rebuild the decoder from the retained batch without repeating experiment search. For the four training families the rebuild requires 52,034 predictions rather than reconstructing the whole 152,369-prediction consequence field: **2.93x less work** before the first new observation.
 
 Ablating retained capability restores the cold design path.
 
