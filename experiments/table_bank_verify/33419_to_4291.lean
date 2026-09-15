@@ -96,7 +96,8 @@ theorem source : EquationLHS (Fin 26) := by
 theorem target_false : ¬ EquationRHS (Fin 26) := by
   intro h
   have bad := h (0 : Fin 26) (1 : Fin 26)
-  decide at bad
+  change (25 : Fin 26) = 4 at bad
+  exact (by decide : Not ((25 : Fin 26) = 4)) bad
 
 end Countermodel33419To118
 
