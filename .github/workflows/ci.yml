@@ -1,11 +1,14 @@
 name: verify
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   realitygraph:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     env:
       REALITYGRAPH_RUN_SEED: ${{ github.sha }}-${{ github.run_id }}
     steps:
