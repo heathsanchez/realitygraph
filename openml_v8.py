@@ -12,7 +12,7 @@ from scope_gate_v5 import run_portfolio
 POLICY_PATH=Path("frozen-meta/adaptive_policy.mg")
 POLICY_SHA="3da082adbcfcacc53c9745a0b6af42a4ea33655e43c3768bc755fdf41168fa92"
 SCOPE_PATH=Path("frozen-meta/openml_scope_v8.json")
-MANIFEST_SHA="TO_BE_FROZEN"
+MANIFEST_SHA="fa680b627db3d8ac1056fb07d7dcda448ecba35667a3fe7e5b3c433bd0ee905f"
 
 def main():
     freeze_manifest()
