@@ -1,0 +1,34 @@
+name: equational-global-theory-transfer
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_global_theory_transfer.py
+      - equational_internal_lemma_bank.py
+      - equational_residual_demo.py
+      - equational_transition_demo.py
+      - .github/workflows/equational-global-theory-transfer.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-global-theory-transfer-v1
+  cancel-in-progress: true
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mine and transfer verified internal theories globally
+        run: python equational_global_theory_transfer.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-global-theory-transfer-v1
+          path: results/equational-global-theory-transfer-v1.json
+          if-no-files-found: error
+          retention-days: 3
