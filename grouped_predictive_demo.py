@@ -11,6 +11,7 @@ from realitygraph.predictive import (
     field_from_matrix,
     sealed_group_split,
 )
+from realitygraph.residual import certify_residual_batch
 
 
 def sealed_row_split(labels, seed: str) -> PredictiveSplit:
@@ -57,6 +58,7 @@ def main():
     print()
 
     accepted = 0
+    residual_accepted = 0
     for dataset in grouped_real_datasets(cache):
         field = field_from_matrix(
             dataset.probe_names,
@@ -89,6 +91,24 @@ def main():
             min_sealed_gain=1e-4,
             min_support=4,
         )
+
+        train_positive = sum(dataset.labels[i] for i in split.train)
+        prior = (train_positive + 1.0) / (len(split.train) + 2.0)
+        baseline_probabilities = [prior] * len(dataset.values)
+        residual = certify_residual_batch(
+            field,
+            split,
+            baseline_probabilities,
+            max_probes=8,
+            min_calibration_gain=1e-4,
+            min_sealed_gain=1e-4,
+            max_group_harm=0.0,
+            min_support=4,
+        )
+        if residual.accepted:
+            residual_accepted += 1
+            if residual.sealed_metrics.max_group_harm > 1e-12:
+                raise AssertionError(f"{dataset.name}: residual harmed a sealed group")
         if certificate.accepted:
             accepted += 1
             if not (
@@ -131,11 +151,20 @@ def main():
             f"  grouping_penalty_LL="
             f"{certificate.sealed_metrics.log_loss - row_certificate.sealed_metrics.log_loss:.6f}"
         )
+        print(
+            f"  residual_from_prior: retained="
+            f"{[rule.probe_name for rule in residual.plan.rules]} "
+            f"baseline_LL={residual.sealed_baseline_metrics.log_loss:.6f} "
+            f"candidate_LL={residual.sealed_metrics.log_loss:.6f} "
+            f"max_group_harm={residual.sealed_metrics.max_group_harm:.6f} "
+            f"accepted={residual.accepted}"
+        )
         for url, digest in dataset.source_hashes:
             print(f"  sha256={digest} url={url}")
         print()
 
     print(f"accepted_datasets={accepted}")
+    print(f"residual_accepted_datasets={residual_accepted}")
     print("VERDICT")
     print("REAL_GROUP_SPLIT_COMPLETE")
 
