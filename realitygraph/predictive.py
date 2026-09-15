@@ -199,6 +199,59 @@ def sealed_group_split(
     )
 
 
+def leave_one_group_out_split(
+    groups: Sequence[Group],
+    held_out_group: Group,
+    seed: str,
+    calibration_fraction: float = 0.25,
+) -> PredictiveSplit:
+    """Seal exactly one natural group and partition every other group upstream.
+
+    Unlike repeated random group splits, this makes group coverage exhaustive:
+    every requested held-out person/site/day is the entire test partition.
+    """
+    if not 0 < calibration_fraction < 1:
+        raise ValueError("invalid calibration fraction")
+
+    unique = sorted(set(groups), key=lambda item: repr(item))
+    if held_out_group not in unique:
+        raise ValueError("held-out group is absent")
+    remaining = [group for group in unique if group != held_out_group]
+    if len(remaining) < 2:
+        raise ValueError("leave-one-group-out requires at least three groups")
+
+    def key(group: Group) -> bytes:
+        return hashlib.sha256(
+            f"{seed}|calibration|{group!r}".encode()
+        ).digest()
+
+    ordered = sorted(remaining, key=key)
+    n_cal = max(1, int(round(len(ordered) * calibration_fraction)))
+    if n_cal >= len(ordered):
+        n_cal = len(ordered) - 1
+
+    calibration_groups = set(ordered[:n_cal])
+    train_groups = set(ordered[n_cal:])
+    test_groups = {held_out_group}
+
+    train = tuple(i for i, group in enumerate(groups) if group in train_groups)
+    calibration = tuple(
+        i for i, group in enumerate(groups) if group in calibration_groups
+    )
+    test = tuple(i for i, group in enumerate(groups) if group in test_groups)
+
+    if not train or not calibration or not test:
+        raise ValueError("leave-one-group-out produced an empty partition")
+    return PredictiveSplit(
+        train,
+        calibration,
+        test,
+        hashlib.sha256(
+            f"{seed}|held-out|{held_out_group!r}".encode()
+        ).hexdigest()[:16],
+    )
+
+
 def _clip_probability(value: float) -> float:
     return min(max(float(value), 1e-6), 1.0 - 1e-6)
 
