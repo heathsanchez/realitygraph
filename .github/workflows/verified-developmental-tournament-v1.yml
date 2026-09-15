@@ -1,0 +1,44 @@
+name: verified-developmental-tournament-v1
+
+on:
+  push:
+    branches: [verified-developmental-tournament-v1]
+  workflow_dispatch:
+
+concurrency:
+  group: verified-developmental-tournament-v1
+  cancel-in-progress: true
+
+jobs:
+  developmental-tournament:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      REALITYGRAPH_DEVELOPMENTAL_SEED: ${{ github.sha }}-developmental-v1
+      REALITYGRAPH_DEVELOPMENTAL_RESULT: verified-developmental-tournament-summary.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify developmental machinery
+        run: |
+          python -m unittest             tests.test_transfer_memory             tests.test_retained_capability             tests.test_developmental_tournament -v
+
+      - name: Acquire pinned external grouped worlds
+        run: python prepare_grouped_datasets.py
+
+      - name: Run verified developmental tournament
+        run: python verified_developmental_tournament.py
+
+      - name: Preserve tournament evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-developmental-tournament-v1-evidence
+          path: verified-developmental-tournament-summary.json
+          if-no-files-found: warn
+          retention-days: 14
