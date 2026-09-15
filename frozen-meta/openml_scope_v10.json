@@ -1,0 +1,12 @@
+{
+  "version": "openml-scope-v10-selective-escalation-v1",
+  "training_evidence_runs": [35011307417, 35035115639, 35035644644],
+  "direct_promotion_gain": 0.05718096689694352,
+  "borderline_gain_floor": 0.01599671357125708,
+  "borderline_probation_groups": 2,
+  "borderline_activation": "both probation future groups have gain > 0.0001",
+  "direct_candidates_use_probation": false,
+  "deployment_groups": "future groups after the first two for all policies",
+  "future_search_after_acquisition": false,
+  "v10_target_outcomes_used": false
+}
