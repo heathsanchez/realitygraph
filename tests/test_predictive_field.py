@@ -2,6 +2,7 @@ import unittest
 
 from realitygraph.predictive import (
     PredictiveSplit,
+    binary_auc,
     build_probe_field,
     certify_predictive_batch,
     field_from_matrix,
@@ -10,6 +11,14 @@ from realitygraph.predictive import (
 
 
 class PredictiveFieldTests(unittest.TestCase):
+    def test_rank_auc_matches_pairwise_tie_semantics(self):
+        labels = [0, 1, 0, 1, 1, 0]
+        scores = [0.1, 0.9, 0.4, 0.4, 0.8, 0.4]
+        # Pairwise: positive 0.9 wins all 3, 0.8 wins all 3,
+        # positive 0.4 beats 0.1 and ties two 0.4 negatives.
+        expected = (3 + 3 + 1 + 1.0) / 9.0
+        self.assertAlmostEqual(binary_auc(labels, scores), expected)
+
     def test_build_field_computes_each_probe_once(self):
         calls = {"stable": 0, "noise": 0}
         states = list(range(6))
