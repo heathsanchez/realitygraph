@@ -6,10 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-concurrency:
-  group: realitygraph-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   realitygraph:
     runs-on: ubuntu-latest
