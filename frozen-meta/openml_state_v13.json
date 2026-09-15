@@ -1,0 +1,15 @@
+{
+  "version": "openml-capability-state-v13-replication-v1",
+  "protocol_source_commit": "e0f176902d8c00813dbcbd5e238f9ce7c134e95e",
+  "protocol": "exact replication of V12 adaptive-evidence semantics",
+  "candidate_gain_floor": 0.01599671357125708,
+  "direct_gain_threshold": 0.05718096689694352,
+  "max_evidence_microshards": 3,
+  "deployment_microshards": 5,
+  "direct_rule": "ACTIVE immediately after two passes; SUSPENDED immediately after two failures; otherwise use third shard and require at least two of three passes",
+  "borderline_rule": "SUSPENDED immediately on any failure; ACTIVE only after three passes",
+  "hard_restart_before_deployment": true,
+  "search_after_acquisition": false,
+  "pass_gate": "same active set and same deployment outcome as fixed V11 with at least 15 percent fewer verifier checks",
+  "v13_target_outcomes_used": false
+}
