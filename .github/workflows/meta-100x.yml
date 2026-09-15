@@ -1,4 +1,4 @@
-name: meta-100x
+name: meta-100x-cross-task
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sealed-confirmation:
+  sealed-cross-task:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -23,7 +23,7 @@ jobs:
       - name: Meta-policy unit tests
         run: python -m unittest tests.test_meta_policy -v
 
-      - name: Build one hundred past dataset worlds
+      - name: Rebuild one hundred classification training worlds
         shell: bash
         run: |
           set -euo pipefail
@@ -34,45 +34,46 @@ jobs:
             python pmlb_meta_world.py
           '
 
-      - name: Compile policy before any second-block world exists
+      - name: Freeze exact previously verified policy
         env:
           REALITYGRAPH_META_TRAIN_DIR: gathered-meta-train
           REALITYGRAPH_META_POLICY_DIR: meta-policy-out
         run: |
           set -euo pipefail
-          test ! -e gathered-meta-heldout
+          test ! -e gathered-meta-regression
           python learn_pmlb_meta_policy.py
-          sha256sum meta-policy-out/meta_policy.mg
-          echo "SECOND_BLOCK_NOT_YET_CONSTRUCTED"
+          actual="$(shasum -a 256 meta-policy-out/meta_policy.mg | awk '{print $1}')"
+          expected="f80932ec2ce05e85899787a9bd13da15ea7007a496526cb69c776c3bc56baf47"
+          echo "policy_sha256=$actual"
+          test "$actual" = "$expected"
+          echo "FROZEN_POLICY_MATCHES_PRIOR_VERIFIED_BYTES"
+          echo "REGRESSION_HELDOUT_NOT_YET_CONSTRUCTED"
 
-      - name: Build second untouched twenty dataset worlds
+      - name: Build twenty untouched regression-family worlds
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p gathered-meta-heldout
-          seq 120 139 | xargs -P 4 -I{} bash -c '
-            export REALITYGRAPH_PMLB_INDEX="{}"
-            export REALITYGRAPH_PMLB_RESULT="gathered-meta-heldout/pmlb-world-{}.json"
-            python pmlb_meta_world.py
+          mkdir -p gathered-meta-regression
+          seq 0 19 | xargs -P 4 -I{} bash -c '
+            export REALITYGRAPH_PMLB_REGRESSION_INDEX="{}"
+            export REALITYGRAPH_PMLB_REGRESSION_RESULT="gathered-meta-regression/pmlb-regression-world-{}.json"
+            python pmlb_regression_world.py
           '
 
-      - name: Restart frozen mg and verify second untouched block
+      - name: Restart frozen mg in unseen task family
         env:
-          REALITYGRAPH_META_TRAIN_DIR: gathered-meta-train
-          REALITYGRAPH_META_HELDOUT_DIR: gathered-meta-heldout
+          REALITYGRAPH_REGRESSION_HELDOUT_DIR: gathered-meta-regression
           REALITYGRAPH_META_POLICY_DIR: meta-policy-out
-          REALITYGRAPH_META_HELDOUT_START: '120'
-        run: python evaluate_pmlb_meta_policy.py
+        run: python evaluate_pmlb_cross_task.py
 
-      - name: Preserve sealed confirmation evidence
+      - name: Preserve cross-task evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: meta-100x-second-block-evidence
+          name: meta-100x-cross-task-evidence
           path: |
             meta-policy-out
-            meta-heldout-summary.json
-            gathered-meta-train
-            gathered-meta-heldout
+            meta-cross-task-summary.json
+            gathered-meta-regression
           if-no-files-found: warn
           retention-days: 7
