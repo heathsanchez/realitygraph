@@ -1,0 +1,31 @@
+name: equational-frontier-map
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - equational_frontier_map.py
+      - .github/workflows/equational-frontier-map.yml
+  workflow_dispatch:
+
+concurrency:
+  group: equational-frontier-map-v1
+  cancel-in-progress: true
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Map retained residual frontier
+        run: python equational_frontier_map.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: equational-frontier-map-v1
+          path: results/equational-frontier-map-v1.json
+          if-no-files-found: error
+          retention-days: 3
