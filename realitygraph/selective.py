@@ -208,8 +208,8 @@ def _compile_categorical_balls(
     train: EmpiricalDataset,
     calibration: EmpiricalDataset,
     margin_fraction: float = 0.80,
-    min_calibration_support: int = 1,
-    min_votes: int = 3,
+    min_calibration_support: int = 2,
+    min_votes: int = 5,
 ) -> SelectiveModel:
     train_rows = tuple(_numeric_row(row) for row in train.features)
     cal_rows = tuple(_numeric_row(row) for row in calibration.features)
