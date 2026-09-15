@@ -161,11 +161,16 @@ def _occupancy_rows(raw: bytes):
     for row in reader:
         if not row:
             continue
-        date = row[index["date"]].strip().strip('"')
+        offset = len(row) - len(header)
+        if offset not in {0, 1}:
+            raise ValueError(
+                f"unexpected occupancy row width: header={len(header)} row={len(row)}"
+            )
+        date = row[index["date"] + offset].strip().strip('"')
         day = date[:10]
         yield (
-            tuple(float(row[index[name]]) for name in probes),
-            int(float(row[index["Occupancy"]])),
+            tuple(float(row[index[name] + offset]) for name in probes),
+            int(float(row[index["Occupancy"] + offset])),
             day,
         )
 
