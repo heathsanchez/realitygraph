@@ -1,0 +1,33 @@
+name: nat-model-kernel-verify
+
+on:
+  push:
+    branches: [equational-residual-v1]
+    paths:
+      - experiments/nat_model_verify/*.lean
+      - experiments/structured_model_reuse/leanproj/**
+      - .github/workflows/nat-model-kernel-verify.yml
+  workflow_dispatch:
+
+concurrency:
+  group: nat-model-kernel-verify-v1
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Prepare pinned Mathlib
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: |
+          lake update
+          lake exe cache get
+      - name: Kernel-check compiled Nat-model certificate
+        working-directory: experiments/structured_model_reuse/leanproj
+        run: lake env lean -j 1 -M 4096 ../../nat_model_verify/1076_to_56072.lean
