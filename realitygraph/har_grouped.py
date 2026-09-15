@@ -62,8 +62,32 @@ def source_digest(
     return len(raw), digest
 
 
-def _read_lines(archive: zipfile.ZipFile, path: str) -> list[str]:
+def _member_by_suffix(archive: zipfile.ZipFile, suffix: str) -> str:
+    matches = [name for name in archive.namelist() if name.endswith(suffix)]
+    if len(matches) != 1:
+        raise ValueError(
+            f"expected one HAR archive member ending {suffix!r}, got {matches}"
+        )
+    return matches[0]
+
+
+def _read_suffix(archive: zipfile.ZipFile, suffix: str) -> list[str]:
+    path = _member_by_suffix(archive, suffix)
     return archive.read(path).decode("utf-8").strip().splitlines()
+
+
+def _open_payload_archive(raw: bytes) -> zipfile.ZipFile:
+    outer = zipfile.ZipFile(io.BytesIO(raw))
+    if any(name.endswith("features.txt") for name in outer.namelist()):
+        return outer
+    nested = [name for name in outer.namelist() if name.lower().endswith(".zip")]
+    if len(nested) != 1:
+        raise ValueError(
+            f"HAR outer archive did not expose a unique payload zip: {nested}"
+        )
+    nested_raw = outer.read(nested[0])
+    outer.close()
+    return zipfile.ZipFile(io.BytesIO(nested_raw))
 
 
 def fetch_har_grouped(
@@ -75,8 +99,8 @@ def fetch_har_grouped(
             "HAR source is not pinned; run source-only hash acquisition first"
         )
 
-    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-        feature_lines = _read_lines(archive, "UCI HAR Dataset/features.txt")
+    with _open_payload_archive(raw) as archive:
+        feature_lines = _read_suffix(archive, "features.txt")
         all_names = tuple(line.split(maxsplit=1)[1] for line in feature_lines)
         probe_names = tuple(all_names[i] for i in HAR_FEATURE_INDICES)
 
@@ -85,17 +109,17 @@ def fetch_har_grouped(
         groups: list[str] = []
 
         for split in ("train", "test"):
-            x_lines = _read_lines(
+            x_lines = _read_suffix(
                 archive,
-                f"UCI HAR Dataset/{split}/X_{split}.txt",
+                f"/{split}/X_{split}.txt",
             )
-            y_lines = _read_lines(
+            y_lines = _read_suffix(
                 archive,
-                f"UCI HAR Dataset/{split}/y_{split}.txt",
+                f"/{split}/y_{split}.txt",
             )
-            subject_lines = _read_lines(
+            subject_lines = _read_suffix(
                 archive,
-                f"UCI HAR Dataset/{split}/subject_{split}.txt",
+                f"/{split}/subject_{split}.txt",
             )
             if not (len(x_lines) == len(y_lines) == len(subject_lines)):
                 raise ValueError(f"HAR {split} row counts disagree")
