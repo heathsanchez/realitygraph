@@ -24,3 +24,5 @@ jobs:
         run: python field_demo.py
       - name: Blind meta-world transfer
         run: python meta_world_demo.py
+      - name: Real-world mechanism stress suite
+        run: python real_world_demo.py
