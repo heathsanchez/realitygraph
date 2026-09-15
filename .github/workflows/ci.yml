@@ -31,3 +31,5 @@ jobs:
         run: python real_data_demo.py
       - name: Sealed future measurement benchmark
         run: python future_data_demo.py
+      - name: Adaptive consequence frontier
+        run: python consequence_future_demo.py
