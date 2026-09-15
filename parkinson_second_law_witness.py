@@ -3,7 +3,6 @@ from __future__ import annotations
 from itertools import combinations
 
 import numpy as np
-from sklearn.metrics import log_loss
 
 exec(open("/workspace/parkinson_finish_fast.py").read().split("def main():")[0])
 
