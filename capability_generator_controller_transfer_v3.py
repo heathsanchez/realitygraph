@@ -9,7 +9,7 @@ from capability_generator_transfer_v2 import (
 from openml_regression_transfer_v2 import InapplicableWorld
 from probe_capability_generator_controller_v3_manifest import main as freeze_manifest
 
-MANIFEST_SHA="TO_BE_FROZEN"
+MANIFEST_SHA="991cd0f3f83f1b3961a81ceaf8c04625f3ad874f7f37378b19f85758d9576a54"
 POLICY_PATH=Path("frozen-meta/capability_generator_controller_v3.json")
 
 def certmap(stats):
