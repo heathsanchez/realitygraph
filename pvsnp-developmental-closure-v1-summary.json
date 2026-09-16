@@ -1,0 +1,82 @@
+{
+  "barriers": {
+    "algebrization_escape": false,
+    "natural_proof_escape": false,
+    "relativizing_character": true
+  },
+  "claims": {
+    "asymptotic_lower_bound": false,
+    "autonomous_invariant_discovery": false,
+    "barrier_escape": false,
+    "exhaustive_candidate_language": false,
+    "p_not_equal_np": false,
+    "polynomial_size_invariant": false
+  },
+  "classification": "FINITE_SIGNAL",
+  "g1": {
+    "capability_id": "joint-coavailability-j2",
+    "representation": "pairwise joint coavailability J2",
+    "route": "COMPILED",
+    "xor_costs": [
+      3,
+      4
+    ]
+  },
+  "g2": {
+    "capability_id": "provenance-support-union",
+    "minimal_singleton_supports_through_b4": 345,
+    "n4_fixed_point_matches_states": true,
+    "pair_costs": [
+      2,
+      2,
+      2
+    ],
+    "raw_states_through_b4": 1501,
+    "representation": "minimum provenance-support antichains",
+    "route": "COMPILED",
+    "support_factorization_exact": true,
+    "triple_checks": 17296,
+    "triple_classification_errors": 0,
+    "triple_cost": 3,
+    "unavailable_triples_certified": 16303
+  },
+  "g3": {
+    "capability_id": "direct-nand-family-generalizer",
+    "future": {
+      "enumeration_calls": "0",
+      "nand:n6:direct-pairs:01,02,03,04,05,12": "6"
+    },
+    "future_answer": 6,
+    "future_enumeration_calls": 0,
+    "future_oracle_attacked": false,
+    "future_preloaded": false,
+    "g3_ablation_blocks_future": true,
+    "independent_future_oracle_agrees": true,
+    "pre_g3_is_unknown": true,
+    "representation": "symbolic direct-NAND support union",
+    "route": "COMPILED",
+    "semantic_ablation_blocks_future": true
+  },
+  "gates": {
+    "future_not_preloaded_or_attacked": true,
+    "g1_ablation_invalidates_g2_g3": true,
+    "g2_ablation_invalidates_g3": true,
+    "g2_depends_on_g1": true,
+    "g3_ablation_blocks_future": true,
+    "g3_depends_on_g2": true,
+    "independent_future_oracle_agrees": true,
+    "pre_g3_unknown": true,
+    "restart_exact": true,
+    "same_generic_executor": true,
+    "sealed_future_zero_enumeration": true,
+    "semantic_ablation_blocks_future": true
+  },
+  "passed": true,
+  "residual": "minimum support antichains can still have exponential width; no stronger compositional domination preorder is known",
+  "theorem": {
+    "fixed_point": "P(x_i)={empty}; for non-input f, P(f)=Min_subset { {f} union B_g union B_h : NAND(g,h)=f }",
+    "scope": "bounded exact evidence plus a general normalization/concatenation proof",
+    "statement": "J(S)=min_{B_f in P(f)} |union_f B_f| for normalized free-fanout semantic NAND DAGs"
+  },
+  "verdict": "PASS_PVSNP_DEVELOPMENTAL_CLOSURE_V1"
+}
