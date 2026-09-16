@@ -1,0 +1,27 @@
+name: parkinson-final-submission-v5
+on:
+  push:
+    branches:
+      - parkinson-final-submission-v5
+  workflow_dispatch:
+concurrency:
+  group: parkinson-final-submission-v5-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet numpy
+      - run: python -m unittest tests.test_final_trajectory_model -v
+      - run: |
+          if [ -f parkinson_final_submission_v5.py ]; then
+            python -m py_compile parkinson_final_submission_v5.py
+          else
+            echo "parkinson_final_submission_v5.py missing"
+            exit 1
+          fi
