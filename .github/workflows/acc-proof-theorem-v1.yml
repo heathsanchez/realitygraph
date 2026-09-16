@@ -1,0 +1,44 @@
+name: ACC proof theorem v1
+
+on:
+  push:
+    branches: [acc-proof-theorem-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout theorem branch
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned official ACC repository
+        uses: actions/checkout@v4
+        with:
+          repository: SAIRcompetition/Andrews-Curtis
+          ref: a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e
+          path: official
+
+      - name: Verify official pin
+        run: test "$(git -C official rev-parse HEAD)" = "a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e"
+
+      - name: Install elan
+        run: |
+          curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build official AC environment
+        working-directory: official/competition/tools/lean
+        run: |
+          MATHLIB_NO_CACHE_ON_UPDATE=1 lake update
+          lake exe cache get Mathlib/GroupTheory/PresentedGroup.lean Mathlib/Data/Fin/Tuple/Basic.lean
+          lake build
+
+      - name: Check recurrence theorem candidate
+        run: |
+          cp lean/ACCProofCandidate.lean official/competition/tools/lean/ACCProofCandidate.lean
+          cd official/competition/tools/lean
+          lake env lean ACCProofCandidate.lean
