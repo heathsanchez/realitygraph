@@ -1,12 +1,13 @@
 from itertools import product
 
+import acc_substitution_generator as substitution_module
 from acc_substitution_generator import (
     SubstitutionCandidate,
     SubstitutionGenerator,
     compile_substitution,
     substitution_successor,
 )
-from realitygraph.acc import replay
+from realitygraph.acc import free_reduce, invert, replay
 
 
 def _words(max_len=3):
@@ -58,3 +59,18 @@ def test_substitution_generator_respects_path_and_intermediate_size_bounds():
     long = SubstitutionCandidate(0, (1, 2, 1, 2), False)
     assert SubstitutionGenerator((long,), max_path_length=2).generate(start) == ()
     assert SubstitutionGenerator((long,), max_total=3, max_path_length=32).generate(start) == ()
+
+
+def test_source_conditioned_candidates_keep_fixed_action_budget_and_include_source_word():
+    build = getattr(substitution_module, "source_conditioned_candidates", None)
+    assert callable(build), "source-conditioned substitution portfolio is missing"
+
+    source_word = (2, -1, -2, 1, 2, 2)
+    candidates = build(source_word, max_words=12)
+    assert len(candidates) == 48
+
+    conjugators = {candidate.conjugator for candidate in candidates}
+    reduced = free_reduce(source_word)
+    assert reduced in conjugators
+    assert free_reduce(invert(reduced)) in conjugators
+    assert all(word and free_reduce(word) == word for word in conjugators)
