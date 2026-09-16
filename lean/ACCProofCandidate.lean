@@ -68,13 +68,12 @@ lemma endpoint (n : Nat) (w : W) (h : w⁻¹ * y * w = y) : s7 n w = ms n w := b
         x =
       ms0 n
     simp only [ms0, pow_succ]
-    group
+    group at h ⊢
     rw [h]
     group
   · have hj : j = 0 := Fin.eq_zero j
     subst j
-    change x * w⁻¹ = x * w⁻¹
-    rfl
+    simp [s7, s6, s5, s4, s3, s2, s1, ms]
 
 /-- The exact recurrence discovered by replay: under the centralizer condition
 `w⁻¹ y w = y`, one Miller-Schupp parameter step is AC-reachable.  The official
