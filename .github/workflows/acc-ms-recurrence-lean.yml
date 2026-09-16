@@ -41,7 +41,7 @@ jobs:
           cp ACCMSRecurrence.lean official/competition/tools/lean/ACCMSRecurrence.lean
           cd official/competition/tools/lean
           MATHLIB_NO_CACHE_ON_UPDATE=1 lake update
-          lake exe cache get Mathlib/GroupTheory/PresentedGroup.lean Mathlib/Data/Fin/Tuple/Basic.lean
+          lake exe cache get
           set +e
           lake env lean ACCMSRecurrence.lean 2>&1 | tee "$GITHUB_WORKSPACE/acc-ms-recurrence-lean.log"
           status=${PIPESTATUS[0]}
