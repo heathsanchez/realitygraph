@@ -1,0 +1,146 @@
+{
+  "schema": "realitygraph.abgp.design-manifest.v1",
+  "status": "REVIEW_PENDING",
+  "confirmatory_execution_enabled": false,
+  "design_version": "ABGP-v1",
+  "base_branch": "verified-meta-growth-v3",
+  "base_commit": "45c766cd3d5410cea90790a67958390be9ccb896",
+  "design_spec": "docs/superpowers/specs/2026-09-17-abgp-confirmatory-design.md",
+  "seed_namespaces": {
+    "development": "ABGP-DEV-v1",
+    "confirmatory": "ABGP-CONFIRM-v1"
+  },
+  "seed_derivation": "SHA256(root_namespace || arm || cell || index || generator_version)",
+  "statistics": {
+    "primary_hypotheses": ["A", "B", "G", "P"],
+    "familywise_alpha": 0.05,
+    "multiplicity": "Holm-Bonferroni across four primary arm-level tests",
+    "full_pass_requires_effect_floor": true,
+    "full_pass_requires_adjusted_significance": true
+  },
+  "arms": {
+    "A": {
+      "name": "non-identifying verifier channel",
+      "task_count": 256,
+      "conditions": ["one_shot", "equal_compute_recheck", "one_message_one_repair_verifier"],
+      "primary_metric": "exact_protected_action_selection",
+      "comparison": "verifier_assisted_vs_equal_compute_recheck",
+      "effect_floor_absolute": 0.05,
+      "direct_action_insufficiency": "for every admitted message m, |A*(m)| > 1",
+      "repeated_binary_elimination_allowed": false,
+      "downstream_success_role": "secondary_corroborating"
+    },
+    "B": {
+      "name": "grammar invariance",
+      "grammar_families": [
+        "extensional_action_observation_consequence",
+        "compositional_operator",
+        "graph_reachability",
+        "constraint_order"
+      ],
+      "shared_across_grammars_only": ["latent_world_task_generator", "protected_objective", "protected_action_order_semantics"],
+      "independently_generated": [
+        "surface_symbols",
+        "primitive_relations_or_operators",
+        "primitive_arity",
+        "composition_rules",
+        "derivation_templates",
+        "inference_paths",
+        "serialization",
+        "candidate_set_generation"
+      ],
+      "supplied_deterministic_translation": false,
+      "simple_primitive_dictionary_recoverable_by_construction": false,
+      "ordered_cross_grammar_directions": 12,
+      "fresh_worlds_per_direction": 32,
+      "structural_interventions": ["edge_or_relation_deletion", "protected_order_reversal_perturbation", "scope_change", "constraint_change"],
+      "primary_metric": "exact_protected_action_order_agreement_under_heldout_interventions",
+      "minimum_exact_agreement": 0.90,
+      "minimum_advantage_over_wrong_class": 0.15,
+      "minimum_advantage_over_shuffled_coupling": 0.15,
+      "controls": ["pure_renaming", "matched_complexity_wrong_class", "shuffled_coupling"]
+    },
+    "G": {
+      "name": "action-relevance corruption dose response",
+      "task_count": 256,
+      "corruption_doses": [0.0, 0.1, 0.25, 0.5, 1.0],
+      "relevance_classes": ["action_relevant", "action_irrelevant"],
+      "relevance_definition": "changing the cell can alter protected ordering among live actions under the frozen evaluator",
+      "relevance_computed_before_corruption": true,
+      "matched_corruption_count_and_magnitude": true,
+      "primary_test": "relevance_by_corruption_dose_interaction_on_exact_action_order_flip_probability",
+      "minimum_flip_rate_gap_at_max_nonzero_dose": 0.15,
+      "secondary_metrics": ["downstream_accuracy", "zero_target_entropy_rate", "dose_monotonicity", "matched_random_location_control"]
+    },
+    "P": {
+      "name": "retained persistence without verifier",
+      "task_count": 256,
+      "retained_object_form": "non_verbal_structural_object_plus_explicit_applicability_metadata",
+      "hard_restart_from_retained_object_only": true,
+      "future_verifier_access": 0,
+      "future_reconstruction_search": 0,
+      "future_applicability_uses_target_labels": false,
+      "source_distinct_shared_only": ["protected_objective_or_action_order_principle"],
+      "source_distinct_forbidden_shared_features": [
+        "entity_identifiers",
+        "lexical_templates",
+        "instance_seeds",
+        "surface_serialization",
+        "exact_structures_or_topologies",
+        "source_specific_labels",
+        "verifier_outputs"
+      ],
+      "baselines": ["cold", "equal_compute_recheck", "verbal_rule_negative", "size_matched_sham", "wrong_class_object"],
+      "primary_metric": "exact_protected_action_selection",
+      "minimum_advantage_over_strongest_baseline": 0.05,
+      "targeted_deletion_required": true,
+      "post_deletion_max_distance_from_cold": 0.02,
+      "post_deletion_must_force_reacquisition_search": true
+    }
+  },
+  "verdicts": ["PASS", "PARTIAL", "FAIL"],
+  "combined_full_claim_requires": {"A": "PASS", "B": "PASS", "G": "PASS", "P": "PASS"},
+  "development_policy": {
+    "allowed_seed_namespace": "ABGP-DEV-v1",
+    "confirmatory_namespace_access_during_development": false,
+    "allowed_uses": [
+      "determinism_tests",
+      "generator_coverage",
+      "negative_controls",
+      "leakage_detection",
+      "synthetic_statistical_tests",
+      "failure_behavior",
+      "restart_and_serialization",
+      "artifact_schema_tests",
+      "runtime_and_resource_bounds"
+    ]
+  },
+  "final_lock_requirements": [
+    "design_manifest_digest",
+    "repository_tree_hash",
+    "arm_generator_code_hashes",
+    "verifier_implementation_hash",
+    "protected_evaluator_hash",
+    "analysis_implementation_hash",
+    "grammar_family_generator_hashes",
+    "sham_object_construction_hash",
+    "wrong_class_construction_hash",
+    "corruption_implementation_hash",
+    "ablation_implementation_hash",
+    "model_and_runtime_versions",
+    "dependency_environment_hash",
+    "resource_budgets",
+    "confirmatory_namespace_identifier",
+    "one_shot_execution_marker_policy"
+  ],
+  "final_lock_status_required": "FROZEN",
+  "confirmatory_change_policy": "Any post-unlock change to thresholds, counts, grammar independence, intervention classes, corruption schedule, source-distinctness, PASS semantics, or scientific code requires a new preregistration version and new confirmatory namespace.",
+  "claim_boundary": {
+    "representation_independent_invention": false,
+    "universal_grammar_invariance": false,
+    "arbitrary_substrate_invention": false,
+    "unbounded_self_development": false,
+    "universal_verifier_sufficiency": false,
+    "transfer_outside_frozen_generators": false
+  }
+}
