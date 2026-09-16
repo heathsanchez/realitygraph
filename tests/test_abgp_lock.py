@@ -1,5 +1,7 @@
 import copy
+import json
 import unittest
+from pathlib import Path
 
 from realitygraph.abgp.lock import build_review_lock, validate_final_lock
 from realitygraph.abgp.manifest import load_analysis_plan, load_design_manifest
@@ -7,6 +9,7 @@ from realitygraph.abgp.manifest import load_analysis_plan, load_design_manifest
 
 DESIGN_PATH = "preregistration/abgp-design-manifest-v1.json"
 ANALYSIS_PATH = "preregistration/abgp-analysis-plan-v1.json"
+TEMPLATE_PATH = Path("preregistration/abgp-final-lock-template-v1.json")
 
 
 class ABGPLockTests(unittest.TestCase):
@@ -78,6 +81,17 @@ class ABGPLockTests(unittest.TestCase):
         self.assertNotIn("freeze", lock)
         self.assertNotIn("unlock", lock)
         self.assertNotEqual(lock["status"], "FROZEN")
+
+    def test_committed_lock_template_is_review_only_and_complete(self):
+        template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(template["schema"], "realitygraph.abgp.final-lock-review-template.v1")
+        self.assertEqual(template["status"], "REVIEW_PENDING")
+        self.assertFalse(template["confirmatory_execution_enabled"])
+        self.assertFalse(template["builder_can_freeze"])
+        self.assertEqual(
+            tuple(template["required_fields"]),
+            tuple(self.design.raw["final_lock_requirements"]),
+        )
 
 
 if __name__ == "__main__":
