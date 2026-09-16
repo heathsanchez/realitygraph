@@ -118,6 +118,11 @@ def main():
             or "anneal" in lname
             or "breast" in lname
             or "sick" in lname
+            or "online_shopper" in lname
+            or "cpmp" in lname
+            or "jungle_chess" in lname
+            or "ilpd" in lname
+            or lname == "boston"
         ):
             continue
         if did in OLD or stem(name) in oldnames or stem(name) in v7names or stem(name) in v8names or stem(name) in v9names or stem(name) in v10names or stem(name) in v11names or stem(name) in v12names or stem(name) in v13names or stem(name) in v14names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
