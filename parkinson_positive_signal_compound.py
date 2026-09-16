@@ -81,59 +81,136 @@ def objective(indices, tables, counts, base_loss, discovery_envs):
 
 
 def fit_policy(y, env, base, cells, n_cells, discovery_envs):
+    """Exact discrete maximin optimization.
+
+    The first version used one-coordinate-at-a-time ascent from zero.  That
+    can falsely declare zero optimal when a useful law requires two or more
+    corrections to move together (exactly the known R_q90 +0.30/-0.10 case).
+    Here we solve the frozen grid globally.  Two-cell policies are exhaustively
+    enumerated.  Four-cell QxG policies are exhaustively enumerated in chunks,
+    so the result is still exact without allocating the full 33^4 tensor.
+    """
     tables, counts, base_loss = build_loss_tables(
         y, env, base, cells, n_cells, discovery_envs
     )
 
-    zero_k = int(np.argmin(np.abs(DELTA_GRID)))
-    current = [zero_k] * n_cells
+    envs = list(discovery_envs)
+    E = len(envs)
+    K = len(DELTA_GRID)
+
+    # loss[c, e, k] = mean-loss contribution of cell c in environment e
+    loss = np.zeros((n_cells, E, K), dtype=np.float64)
+    base_vec = np.zeros(E, dtype=np.float64)
+    for ei, e in enumerate(envs):
+        base_vec[ei] = base_loss[e]
+        for cc in range(n_cells):
+            loss[cc, ei, :] = tables[e][cc] / counts[e]
+
+    def score_totals(total_loss, l1):
+        gains = base_vec - total_loss
+        worst = np.min(gains, axis=-1)
+        mean = np.mean(gains, axis=-1)
+        return worst, mean, -l1
+
+    if n_cells == 2:
+        total = (
+            loss[0, :, :, None].transpose(1, 2, 0)
+            + loss[1, :, None, :].transpose(1, 2, 0)
+        )
+        # total is K x K x E
+        l1 = (
+            np.abs(DELTA_GRID)[:, None]
+            + np.abs(DELTA_GRID)[None, :]
+        )
+        worst, mean, simplicity = score_totals(total, l1)
+
+        flat = np.arange(K * K)
+        # lexicographic: worst, then mean, then smaller L1
+        order = np.lexsort((
+            flat,
+            -simplicity.ravel(),
+            -mean.ravel(),
+            -worst.ravel(),
+        ))
+        best = int(order[0])
+        i, j = np.unravel_index(best, (K, K))
+        indices = [i, j]
+
+    elif n_cells == 4:
+        # Exact 33^4 search, chunked over the first-pair state space.
+        pair01 = []
+        pair23 = []
+        pair_l1 = []
+        for i in range(K):
+            for j in range(K):
+                pair01.append(loss[0, :, i] + loss[1, :, j])
+                pair23.append(loss[2, :, i] + loss[3, :, j])
+                pair_l1.append(abs(DELTA_GRID[i]) + abs(DELTA_GRID[j]))
+
+        pair01 = np.asarray(pair01, dtype=np.float64)
+        pair23 = np.asarray(pair23, dtype=np.float64)
+        pair_l1 = np.asarray(pair_l1, dtype=np.float64)
+
+        best_key = None
+        best_pair = None
+        P = K * K
+        chunk = 48
+
+        for start in range(0, P, chunk):
+            stop = min(start + chunk, P)
+            totals = pair01[start:stop, None, :] + pair23[None, :, :]
+            gains = base_vec[None, None, :] - totals
+            worst = gains.min(axis=2)
+            mean = gains.mean(axis=2)
+            l1 = pair_l1[start:stop, None] + pair_l1[None, :]
+
+            # Find the best point in this chunk by the exact same lexicographic
+            # objective used everywhere else.
+            for local_i in range(stop - start):
+                for p23 in range(P):
+                    key = (
+                        float(worst[local_i, p23]),
+                        float(mean[local_i, p23]),
+                        -float(l1[local_i, p23]),
+                        -(start + local_i),
+                        -p23,
+                    )
+                    if best_key is None or key > best_key:
+                        best_key = key
+                        best_pair = (start + local_i, p23)
+
+        p01, p23 = best_pair
+        i0, i1 = divmod(p01, K)
+        i2, i3 = divmod(p23, K)
+        indices = [i0, i1, i2, i3]
+
+    else:
+        raise ValueError(f"unsupported cell count: {n_cells}")
+
     current_obj = objective(
-        current, tables, counts, base_loss, discovery_envs
+        indices, tables, counts, base_loss, discovery_envs
     )
 
-    for _ in range(MAX_COORD_ITERS):
-        changed = False
-        for c in range(n_cells):
-            best_idx = current[c]
-            best_obj = current_obj
-
-            for k in range(len(DELTA_GRID)):
-                trial = list(current)
-                trial[c] = k
-                obj = objective(
-                    trial, tables, counts, base_loss, discovery_envs
-                )
-                if obj > best_obj:
-                    best_obj = obj
-                    best_idx = k
-
-            if best_idx != current[c]:
-                current[c] = best_idx
-                current_obj = best_obj
-                changed = True
-
-        if not changed:
-            break
-
-    # Exact backward deletion: any correction that does not still earn its
-    # place under the lexicographic maximin objective is zeroed.
+    # Backward deletion remains exact: zero any distinction that does not
+    # still earn its place under the frozen global optimum.
+    zero_k = int(np.argmin(np.abs(DELTA_GRID)))
     changed = True
     while changed:
         changed = False
-        for c in range(n_cells):
-            if current[c] == zero_k:
+        for cc in range(n_cells):
+            if indices[cc] == zero_k:
                 continue
-            trial = list(current)
-            trial[c] = zero_k
+            trial = list(indices)
+            trial[cc] = zero_k
             obj = objective(
                 trial, tables, counts, base_loss, discovery_envs
             )
             if obj >= current_obj:
-                current = trial
+                indices = trial
                 current_obj = obj
                 changed = True
 
-    deltas = np.array([DELTA_GRID[k] for k in current], dtype=float)
+    deltas = np.array([DELTA_GRID[k] for k in indices], dtype=float)
     return deltas, current_obj
 
 
