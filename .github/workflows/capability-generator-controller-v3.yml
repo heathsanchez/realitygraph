@@ -1,0 +1,31 @@
+name: capability-generator-controller-v3
+on:
+  push:
+    branches:
+      - capability-generator-controller-transfer-v3
+  workflow_dispatch:
+concurrency:
+  group: capability-generator-controller-v3
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_GENERATOR_CONTROLLER_V3_RESULT: capability-generator-controller-v3-summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml pandas
+      - name: Run retained generator-controller V3
+        run: python capability_generator_controller_transfer_v3.py
+      - name: Preserve V3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-generator-controller-v3-evidence
+          path: capability-generator-controller-v3-summary.json
+          if-no-files-found: warn
+          retention-days: 14
