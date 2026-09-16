@@ -1,0 +1,95 @@
+name: ACC proof discovery v1
+
+on:
+  push:
+    branches: [acc-proof-discovery-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout RealityGraph branch
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned official ACC repository
+        uses: actions/checkout@v4
+        with:
+          repository: SAIRcompetition/Andrews-Curtis
+          ref: a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e
+          path: official
+
+      - name: Verify official pin and move-spec hash
+        run: |
+          test "$(git -C official rev-parse HEAD)" = "a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e"
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          expected = "sha256:e13f57d82b5db1a79c1bd9d5ee1f6665ac4d96a634a3656ea20c0ada82e07643"
+          spec = json.loads(Path("official/competition/tools/verifier/data/move_spec.json").read_text())
+          canon = json.dumps(spec["moves"], sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+          got = "sha256:" + hashlib.sha256(canon.encode()).hexdigest()
+          assert got == expected, (got, expected)
+          print("move_spec_hash", got)
+          PY
+
+      - name: Run unit tests
+        run: |
+          python -m pip install -q pytest
+          python -m pytest tests/test_acc.py tests/test_acc_training_replay.py -q
+
+      - name: Replay all 424 certified AC trajectories
+        run: |
+          python acc_training_replay.py \
+            --training official/competition/examples/training_424.json \
+            --trajectories acc-training-trajectories.jsonl \
+            --summary acc-training-replay-summary.json
+          cat acc-training-replay-summary.json
+          python - <<'PY'
+          import json
+          s = json.load(open("acc-training-replay-summary.json"))
+          assert s["instances"] == 424, s
+          assert s["accepted"] == 424, s
+          assert s["rejected"] == 0, s
+          PY
+
+      - name: Cross-check all 424 with official verifier
+        run: |
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path("official/competition/tools").resolve()))
+          from verifier.core import verify
+
+          training = json.loads(Path("official/competition/examples/training_424.json").read_text())
+          manifest = json.loads(Path("official/competition/examples/training_manifest.json").read_text())
+          challenges = {
+              c["challenge_id"]: c
+              for c in manifest["challenges"]
+              if c["move_spec_version"] == "ac-r2-v1"
+          }
+          accepted = 0
+          for instance in training["instances"]:
+              result = verify(
+                  challenges[instance["training_id"]],
+                  instance["moves"],
+                  "ac-r2-v1",
+                  manifest["limits"],
+              )
+              if not result["ok"]:
+                  raise SystemExit(f"official verifier rejected {instance['training_id']}: {result}")
+              accepted += 1
+          assert accepted == 424
+          print(f"official_verifier_accepted={accepted}/424")
+          PY
+
+      - name: Upload replay evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: acc-proof-discovery-v1-replay
+          path: |
+            acc-training-replay-summary.json
+            acc-training-trajectories.jsonl
