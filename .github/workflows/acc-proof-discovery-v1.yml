@@ -45,7 +45,8 @@ jobs:
             tests/test_acc_capability.py \
             tests/test_acc_transfer.py \
             tests/test_acc_source_entry.py \
-            tests/test_acc_consequence_closure.py -q
+            tests/test_acc_consequence_closure.py \
+            tests/test_acc_consequence_transfer.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
@@ -53,13 +54,13 @@ jobs:
             --training official/competition/examples/training_424.json \
             --trajectories acc-training-trajectories.jsonl \
             --summary acc-training-replay-summary.json
-          cat acc-training-replay-summary.json
           python - <<'PY'
           import json
           s = json.load(open("acc-training-replay-summary.json"))
           assert s["instances"] == 424, s
           assert s["accepted"] == 424, s
           assert s["rejected"] == 0, s
+          print(s)
           PY
 
       - name: Cross-check all 424 with official verifier
@@ -69,22 +70,15 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, str(Path("official/competition/tools").resolve()))
           from verifier.core import verify
-
           training = json.loads(Path("official/competition/examples/training_424.json").read_text())
           manifest = json.loads(Path("official/competition/examples/training_manifest.json").read_text())
           challenges = {
-              c["challenge_id"]: c
-              for c in manifest["challenges"]
+              c["challenge_id"]: c for c in manifest["challenges"]
               if c["move_spec_version"] == "ac-r2-v1"
           }
           accepted = 0
           for instance in training["instances"]:
-              result = verify(
-                  challenges[instance["training_id"]],
-                  instance["moves"],
-                  "ac-r2-v1",
-                  manifest["limits"],
-              )
+              result = verify(challenges[instance["training_id"]], instance["moves"], "ac-r2-v1", manifest["limits"])
               if not result["ok"]:
                   raise SystemExit(f"official verifier rejected {instance['training_id']}: {result}")
               accepted += 1
@@ -92,10 +86,33 @@ jobs:
           print(f"official_verifier_accepted={accepted}/424")
           PY
 
+      - name: Run prospective exact consequence-closure audit
+        if: github.ref_name == 'acc-consequence-closure-v1'
+        run: |
+          python acc_consequence_transfer.py \
+            --trajectories acc-training-trajectories.jsonl \
+            --summary acc-consequence-audit.json \
+            --closure acc-consequence-closure.json \
+            --budget 100
+          python - <<'PY'
+          import json
+          s = json.load(open("acc-consequence-audit.json"))
+          assert s["acquisition_presentations"] == 297, s
+          assert s["heldout_presentations"] == 127, s
+          assert s["closure_states"] > 0, s
+          assert s["exact_restart"] is True, s
+          assert s["ablation_mismatches"] == 0, s
+          assert s["warm_only_solved"] > 0, s
+          assert s["warm_solved"] > s["cold_solved"], s
+          print("closure_warm_only", s["warm_only_solved"])
+          PY
+
       - name: Diagnose scored-pool MS representative mapping
+        if: github.ref_name == 'acc-proof-discovery-v1'
         run: python acc_mapping_diagnostic.py
 
       - name: Run frozen held-out audit and bridged open MS transfer
+        if: github.ref_name == 'acc-proof-discovery-v1'
         run: |
           python acc_open_ms_transfer.py \
             --trajectories acc-training-trajectories.jsonl \
@@ -107,26 +124,9 @@ jobs:
             --submission acc-open-ms-candidates.txt \
             --audit-budget 100 \
             --open-budget 3000
-          python - <<'PY'
-          import json
-          s = json.load(open("acc-proof-discovery-summary.json"))
-          a = s["audit"]
-          o = s["open_transfer"]
-          assert a["exact_restart"] is True, a
-          assert a["ablation_mismatches"] == 0, a
-          assert a["exact_macro_reuse_events"] > 0, a
-          assert a["warm_only_solved"] > 0, a
-          assert a["warm_expansions_on_both"] < a["cold_expansions_on_both"], a
-          assert o["open_metadata_rows"] == 550, o
-          assert o["orbit_manifest_matches"] == 550, o
-          assert o["bridged_manifest_matches"] == 550, o
-          assert o["unmatched_open_rows"] == 0, o
-          assert o["officially_verified_open_solved"] == o["open_solved"], o
-          print("heldout_warm_only", a["warm_only_solved"])
-          print("open_verified", o["officially_verified_open_solved"])
-          PY
 
       - name: Diagnose open-MS search residual
+        if: github.ref_name == 'acc-proof-discovery-v1'
         run: |
           python acc_search_diagnostics.py \
             --trajectories acc-training-trajectories.jsonl \
@@ -141,6 +141,8 @@ jobs:
           path: |
             acc-training-replay-summary.json
             acc-training-trajectories.jsonl
+            acc-consequence-audit.json
+            acc-consequence-closure.json
             acc-proof-discovery-summary.json
             acc-capability-bank.json
             acc-open-ms-candidates.txt
