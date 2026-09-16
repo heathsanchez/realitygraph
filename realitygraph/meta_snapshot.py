@@ -48,7 +48,7 @@ class MetaSnapshot:
         if not portfolio_digest:
             raise ValueError("cannot snapshot without portfolio identity")
         return cls(
-            object_state_text=object_state.text(),
+            object_state_text=object_state.to_text(),
             object_state_digest=object_state.digest,
             meta_memory_text=meta_memory.text(),
             meta_memory_digest=meta_memory.digest,
