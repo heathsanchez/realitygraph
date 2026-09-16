@@ -31,7 +31,10 @@ class ThreeStateObserverGrowthTests(unittest.TestCase):
         self.assertEqual(target_contains_11("0011"), "1")
         self.assertEqual(
             TARGET_SIGNATURE,
-            "".join(target_contains_11(sequence) for sequence in SEQUENCE_CARRIER),
+            "".join(
+                target_contains_11(sequence)
+                for sequence in sorted(SEQUENCE_CARRIER)
+            ),
         )
 
     def test_two_state_language_is_complete_and_cannot_realize_target(self):
