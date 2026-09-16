@@ -13,6 +13,7 @@ from realitygraph.representation_genesis import (
 )
 from realitygraph.ridge_decoder import (
     fit_ridge_residual_decoder,
+    joint_evidence_invoke,
     predict_ridge_residual_decoder,
 )
 
@@ -184,6 +185,32 @@ class RepresentationGenesisTests(unittest.TestCase):
         self.assertGreater(np.linalg.norm(model.beta), 0.0)
         self.assertGreater(model.alpha, 0.0)
         self.assertLess(loss(pred), loss(base))
+
+    def test_joint_controller_requires_LL_and_AUC_support(self):
+        self.assertTrue(joint_evidence_invoke(
+            [0.004, 0.002, -0.0001],
+            [0.006, 0.001, 0.0005],
+            min_mean_ll=1e-4,
+            min_mean_auc=0.0,
+        ))
+        self.assertTrue(joint_evidence_invoke(
+            [0.004, 0.003, 0.002],
+            [0.006, 0.002, 0.001],
+            min_mean_ll=1e-4,
+            min_mean_auc=0.0,
+        ))
+        self.assertFalse(joint_evidence_invoke(
+            [0.004, 0.002, -0.0001],
+            [-0.006, -0.001, 0.0005],
+            min_mean_ll=1e-4,
+            min_mean_auc=0.0,
+        ))
+        self.assertFalse(joint_evidence_invoke(
+            [0.004, 0.002, 0.001],
+            [0.0, 0.0, 0.0],
+            min_mean_ll=1e-4,
+            min_mean_auc=0.0,
+        ))
 
 
 if __name__ == "__main__":
