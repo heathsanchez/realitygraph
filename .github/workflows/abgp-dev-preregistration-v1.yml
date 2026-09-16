@@ -19,5 +19,66 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Manifest and seed-firewall tests
+        run: python -m unittest tests.test_abgp_manifest -v
+
+      - name: Frozen statistical analysis tests
+        run: python -m unittest tests.test_abgp_analysis -v
+
+      - name: DEV verifier and corruption tests
+        run: python -m unittest tests.test_abgp_arm_a_g -v
+
+      - name: DEV independent grammar tests
+        run: python -m unittest tests.test_abgp_arm_b -v
+
+      - name: DEV persistence tests
+        run: python -m unittest tests.test_abgp_arm_p -v
+
+      - name: DEV runner and replay tests
+        run: python -m unittest tests.test_abgp_runner -v
+
+      - name: Review-only final-lock tests
+        run: python -m unittest tests.test_abgp_lock -v
+
+      - name: Inherited V3 qualification tests
+        run: python -m unittest tests.test_verified_meta_growth_v3 -v
+
       - name: Full regression suite
         run: python -m unittest discover -s tests -v
+
+      - name: Run DEV-only ABGP matrix
+        run: |
+          python abgp_dev_matrix.py | tee abgp-dev-matrix.log
+          grep -Fx 'ABGP_DEV_MATRIX_OK' abgp-dev-matrix.log
+
+      - name: Assert DEV-only scientific safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          from realitygraph.abgp.manifest import load_design_manifest
+
+          design = load_design_manifest('preregistration/abgp-design-manifest-v1.json')
+          summary = json.load(open('abgp-dev-matrix-summary.json', encoding='utf-8'))
+
+          assert design.status == 'REVIEW_PENDING'
+          assert design.confirmatory_execution_enabled is False
+          assert design.development_namespace == 'ABGP-DEV-v1'
+          assert design.confirmatory_namespace == 'ABGP-CONFIRM-v1'
+          assert summary['mode'] == 'DEV_ONLY'
+          assert summary['confirmatory_namespace_used'] is False
+          assert summary['scientific_status'] == 'DEVELOPMENT_MECHANICS_ONLY_NOT_CONFIRMATORY_EVIDENCE'
+          assert set(summary['raw_records']) == {'A', 'B', 'G', 'P'}
+          assert summary['analysis']['analysis_plan_digest'] == summary['analysis_plan_digest']
+          print('ABGP_DEV_SAFETY_BOUNDARY_OK')
+          PY
+
+      - name: Upload DEV-only qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: abgp-dev-harness-v1-evidence
+          path: |
+            abgp-dev-matrix-summary.json
+            abgp-dev-matrix.log
+          if-no-files-found: error
+          retention-days: 30
