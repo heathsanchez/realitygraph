@@ -1,0 +1,23 @@
+name: ACC developmental system v6 control
+
+on:
+  push:
+    branches: [acc-developmental-system-v6-control]
+  workflow_dispatch:
+
+concurrency:
+  group: acc-developmental-system-v6-control
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ACC unit suite
+        run: |
+          python -m pip install -q pytest
+          python -m pytest tests/test_acc*.py -q
