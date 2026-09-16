@@ -1,0 +1,120 @@
+name: ACC developmental system v2
+
+on:
+  push:
+    branches: [acc-developmental-system-v2]
+  workflow_dispatch:
+
+concurrency:
+  group: acc-developmental-system-v2
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  developmental:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout RealityGraph branch
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned official ACC repository
+        uses: actions/checkout@v4
+        with:
+          repository: SAIRcompetition/Andrews-Curtis
+          ref: a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e
+          path: official
+
+      - name: Verify official pin and move specification
+        run: |
+          set -euo pipefail
+          test "$(git -C official rev-parse HEAD)" = "a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e"
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          expected = "sha256:e13f57d82b5db1a79c1bd9d5ee1f6665ac4d96a634a3656ea20c0ada82e07643"
+          spec = json.loads(Path("official/competition/tools/verifier/data/move_spec.json").read_text())
+          canon = json.dumps(spec["moves"], sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+          got = "sha256:" + hashlib.sha256(canon.encode()).hexdigest()
+          assert got == expected, (got, expected)
+          print("official_commit=a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e")
+          print("move_spec_hash=" + got)
+          PY
+
+      - name: Run ACC unit suite
+        run: |
+          python -m pip install -q pytest
+          python -m pytest tests/test_acc*.py -q
+
+      - name: Replay 424 certified trajectories
+        run: |
+          python acc_training_replay.py \
+            --training official/competition/examples/training_424.json \
+            --trajectories acc-training-trajectories.jsonl \
+            --summary acc-training-replay-summary.json
+          python - <<'PY'
+          import json
+          s=json.load(open("acc-training-replay-summary.json"))
+          assert s["instances"]==424 and s["accepted"]==424 and s["rejected"]==0, s
+          print("local_replay=424/424")
+          PY
+
+      - name: Cross-check 424 with official verifier
+        run: |
+          python - <<'PY'
+          import json,sys
+          from pathlib import Path
+          sys.path.insert(0,str(Path("official/competition/tools").resolve()))
+          from verifier.core import verify
+          training=json.loads(Path("official/competition/examples/training_424.json").read_text())
+          manifest=json.loads(Path("official/competition/examples/training_manifest.json").read_text())
+          challenges={c["challenge_id"]:c for c in manifest["challenges"] if c["move_spec_version"]=="ac-r2-v1"}
+          accepted=0
+          for instance in training["instances"]:
+              receipt=verify(challenges[instance["training_id"]],instance["moves"],"ac-r2-v1",manifest["limits"])
+              assert receipt["ok"], (instance["training_id"],receipt)
+              accepted+=1
+          assert accepted==424
+          print("official_verifier=424/424")
+          PY
+
+      - name: Run post-freeze v2 scientific comparison
+        run: |
+          python acc_developmental_experiment.py scientific \
+            --trajectories acc-training-trajectories.jsonl \
+            --training-manifest official/competition/examples/training_manifest.json \
+            --official-tools official/competition/tools \
+            --split acc-dev-v2-split.json \
+            --policy acc-generator-v2-policy.json \
+            --summary acc-dev-v2-future-summary.json \
+            --freeze-marker acc-dev-v2-freeze.json \
+            --seed acc-developmental-system-v1 \
+            --budget 100
+          python - <<'PY'
+          import json
+          s=json.load(open("acc-dev-v2-future-summary.json"))
+          print("passed",s["passed"])
+          print("split",s["split"])
+          print("calibration_rescues",s["calibration"]["verified_rescues_by_generator"])
+          print("policy",s["policy"])
+          print("future_baseline",s["future"]["baseline_solved"])
+          print("future_warm",s["future"]["warm_solved"])
+          print("future_rescues",s["future"]["rescues"])
+          print("future_harms",s["future"]["harms"])
+          PY
+
+      - name: Upload v2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acc-developmental-system-v2-evidence
+          path: |
+            acc-training-replay-summary.json
+            acc-dev-v2-split.json
+            acc-generator-v2-policy.json
+            acc-dev-v2-future-summary.json
+            acc-dev-v2-freeze.json
+          if-no-files-found: warn
+          retention-days: 14
