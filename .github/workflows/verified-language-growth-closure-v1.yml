@@ -19,5 +19,44 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Existing unit baseline
+
+      - name: Focused developmental type tests
+        run: python -m unittest tests.test_developmental_types -v
+      - name: Focused grammar growth tests
+        run: python -m unittest tests.test_grammar_growth -v
+      - name: Focused capability algebra tests
+        run: python -m unittest tests.test_capability_algebra -v
+      - name: Focused closure tests
+        run: python -m unittest tests.test_developmental_closure -v
+      - name: Recursive qualification tests
+        run: python -m unittest tests.test_verified_language_growth_closure -v
+      - name: Full regression suite
         run: python -m unittest discover -s tests -v
+
+      - name: Run sealed bounded qualification
+        run: |
+          python verified_language_growth_closure_v1.py | tee verified-language-growth-closure-v1.log
+          grep -Fx 'PASS_VERIFIED_LANGUAGE_GROWTH_CLOSURE_V1' verified-language-growth-closure-v1.log
+          python - <<'PY'
+          import json
+          p='verified-language-growth-closure-v1-summary.json'
+          d=json.load(open(p))
+          assert d['passed'] is True
+          assert d['verdict']=='PASS_VERIFIED_LANGUAGE_GROWTH_CLOSURE_V1'
+          assert d['closure']['status']=='CLOSED_BOUNDED'
+          assert d['gates']['g2_depends_on_g1'] is True
+          assert d['gates']['g1_ablation_invalidates_g2'] is True
+          assert d['claims']['open_ended_closure'] is False
+          print('SEALED_SUMMARY_OK', d['closure']['certificate_digest'])
+          PY
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-language-growth-closure-v1-evidence
+          path: |
+            verified-language-growth-closure-v1-summary.json
+            verified-language-growth-closure-v1.log
+          if-no-files-found: error
+          retention-days: 30
