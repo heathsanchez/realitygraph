@@ -1,0 +1,9 @@
+{
+  "version": "capability-generator-controller-transfer-v3",
+  "generator": "absdiff",
+  "generator_source_run": 35052246708,
+  "controller_source_run": 35052502246,
+  "controller_rule": "invoke generator iff raw verifier evidence contains at least one pass and at least one fail; otherwise retain raw",
+  "uses_deployment_outcomes_during_v3": false,
+  "v3_target_outcomes_used": false
+}
