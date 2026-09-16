@@ -1,0 +1,23 @@
+name: abgp-dev-preregistration-v1
+
+on:
+  push:
+    branches:
+      - abgp-preregistration-freeze-v1
+  workflow_dispatch:
+
+concurrency:
+  group: abgp-dev-preregistration-v1
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Full regression suite
+        run: python -m unittest discover -s tests -v
