@@ -298,3 +298,22 @@ def predict_residual_decoder(
     raw_score = z @ model.direction
     score = (raw_score - model.score_mean) / model.score_scale
     return _sigmoid(_logit(base) + model.delta * score)
+
+
+def mixed_evidence_invoke(gains, min_mean_gain: float = 0.0) -> bool:
+    """Return True only for non-trivial mixed verifier evidence.
+
+    This is the retained selective-representation controller pattern: expand
+    representation when evidence contains both a pass and a fail, rather than
+    demanding universal success before a representation is even allowed to be
+    tested prospectively.  ``min_mean_gain`` prevents pure numerical noise from
+    triggering expansion.
+    """
+    values = np.asarray(tuple(gains), dtype=np.float64)
+    if values.size == 0 or not np.isfinite(values).all():
+        return False
+    return bool(
+        np.any(values > 0.0)
+        and np.any(values <= 0.0)
+        and float(values.mean()) > float(min_mean_gain)
+    )
