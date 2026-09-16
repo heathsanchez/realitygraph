@@ -82,7 +82,7 @@ jobs:
 
       - name: Run post-freeze v2 scientific comparison
         run: |
-          python acc_developmental_experiment.py scientific \
+          python acc_developmental_experiment_v2.py scientific \
             --trajectories acc-training-trajectories.jsonl \
             --training-manifest official/competition/examples/training_manifest.json \
             --official-tools official/competition/tools \
