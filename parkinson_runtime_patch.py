@@ -118,16 +118,17 @@ def load_model(path):
     return json.loads(Path(path).read_text())
 
 
-def patch_probability(nifti_path, canonical_probability, model):
-    """Apply frozen G1+G2 and the final threshold-trajectory residual.
+def patch_probability(nifti_path, canonical_probability, model, *, already_parent=False):
+    """Apply the final threshold-trajectory residual.
 
-    ``canonical_probability`` must be the probability produced by the exact
-    pre-existing canonical submission before the RealityGraph patches.
+    By default ``canonical_probability`` is the exact pre-RealityGraph canonical
+    probability and frozen G1+G2 are applied first.  Set ``already_parent=True``
+    only when the caller has already applied those exact G1+G2 corrections.
     """
     if isinstance(model, (str, Path)):
         model = load_model(model)
     _, r = runtime_signal_map(nifti_path)
-    parent = parent_probability(canonical_probability, r)
+    parent = float(canonical_probability) if already_parent else parent_probability(canonical_probability, r)
     base_logit = _logit([parent])
 
     bank, names, _ = dense_threshold_trajectory_features(r[None, ...])
