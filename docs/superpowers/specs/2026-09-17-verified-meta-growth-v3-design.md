@@ -52,7 +52,7 @@ V3 inherits the existing developmental laws unchanged.
 4. Losing repair attempts cannot mutate persistent state.
 5. A retained repair-selection rule is advisory capability, not truth; the resulting object-level capability must still pass the normal verifier, attack, future evaluation, replay, and admission gates.
 6. A stale authority snapshot, verifier identity, portfolio identity, or obstruction fingerprint invalidates the rule.
-7. If several repair strategies remain equally lawful under the declared selection order, V3 returns `UNKNOWN_CHOICE` rather than silently choosing one.
+7. If several repair strategies remain equally lawful under the declared structural selection criteria, V3 returns `UNKNOWN_CHOICE` rather than silently choosing one by name or iteration order.
 8. If the repair portfolio is not exhaustively checked within the declared resource envelope, failure remains `UNKNOWN_SEARCH`.
 
 ## 4. Architecture
@@ -91,7 +91,7 @@ The critical property is that the meta layer chooses **which lower substrate ada
 
 V3 must not transfer repair rules by task name, source identity, surface symbol names, fixture names, or generation number.
 
-The new `ObstructionFingerprint` is an exact isomorphism-invariant description of the bounded partition failure.
+The new `ObstructionFingerprint` is an exact isomorphism-invariant description of the bounded typed partition failure.
 
 For a frozen carrier, construct the bipartite multigraph induced by:
 
@@ -116,11 +116,11 @@ authority_snapshot
 verifier_id
 ```
 
-Surface carrier labels are excluded.
+Surface carrier labels are excluded. The declared input/output type is part of the obstruction geometry: a stateless pair obstruction and a temporal-history obstruction are not interchangeable even when their raw class-count matrices happen to match.
 
-Two obligations may share a fingerprint only when their certified quotient/consequence failures are isomorphic under this declared finite canonicalizer.
+Two obligations may share a fingerprint only when their certified typed quotient/consequence failures are isomorphic under this declared finite canonicalizer.
 
-This is a deliberately stronger key than a hand-authored label such as `needs_memory` or `needs_composition`.
+This is deliberately stronger than a hand-authored label such as `needs_memory` or `needs_observation`.
 
 ## 6. Repair strategy protocol
 
@@ -140,11 +140,11 @@ A strategy never mutates state directly. It may only construct a normal V2 `Gene
 V3's initial frozen portfolio contains four generic strategy families:
 
 1. `deepen_stateless_composition`
-   - expands composition depth while preserving the same observables and no internal state;
+   - expands composition depth while preserving the same declared observables and no internal state;
 2. `add_observable`
-   - expands the declared stateless observation vocabulary without adding memory;
+   - expands the declared stateless observation vocabulary from a lower raw-observation substrate without adding memory;
 3. `add_finite_memory_2`
-   - introduces the complete declared two-state finite-memory substrate over the existing earned signal interface;
+   - introduces the complete declared two-state finite-memory substrate over the existing signal interface;
 4. `add_finite_memory_3`
    - introduces the corresponding complete three-state substrate at higher structural cost.
 
@@ -211,16 +211,14 @@ If no strategy succeeds:
 - incomplete portfolio evaluation -> `UNKNOWN_SEARCH`;
 - complete portfolio evaluation -> `NAMED_META_OBSTRUCTION`.
 
-If more than one succeeds, selection is by the predeclared structural order:
+If more than one succeeds, use only the predeclared structural criteria:
 
 ```text
 (strategy.structural_cost,
- admitted_constructor.complexity,
- strategy_id,
- retained_capability_id)
+ admitted_constructor.complexity)
 ```
 
-If two candidates remain observationally and structurally tied under the declared order, return `UNKNOWN_CHOICE`.
+If exactly one success is strictly minimal, it is the selected developmental move. If multiple successful strategies remain tied at the minimum structural pair, return `UNKNOWN_CHOICE`. Strategy ID, fixture name, enumeration order, and capability ID are never permitted to break the tie.
 
 ### 7.4 Retain the developmental move
 
@@ -250,7 +248,7 @@ RepairRule
   ablation_handle
 ```
 
-`MetaMemory` must have canonical serialization, byte-exact restart, deterministic merge-free ordering for this bounded experiment, and explicit rule ablation.
+`MetaMemory` must have canonical serialization, byte-exact restart, deterministic ordering for this bounded experiment, and explicit rule ablation.
 
 A rule is not a replacement for the object capability it helps construct. It is a retained **developmental capability**: a verified mapping from an obstruction geometry to a repair family.
 
@@ -258,18 +256,18 @@ A rule is not a replacement for the object capability it helps construct. It is 
 
 V3 must show that the meta policy is not simply hard-coded to one repair type. The qualification therefore uses two distinct obstruction families.
 
-### 9.1 Family C — compositional obstruction
+### 9.1 Family O — observation obstruction
 
-Current language sees only one coordinate of a finite pair carrier and is complete over that declared one-coordinate language. The target distinction is not present.
+The current language is complete over a declared one-coordinate observation vocabulary on a finite pair carrier. Required consequence separates states that the current observation quotient collapses because the second coordinate is invisible.
 
 Cold portfolio behavior must establish:
 
-- deeper same-observable stateless structure alone does not resolve the obstruction within the frozen bound;
-- finite memory is inapplicable to the nonsequential interface;
-- the declared stateless composition repair yields the minimal verified successful extension;
-- the winning strategy class is `deepen_stateless_composition`.
+- deeper composition over the same one-coordinate observations cannot resolve the quotient collision;
+- finite memory is inapplicable to the nonsequential `pair` interface;
+- the declared lower raw-observation substrate contains a lawful missing observable that separates the certified collision;
+- `add_observable` is the unique minimal verified successful strategy.
 
-The acquisition and calibration variants use different surface carrier names and syntactic encodings but have the same exact obstruction fingerprint.
+The acquisition and calibration variants use different surface carrier names and syntactic encodings but have the same exact typed obstruction fingerprint.
 
 ### 9.2 Family T — temporal obstruction
 
@@ -277,19 +275,19 @@ The complete current language sees only the present symbol, while required conse
 
 Cold portfolio behavior must establish:
 
-- stateless composition cannot separate histories collapsed by identical present observation;
-- adding only another stateless present observable within the declared vocabulary does not resolve the obstruction;
+- deeper stateless composition cannot separate histories collapsed by identical present observation;
+- adding only another stateless present observable from the declared vocabulary does not resolve the obstruction;
 - a two-state memory repair succeeds;
-- a three-state memory repair is also available but is structurally more expensive;
-- the selected strategy class is `add_finite_memory_2`.
+- a three-state memory repair also succeeds but is structurally more expensive;
+- the unique minimal selected strategy is `add_finite_memory_2`.
 
-Again, acquisition and calibration tasks use different surface alphabets while preserving exact obstruction isomorphism.
+Again, acquisition and calibration tasks use different surface alphabets while preserving exact typed obstruction isomorphism.
 
 ## 10. Prospective transfer test
 
 After both repair rules are promoted, freeze two untouched future tasks:
 
-- one new Family-C surface realization;
+- one new Family-O surface realization;
 - one new Family-T surface realization.
 
 For each future task:
@@ -325,7 +323,7 @@ The eventual object-level answer may still be rediscovered; what must disappear 
 
 ### Wrong-fingerprint control
 
-A rule for Family C must not select the Family T strategy, and vice versa.
+A rule for Family O must not select the Family T strategy, and vice versa.
 
 ### Stale authority/verifier control
 
@@ -345,7 +343,7 @@ If only part of the frozen repair portfolio is explored and no solution is found
 
 ### Choice control
 
-A deliberately tied bounded fixture with two indistinguishable equally ranked repairs must remain `UNKNOWN_CHOICE` until external consequence breaks the tie.
+A deliberately tied bounded fixture with two equally minimal verified repairs must remain `UNKNOWN_CHOICE` until external consequence breaks the tie.
 
 ### Object-capability ablation
 
@@ -426,7 +424,7 @@ The existing `developmental_executor.py` remains generation-generic and must not
 The implementation must include focused tests proving:
 
 - fingerprint invariance under allowed surface relabeling;
-- fingerprint inequality for non-isomorphic obstruction geometry;
+- fingerprint inequality for non-isomorphic typed obstruction geometry;
 - cold portfolio selection through one generic meta executor;
 - distinct winning repair classes across the two acquisition families;
 - candidate rule creation after acquisition;
@@ -440,7 +438,7 @@ The implementation must include focused tests proving:
 - partial obstruction and partial portfolio search stay `UNKNOWN_SEARCH`;
 - tied repairs stay `UNKNOWN_CHOICE`;
 - inherited V2 tests remain green;
-- source-level meta executor contains no fixture imports, Family-C/Family-T names, or strategy-ID dispatch.
+- source-level meta executor contains no fixture imports, Family-O/Family-T names, or strategy-ID dispatch.
 
 ## 16. Evidence discipline
 
