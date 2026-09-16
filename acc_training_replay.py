@@ -50,6 +50,7 @@ def trajectory_record(instance: dict[str, Any]) -> dict[str, Any]:
         "source_hash": state_hash(start),
         "sequence_hash": sequence_hash(moves),
         "move_count": len(moves),
+        "moves": list(moves),
         "accepted": accepted,
         "target": _jsonable(target),
         "states": states,
