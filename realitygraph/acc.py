@@ -53,3 +53,52 @@ def replay(state: State, moves: Iterable[int]) -> tuple[State, ...]:
         current = apply_move(current, move)
         trace.append(current)
     return tuple(trace)
+
+
+def _exponent_sums(word: Word) -> tuple[int, int]:
+    return (
+        sum(1 if letter == 1 else -1 if letter == -1 else 0 for letter in word),
+        sum(1 if letter == 2 else -1 if letter == -2 else 0 for letter in word),
+    )
+
+
+def _boundary(word: Word) -> tuple[int, int]:
+    return (word[0], word[-1]) if word else (0, 0)
+
+
+def _would_cancel(left: Word, right: Word) -> bool:
+    return bool(left and right and left[-1] == -right[0])
+
+
+def state_observables(state: State) -> dict[str, object]:
+    r0, r1 = state
+    inv0 = invert(r0)
+    inv1 = invert(r1)
+    return {
+        "lengths": (len(r0), len(r1)),
+        "total_length": len(r0) + len(r1),
+        "exponent_sums": (_exponent_sums(r0), _exponent_sums(r1)),
+        "boundaries": (_boundary(r0), _boundary(r1)),
+        "mul_cancellation": (
+            _would_cancel(r0, r1),
+            _would_cancel(r0, inv1),
+            _would_cancel(r1, r0),
+            _would_cancel(r1, inv0),
+        ),
+    }
+
+
+def _digest_json(value: object) -> str:
+    import hashlib
+    import json
+
+    text = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def state_hash(state: State) -> str:
+    return _digest_json([list(state[0]), list(state[1])])
+
+
+def sequence_hash(moves: Iterable[int]) -> str:
+    return _digest_json(list(moves))
