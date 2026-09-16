@@ -1,0 +1,31 @@
+name: openml-regression-transfer-v2
+on:
+  push:
+    branches:
+      - openml-regression-transfer-v2
+  workflow_dispatch:
+concurrency:
+  group: openml-regression-transfer-v2
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_OPENML_REGRESSION_V2_RESULT: openml-regression-transfer-v2-summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml pandas
+      - name: Run preregistered regression transfer V2
+        run: python openml_regression_transfer_v2.py
+      - name: Preserve regression V2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openml-regression-transfer-v2-evidence
+          path: openml-regression-transfer-v2-summary.json
+          if-no-files-found: warn
+          retention-days: 14
