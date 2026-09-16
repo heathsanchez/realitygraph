@@ -6,6 +6,8 @@ from realitygraph.representation_genesis import (
     Program,
     apply_program,
     enumerate_programs,
+    fit_residual_decoder,
+    predict_residual_decoder,
     program_complexity,
 )
 
@@ -74,6 +76,54 @@ class RepresentationGenesisTests(unittest.TestCase):
         a = apply_program({"R": image, "X": image}, program)
         b = apply_program({"R": 11.0 * image, "X": 11.0 * image}, program)
         self.assertTrue(np.allclose(a, b, atol=1e-10, rtol=1e-10))
+
+    def test_residual_decoder_does_not_read_future_labels(self):
+        rng = np.random.default_rng(19)
+        x = rng.normal(size=(30, 4))
+        env = np.repeat(np.arange(3), 10)
+        y = (x[:, 0] + 0.25 * x[:, 1] > 0).astype(int)
+        base = np.full(30, 0.5)
+
+        first = fit_residual_decoder(x, y, base, env, (0, 1))
+        changed = y.copy()
+        changed[env == 2] = 1 - changed[env == 2]
+        second = fit_residual_decoder(x, changed, base, env, (0, 1))
+
+        self.assertTrue(np.allclose(first.mean, second.mean))
+        self.assertTrue(np.allclose(first.scale, second.scale))
+        self.assertTrue(np.allclose(first.direction, second.direction))
+        self.assertAlmostEqual(first.score_mean, second.score_mean)
+        self.assertAlmostEqual(first.score_scale, second.score_scale)
+        self.assertAlmostEqual(first.delta, second.delta)
+
+    def test_constant_representation_refuses_change(self):
+        x = np.ones((24, 3), dtype=float)
+        env = np.repeat(np.arange(3), 8)
+        y = np.tile([0, 1], 12)
+        base = np.full(24, 0.5)
+
+        model = fit_residual_decoder(x, y, base, env, (0, 1, 2))
+        pred = predict_residual_decoder(model, x, base)
+
+        self.assertAlmostEqual(model.delta, 0.0)
+        self.assertTrue(np.allclose(pred, base))
+
+    def test_residual_decoder_improves_a_shared_linear_signal(self):
+        x0 = np.linspace(-2.5, 2.5, 60)
+        x = np.column_stack([x0, 0.1 * np.sin(x0)])
+        env = np.tile(np.arange(3), 20)
+        y = (x0 > 0).astype(int)
+        base = np.full(60, 0.5)
+
+        model = fit_residual_decoder(x, y, base, env, (0, 1, 2))
+        pred = predict_residual_decoder(model, x, base)
+
+        def loss(p):
+            p = np.clip(p, 1e-9, 1 - 1e-9)
+            return float(np.mean(-(y * np.log(p) + (1 - y) * np.log(1 - p))))
+
+        self.assertGreater(model.delta, 0.0)
+        self.assertLess(loss(pred), loss(base))
 
 
 if __name__ == "__main__":
