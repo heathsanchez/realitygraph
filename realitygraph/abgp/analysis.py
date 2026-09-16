@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import json
 from math import comb, sqrt
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -285,6 +286,15 @@ def _finalize_verdict(analysis: dict[str, Any], adjusted_pvalue: float, alpha: f
     return result
 
 
+def _canonical_json_value(value: Any) -> Any:
+    """Normalize analysis output to the exact JSON data model used by artifacts.
+
+    This makes the live analysis object byte-replayable after JSON serialization:
+    tuples become lists and non-string mapping keys become their JSON string form.
+    """
+    return json.loads(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+
+
 def analyze_matrix(raw_matrix: Mapping[str, Any]) -> dict[str, Any]:
     if set(raw_matrix) != set(_ARM_ORDER):
         raise ValueError("raw ABGP matrix must contain exactly A, B, G, P")
@@ -306,10 +316,12 @@ def analyze_matrix(raw_matrix: Mapping[str, Any]) -> dict[str, Any]:
         for arm in _ARM_ORDER
     }
     combined = "PASS" if all(finalized[arm]["verdict"] == "PASS" for arm in _ARM_ORDER) else "NOT_FULL_PASS"
-    return {
-        "analysis_plan_digest": plan.digest,
-        "raw_pvalues": raw_pvalues,
-        "holm": holm,
-        "arms": finalized,
-        "combined_verdict": combined,
-    }
+    return _canonical_json_value(
+        {
+            "analysis_plan_digest": plan.digest,
+            "raw_pvalues": raw_pvalues,
+            "holm": holm,
+            "arms": finalized,
+            "combined_verdict": combined,
+        }
+    )
