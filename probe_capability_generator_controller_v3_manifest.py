@@ -117,6 +117,7 @@ def main():
             or "telco" in low
             or "fuelcar" in low
             or "analcatdata" in low
+            or low.startswith("ucs_scm")
         ): continue
         if not (250<=rows<=50000 and 3<=feats<=100 and nums>=3): continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":feats,"numeric_features":nums}
