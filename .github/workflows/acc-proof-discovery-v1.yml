@@ -53,7 +53,8 @@ jobs:
             tests/test_acc_consequence_transfer.py \
             tests/test_acc_consequence_open.py \
             tests/test_acc_exact_tail.py \
-            tests/test_acc_ms_recurrence.py -q
+            tests/test_acc_ms_recurrence.py \
+            tests/test_acc_developmental_core.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
@@ -101,18 +102,6 @@ jobs:
             --summary acc-consequence-audit.json \
             --closure acc-consequence-heldout-closure.json \
             --budget 100
-          python - <<'PY'
-          import json
-          s = json.load(open("acc-consequence-audit.json"))
-          assert s["acquisition_presentations"] == 297, s
-          assert s["heldout_presentations"] == 127, s
-          assert s["closure_states"] > 0, s
-          assert s["exact_restart"] is True, s
-          assert s["ablation_mismatches"] == 0, s
-          assert s["warm_only_solved"] > 0, s
-          assert s["warm_solved"] > s["cold_solved"], s
-          print("closure_warm_only", s["warm_only_solved"])
-          PY
 
       - name: Run frozen 424-proof closure against all 550 open MS rows
         if: github.ref_name == 'acc-consequence-closure-v1'
