@@ -7,6 +7,7 @@ from realitygraph.representation_genesis import (
     apply_program,
     enumerate_programs,
     fit_residual_decoder,
+    mixed_evidence_invoke,
     predict_residual_decoder,
     program_complexity,
 )
@@ -124,6 +125,12 @@ class RepresentationGenesisTests(unittest.TestCase):
 
         self.assertGreater(model.delta, 0.0)
         self.assertLess(loss(pred), loss(base))
+
+    def test_mixed_evidence_controller_invokes_only_on_mixed_positive_evidence(self):
+        self.assertTrue(mixed_evidence_invoke([0.004, 0.002, -0.0001], 1e-4))
+        self.assertFalse(mixed_evidence_invoke([0.004, 0.002, 0.001], 1e-4))
+        self.assertFalse(mixed_evidence_invoke([-0.004, -0.002, -0.001], 1e-4))
+        self.assertFalse(mixed_evidence_invoke([0.0, 0.0, 0.0], 1e-4))
 
 
 if __name__ == "__main__":
