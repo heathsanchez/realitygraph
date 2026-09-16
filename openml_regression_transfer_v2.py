@@ -20,7 +20,7 @@ from realitygraph.transfer_memory import model_to_law
 POLICY_PATH=Path("frozen-meta/adaptive_policy.mg")
 POLICY_SHA="3da082adbcfcacc53c9745a0b6af42a4ea33655e43c3768bc755fdf41168fa92"
 VERIFIER_PATH=Path("frozen-meta/openml_verifier_v15.json")
-MANIFEST_SHA="TO_BE_FROZEN"
+MANIFEST_SHA="000e4d92fd4f5cd7c7d64c40da640d7c9fdfc80efad05372c0a53e0e78fa4e33"
 
 class InapplicableWorld(ValueError):
     pass
