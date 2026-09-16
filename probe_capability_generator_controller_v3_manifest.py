@@ -107,6 +107,16 @@ def main():
             or "concrete" in low
             or low == "datastr"
             or "forest" in low
+            or "fiat" in low
+            or low.startswith("pbc")
+            or low.startswith("cps_")
+            or "insurance" in low
+            or "student" in low
+            or "uhpc" in low
+            or "churn" in low
+            or "telco" in low
+            or "fuelcar" in low
+            or "analcatdata" in low
         ): continue
         if not (250<=rows<=50000 and 3<=feats<=100 and nums>=3): continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":feats,"numeric_features":nums}
