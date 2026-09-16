@@ -15,7 +15,7 @@ permissions:
 jobs:
   developmental:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Checkout RealityGraph branch
         uses: actions/checkout@v4
@@ -105,6 +105,28 @@ jobs:
           print("future_harms",s["future"]["harms"])
           PY
 
+      - name: Probe frozen v3 policy on all 550 open rows
+        run: |
+          python acc_developmental_experiment_v3.py open \
+            --trajectories acc-training-trajectories.jsonl \
+            --split acc-dev-v3-split.json \
+            --policy acc-generator-v3-policy.json \
+            --freeze-marker acc-dev-v3-freeze.json \
+            --metadata official/competition/tools/verifier/data/ms1190_metadata.csv \
+            --manifest official/competition/tools/verifier/data/manifest.json \
+            --official-tools official/competition/tools \
+            --summary acc-dev-v3-open-summary.json \
+            --submission acc-dev-v3-open-candidates.txt \
+            --probe-budget 100 \
+            --open-budget 3000
+          python - <<'PY'
+          import json
+          s=json.load(open("acc-dev-v3-open-summary.json"))
+          print("open_rows",s["open_rows"])
+          print("controller_invocations",s["controller_invocations"])
+          print("officially_verified_open_solved",s["officially_verified_open_solved"])
+          PY
+
       - name: Upload v3 evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -116,5 +138,7 @@ jobs:
             acc-generator-v3-policy.json
             acc-dev-v3-future-summary.json
             acc-dev-v3-freeze.json
+            acc-dev-v3-open-summary.json
+            acc-dev-v3-open-candidates.txt
           if-no-files-found: warn
           retention-days: 14
