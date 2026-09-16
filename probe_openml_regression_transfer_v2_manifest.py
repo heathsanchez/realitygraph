@@ -57,6 +57,13 @@ def main():
         name=str(x[nc]); s=stem(name); low=name.lower()
         if s in pmlb_names or s in v1names: continue
         if any(tok in low for tok in banned_tokens): continue
+        if (
+            "cpmp" in low
+            or "mabbob" in low
+            or "bike_sharing" in low
+            or "bike-sharing" in low
+            or low.startswith("visualizing_")
+        ): continue
         if not (250<=rows<=50000 and 3<=feats<=100 and nums>=3): continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":feats,"numeric_features":nums}
         if s not in byfamily or tid<byfamily[s]["task_id"]:
