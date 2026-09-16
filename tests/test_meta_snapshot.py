@@ -68,7 +68,7 @@ class MetaSnapshotTests(unittest.TestCase):
             authority_snapshot="snapshot-authority",
         )
         restored_state, restored_memory = snapshot.restore()
-        self.assertEqual(restored_state.text(), present_state.text())
+        self.assertEqual(restored_state.to_text(), present_state.to_text())
         self.assertEqual(restored_state.digest, present_state.digest)
         self.assertEqual(restored_memory.text(), present_memory.text())
         self.assertEqual(restored_memory.digest, present_memory.digest)
