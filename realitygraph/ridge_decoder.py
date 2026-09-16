@@ -52,7 +52,6 @@ def _balanced_weights(env: np.ndarray, train_envs: tuple[int, ...], train_ids: n
 
 def _objective(z: np.ndarray, y: np.ndarray, offset: np.ndarray, weights: np.ndarray, beta: np.ndarray, l2: float) -> float:
     eta = offset + z @ beta
-    # Stable logistic negative log likelihood: log(1+exp(eta)) - y*eta.
     nll = np.logaddexp(0.0, eta) - y * eta
     return float(np.sum(weights * nll) + 0.5 * l2 * np.dot(beta, beta))
 
@@ -190,3 +189,31 @@ def predict_ridge_residual_decoder(
     standardized = (x - model.mean[None, :]) / model.scale[None, :]
     score = standardized @ model.beta
     return _sigmoid(_logit(base) + model.alpha * score)
+
+
+def joint_evidence_invoke(
+    ll_gains,
+    auc_gains,
+    *,
+    min_mean_ll: float = 0.0,
+    min_mean_auc: float = 0.0,
+) -> bool:
+    """Invoke only when discovery evidence supports both target metrics.
+
+    Universal joint success is promotable. Mixed evidence is also testable when
+    at least one environment improves on both metrics and the mean effect is
+    positive for both. Uniformly useless or one-metric-only evidence is refused.
+    """
+    ll = np.asarray(tuple(ll_gains), dtype=np.float64)
+    auc = np.asarray(tuple(auc_gains), dtype=np.float64)
+    if ll.size == 0 or ll.shape != auc.shape:
+        return False
+    if not np.isfinite(ll).all() or not np.isfinite(auc).all():
+        return False
+    joint = (ll > 0.0) & (auc > 0.0)
+    if not np.any(joint):
+        return False
+    return bool(
+        float(ll.mean()) > float(min_mean_ll)
+        and float(auc.mean()) > float(min_mean_auc)
+    )
