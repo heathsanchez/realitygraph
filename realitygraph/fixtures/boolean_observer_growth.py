@@ -29,11 +29,11 @@ class NandExpression:
     right: "NandExpression | None" = None
 
     @property
-    def gates(self) -> int:
+    def depth(self) -> int:
         if self.op == "atom":
             return 0
         assert self.left is not None and self.right is not None
-        return 1 + self.left.gates + self.right.gates
+        return 1 + max(self.left.depth, self.right.depth)
 
     def text(self) -> str:
         if self.op == "atom":
@@ -70,43 +70,51 @@ def _atoms() -> tuple[NandExpression, ...]:
     return tuple(NandExpression("atom", atom=value) for value in ("0", "1", "x", "y"))
 
 
-def enumerate_nand_candidates(max_gates: int = 4):
-    if max_gates < 1:
+def enumerate_nand_candidates(max_depth: int = 3):
+    """Enumerate extensional NAND programs by compositional depth.
+
+    Depth, rather than raw tree-node count, is the declared substrate resource.
+    This permits a repeated subexpression to be reused compositionally without
+    pretending the named target exists as a primitive.
+    """
+    if max_depth < 1:
         return (), {}
     atoms = _atoms()
-    by_gates: dict[int, tuple[NandExpression, ...]] = {0: atoms}
+    by_depth: dict[int, tuple[NandExpression, ...]] = {0: atoms}
     seen = {expr.signature for expr in atoms}
     candidates: list[FiniteConstructor] = []
     expression_map: dict[str, NandExpression] = {}
 
-    for gates in range(1, max_gates + 1):
+    for depth in range(1, max_depth + 1):
+        pool = sorted(
+            [expr for prior_depth in range(depth) for expr in by_depth[prior_depth]],
+            key=lambda expr: expr.text(),
+        )
         discovered: dict[str, NandExpression] = {}
-        for left_gates in range(gates):
-            right_gates = gates - 1 - left_gates
-            lefts = sorted(by_gates.get(left_gates, ()), key=lambda expr: expr.text())
-            rights = sorted(by_gates.get(right_gates, ()), key=lambda expr: expr.text())
-            for left in lefts:
-                for right in rights:
-                    # NAND is commutative; canonical ordering removes syntactic duplicates.
-                    if left.text() > right.text():
-                        continue
-                    expr = NandExpression("nand", left=left, right=right)
-                    signature = expr.signature
-                    if signature in seen or signature in discovered:
-                        continue
-                    discovered[signature] = expr
+        for left in pool:
+            for right in pool:
+                if 1 + max(left.depth, right.depth) != depth:
+                    continue
+                # NAND is commutative; canonical ordering removes syntactic duplicates.
+                if left.text() > right.text():
+                    continue
+                expr = NandExpression("nand", left=left, right=right)
+                signature = expr.signature
+                if signature in seen or signature in discovered:
+                    continue
+                discovered[signature] = expr
         ordered = tuple(discovered[key] for key in sorted(discovered))
-        by_gates[gates] = ordered
+        by_depth[depth] = ordered
         for expr in ordered:
             signature = expr.signature
             seen.add(signature)
-            constructor_id = f"nand-g{gates}-{signature}"
+            constructor_id = f"nand-d{depth}-{signature}"
             constructor = FiniteConstructor(
                 constructor_id=constructor_id,
                 input_type="pair",
                 output_type="bit",
                 semantics=tuple(zip(PAIR_INPUTS, signature)),
-                complexity=gates,
+                complexity=depth,
                 dependencies=(),
                 primitive_expansion=(expr.text(),),
             )
@@ -165,7 +173,7 @@ def build_g1() -> dict:
         state_digest=state_digest,
         authority_snapshot=AUTHORITY,
         language_id=old.digest,
-        substrate_id="atoms-0-1-x-y-plus-nand-depth4",
+        substrate_id="atoms-0-1-x-y-plus-nand-depth3",
         protected_consequences=("preserve-x-only-observers",),
         observational_equivalence=("old-language-collapses-parity",),
         unresolved=("parity-observer",),
@@ -173,13 +181,13 @@ def build_g1() -> dict:
         no_resolution=no_resolution,
         necessary_constraints=(f"semantic-signature={PARITY_SIGNATURE}",),
         candidate_version_space_digest=canonical_digest(
-            {"atoms": ["0", "1", "x", "y"], "op": "nand", "max_gates": 4},
+            {"atoms": ["0", "1", "x", "y"], "op": "nand", "max_depth": 3},
             prefix="g1-lower-substrate-v1:",
         ),
         replay_evidence=("fixture-frozen-before-growth",),
     )
 
-    candidates, expressions = enumerate_nand_candidates(4)
+    candidates, expressions = enumerate_nand_candidates(3)
     growth = grow_grammar(
         residual,
         old,
