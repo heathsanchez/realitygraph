@@ -13,11 +13,91 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Inherited V2 baseline
+
+      - name: Obstruction fingerprint tests
+        run: python -m unittest tests.test_obstruction_fingerprint -v
+      - name: Repair strategy tests
+        run: python -m unittest tests.test_repair_strategy -v
+      - name: Meta-memory tests
+        run: python -m unittest tests.test_meta_memory -v
+      - name: Generic meta-executor tests
+        run: python -m unittest tests.test_meta_executor -v
+      - name: Meta-snapshot tests
+        run: python -m unittest tests.test_meta_snapshot -v
+      - name: Heterogeneous meta-growth fixture tests
+        run: python -m unittest tests.test_meta_growth_v3_fixtures -v
+      - name: V3 sealed qualification tests
+        run: python -m unittest tests.test_verified_meta_growth_v3 -v
+      - name: Inherited V2 qualification tests
+        run: python -m unittest tests.test_verified_language_growth_closure_v2 -v
+      - name: Full regression suite
         run: python -m unittest discover -s tests -v
+
+      - name: Run sealed bounded V3 qualification
+        run: |
+          python verified_meta_growth_v3.py | tee verified-meta-growth-v3.log
+          grep -Fx 'PASS_VERIFIED_META_GROWTH_V3' verified-meta-growth-v3.log
+          python - <<'PY'
+          import json
+          p = 'verified-meta-growth-v3-summary.json'
+          d = json.load(open(p))
+          assert d['passed'] is True
+          assert d['verdict'] == 'PASS_VERIFIED_META_GROWTH_V3'
+          assert d['closure']['status'] == 'CLOSED_BOUNDED_META_GROWTH_V3'
+          assert d['gates']['acquisition_rules_candidate_only'] is True
+          assert d['gates']['acquisition_distinct_repair_classes'] is True
+          assert d['gates']['calibration_promotes_both_rules'] is True
+          assert d['gates']['two_distinct_promoted_repair_rules'] is True
+          assert d['gates']['family_c_observation_rule'] is True
+          assert d['gates']['family_t_memory_rule'] is True
+          assert d['gates']['family_c_fingerprint_transfers'] is True
+          assert d['gates']['family_t_fingerprint_transfers'] is True
+          assert d['gates']['cross_family_fingerprint_separates'] is True
+          assert d['gates']['future_c_rule_hit'] is True
+          assert d['gates']['future_t_rule_hit'] is True
+          assert d['gates']['future_c_zero_portfolio_search'] is True
+          assert d['gates']['future_t_zero_portfolio_search'] is True
+          assert d['gates']['future_c_zero_competitor_calls'] is True
+          assert d['gates']['future_t_zero_competitor_calls'] is True
+          assert d['gates']['future_c_new_verified_capability'] is True
+          assert d['gates']['future_t_new_verified_capability'] is True
+          assert d['gates']['future_object_zero_grammar_search'] is True
+          assert d['gates']['exact_meta_snapshot_restart'] is True
+          assert d['gates']['rule_ablation_restores_cold_search'] is True
+          assert d['gates']['wrong_fingerprint_rejects_rule'] is True
+          assert d['gates']['stale_authority_rule_rejected'] is True
+          assert d['gates']['stale_verifier_rule_rejected'] is True
+          assert d['gates']['sham_rule_rejected'] is True
+          assert d['gates']['incomplete_obstruction_unknown_search'] is True
+          assert d['gates']['partial_portfolio_unknown_search'] is True
+          assert d['gates']['unknown_choice_preserved'] is True
+          assert d['gates']['inherited_v2_green'] is True
+          assert d['gates']['closed_bounded_meta_growth'] is True
+          assert d['future']['c']['rule_hit'] is True
+          assert d['future']['t']['rule_hit'] is True
+          assert d['future']['c']['portfolio_search_calls'] == 0
+          assert d['future']['t']['portfolio_search_calls'] == 0
+          assert d['future']['c']['competitor_strategy_calls'] == 0
+          assert d['future']['t']['competitor_strategy_calls'] == 0
+          assert d['claims']['open_ended_meta_growth'] is False
+          assert d['claims']['arbitrary_substrate_invention'] is False
+          assert d['claims']['unbounded_self_development'] is False
+          assert d['claims']['universal_obstruction_classification'] is False
+          print('SEALED_V3_SUMMARY_OK', d['closure']['certificate_digest'])
+          PY
+
+      - name: Upload V3 qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-meta-growth-v3-evidence
+          path: |
+            verified-meta-growth-v3-summary.json
+            verified-meta-growth-v3.log
+          if-no-files-found: error
+          retention-days: 30
