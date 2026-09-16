@@ -39,7 +39,11 @@ jobs:
       - name: Run unit tests
         run: |
           python -m pip install -q pytest
-          python -m pytest tests/test_acc.py tests/test_acc_training_replay.py -q
+          python -m pytest \
+            tests/test_acc.py \
+            tests/test_acc_training_replay.py \
+            tests/test_acc_capability.py \
+            tests/test_acc_transfer.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
@@ -86,10 +90,43 @@ jobs:
           print(f"official_verifier_accepted={accepted}/424")
           PY
 
-      - name: Upload replay evidence
+      - name: Run frozen held-out audit and open MS transfer
+        run: |
+          python acc_prospective_transfer.py \
+            --trajectories acc-training-trajectories.jsonl \
+            --metadata official/competition/tools/verifier/data/ms1190_metadata.csv \
+            --manifest official/competition/tools/verifier/data/manifest.json \
+            --official-tools official/competition/tools \
+            --summary acc-proof-discovery-summary.json \
+            --bank acc-capability-bank.json \
+            --submission acc-open-ms-candidates.txt \
+            --audit-budget 100 \
+            --open-budget 3000
+          python - <<'PY'
+          import json
+          s = json.load(open("acc-proof-discovery-summary.json"))
+          a = s["audit"]
+          o = s["open_transfer"]
+          assert a["exact_restart"] is True, a
+          assert a["ablation_mismatches"] == 0, a
+          assert a["exact_macro_reuse_events"] > 0, a
+          assert a["warm_only_solved"] > 0, a
+          assert a["warm_expansions_on_both"] < a["cold_expansions_on_both"], a
+          assert o["open_metadata_rows"] == 550, o
+          assert o["exact_manifest_matches"] == 550, o
+          assert o["unmatched_open_rows"] == 0, o
+          assert o["officially_verified_open_solved"] == o["open_solved"], o
+          print("heldout_warm_only", a["warm_only_solved"])
+          print("open_verified", o["officially_verified_open_solved"])
+          PY
+
+      - name: Upload ACC evidence
         uses: actions/upload-artifact@v4
         with:
-          name: acc-proof-discovery-v1-replay
+          name: acc-proof-discovery-v1
           path: |
             acc-training-replay-summary.json
             acc-training-trajectories.jsonl
+            acc-proof-discovery-summary.json
+            acc-capability-bank.json
+            acc-open-ms-candidates.txt
