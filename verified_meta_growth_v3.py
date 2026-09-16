@@ -126,8 +126,6 @@ def _controls(
     c_future_bundle,
     t_future_bundle,
 ) -> dict[str, bool]:
-    # A promoted C rule cannot choose a T repair. T may still be solved cold;
-    # the control is specifically that no promoted rule hit occurs.
     wrong_fp = execute_meta_growth(
         t_future_bundle.state,
         c_promoted_only_memory,
@@ -388,8 +386,8 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
             c_source_capability is not None
             and c_future_capability is not None
             and c_source_capability.capability_id != c_future_capability.capability_id
-            and c_future.attack is not None
-            and c_future.attack.status.value == "SURVIVE"
+            and c_future.selected_generation.attack is not None
+            and c_future.selected_generation.attack.status.value == "SURVIVE"
             and c_future.selected_generation.future is not None
             and c_future.selected_generation.future.passed
         ),
@@ -397,8 +395,8 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
             t_source_capability is not None
             and t_future_capability is not None
             and t_source_capability.capability_id != t_future_capability.capability_id
-            and t_future.attack is not None
-            and t_future.attack.status.value == "SURVIVE"
+            and t_future.selected_generation.attack is not None
+            and t_future.selected_generation.attack.status.value == "SURVIVE"
             and t_future.selected_generation.future is not None
             and t_future.selected_generation.future.passed
         ),
