@@ -32,3 +32,4 @@ def test_replay_training_document_records_exact_trajectories():
     assert result["summary"]["rejected"] == 0
     assert result["trajectories"][0]["states"][-1]["state"] == [[1], [2]]
     assert result["trajectories"][0]["move_count"] == 1
+    assert result["trajectories"][0]["moves"] == [3]
