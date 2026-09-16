@@ -43,18 +43,7 @@ jobs:
       - name: Run unit tests
         run: |
           python -m pip install -q pytest
-          python -m pytest \
-            tests/test_acc.py \
-            tests/test_acc_training_replay.py \
-            tests/test_acc_capability.py \
-            tests/test_acc_transfer.py \
-            tests/test_acc_source_entry.py \
-            tests/test_acc_consequence_closure.py \
-            tests/test_acc_consequence_transfer.py \
-            tests/test_acc_consequence_open.py \
-            tests/test_acc_exact_tail.py \
-            tests/test_acc_ms_recurrence.py \
-            tests/test_acc_developmental_core.py -q
+          python -m pytest tests/test_acc*.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
