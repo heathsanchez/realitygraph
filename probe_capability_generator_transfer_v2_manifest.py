@@ -85,11 +85,21 @@ def main():
             or "bike_sharing" in low
             or "bike-sharing" in low
             or low.startswith("visualizing_")
+            or low == "cmc"
+            or "test_dsn" in low
+            or "turing" in low
+            or "german" in low
+            or "pokemon" in low
+            or "svmguide" in low
+            or "satellite" in low
+            or "qsar" in low
+            or "titanic" in low
         ): continue
         if not (250<=rows<=50000 and 3<=feats<=100 and nums>=3): continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":feats,"numeric_features":nums}
-        if s not in byfamily or tid<byfamily[s]["task_id"]:
-            byfamily[s]=z
+        family=("microwave_contaminant_urbinati" if "contaminant-detection-in-packaged-cocoa-hazelnut-spread-jars" in low else s)
+        if family not in byfamily or tid<byfamily[family]["task_id"]:
+            byfamily[family]=z
 
     worlds=list(byfamily.values())
     worlds.sort(key=lambda z:(hashlib.sha256(
