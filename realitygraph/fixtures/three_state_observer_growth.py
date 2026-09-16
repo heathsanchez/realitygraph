@@ -29,7 +29,9 @@ def target_contains_11(sequence: str) -> str:
     return "1" if "11" in sequence else "0"
 
 
-TARGET_SIGNATURE = "".join(target_contains_11(sequence) for sequence in SEQUENCE_CARRIER)
+TARGET_SIGNATURE = "".join(
+    target_contains_11(sequence) for sequence in sorted(SEQUENCE_CARRIER)
+)
 
 
 class NegativeFixtureError(RuntimeError):
@@ -245,7 +247,7 @@ class _ThreeStateVerifier:
             return False
         signature = "".join(
             machine.run(_signals_from_dependency(dependency, sequence))
-            for sequence in SEQUENCE_CARRIER
+            for sequence in sorted(SEQUENCE_CARRIER)
         )
         return signature == candidate.semantic_signature == TARGET_SIGNATURE
 
