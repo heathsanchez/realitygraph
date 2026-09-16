@@ -18,8 +18,8 @@ def _sigmoid(z):
 def fit_univariate_offset(x, y, base_logits, max_iter=40, tol=1e-8):
     """Fit one residual logit coefficient against a fixed parent offset.
 
-    Returns (beta, log-loss gain). No intercept is fit here; calibration is kept
-    separate so recurrence measures the feature's own directional consequence.
+    Returns (beta, log-loss gain). No intercept is fit here; recurrence should
+    measure the feature's own directional consequence rather than site prevalence.
     """
     x = np.asarray(x, dtype=np.float64).reshape(-1)
     y = np.asarray(y, dtype=np.float64).reshape(-1)
@@ -151,3 +151,40 @@ def robust_median_beta(betas, min_sign_fraction=0.75):
         if np.any(keep):
             out[j] = float(np.median(col[keep]))
     return out
+
+
+def fit_robust_tiny_model(
+    X,
+    y,
+    base_logits,
+    env,
+    discovery_envs,
+    *,
+    min_sign_fraction=0.75,
+    shrinkage=1.0,
+    max_iter=30,
+):
+    """Fit a tiny residual model without pooled multivariate coefficient fitting.
+
+    Each feature is fit independently inside every discovery environment. Only a
+    stable majority direction survives, and its coefficient is the median of the
+    agreeing environments. A fixed shrinkage scalar can be selected by nested
+    discovery-only validation; no pooled intercept is introduced.
+    """
+    stats = environment_recurrence(
+        X, y, base_logits, env, discovery_envs, max_iter=max_iter
+    )
+    beta = robust_median_beta(
+        stats['betas'], min_sign_fraction=min_sign_fraction
+    )
+    Z = (np.asarray(X, dtype=np.float64) - stats['mean']) / stats['scale']
+    logits = np.asarray(base_logits, dtype=np.float64) + float(shrinkage) * (Z @ beta)
+    return {
+        'mean': stats['mean'],
+        'scale': stats['scale'],
+        'beta': beta,
+        'sign_fraction': stats['sign_fraction'],
+        'score': stats['score'],
+        'logits': logits,
+        'shrinkage': float(shrinkage),
+    }
