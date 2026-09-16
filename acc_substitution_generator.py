@@ -7,6 +7,7 @@ from acc_developmental_core import GeneratedAction, primitive_expansion_ok
 from realitygraph.acc import State, free_reduce, invert, replay
 
 
+_ALPHABET = (1, -1, 2, -2)
 _CONJUGATE_MOVE = {
     0: {1: 6, -1: 7, 2: 8, -2: 9},
     1: {1: 10, -1: 11, 2: 12, -2: 13},
@@ -29,8 +30,81 @@ class SubstitutionCandidate:
 def _validate(candidate: SubstitutionCandidate) -> None:
     if candidate.target_relator not in (0, 1):
         raise ValueError("target_relator must be 0 or 1")
-    if any(letter not in (1, -1, 2, -2) for letter in candidate.conjugator):
+    if any(letter not in _ALPHABET for letter in candidate.conjugator):
         raise ValueError("conjugator contains a non-generator letter")
+
+
+def source_conditioned_candidates(
+    source_word: Iterable[int],
+    *,
+    max_words: int = 12,
+) -> tuple[SubstitutionCandidate, ...]:
+    """Build a fixed-width substitution portfolio conditioned on the source word.
+
+    The old developmental experiment spent its 48-action budget on the first
+    48 members of a global enumeration.  For Miller--Schupp rows the second
+    relator already exposes a distinguished word ``w``.  Reuse that information
+    without increasing width: reserve the same 12 conjugator slots for ``w``,
+    ``w^-1``, the four primitive generators, then informative edge fragments of
+    ``w``/``w^-1`` and finally generic reduced pairs as deterministic fill.
+
+    Every retained conjugator is nonempty and freely reduced.  Four AC variants
+    are emitted for each word (two target relators x other/inverse-other), so
+    ``max_words=12`` gives exactly the historical 48-action budget.
+    """
+    limit = int(max_words)
+    if limit <= 0:
+        return ()
+
+    raw = tuple(int(x) for x in source_word)
+    if any(letter not in _ALPHABET for letter in raw):
+        raise ValueError("source word contains a non-generator letter")
+    word = free_reduce(raw)
+    inverse_word = free_reduce(invert(word))
+
+    selected: list[tuple[int, ...]] = []
+    seen: set[tuple[int, ...]] = set()
+
+    def add(candidate: Iterable[int]) -> None:
+        reduced = free_reduce(tuple(int(x) for x in candidate))
+        if not reduced or reduced in seen:
+            return
+        if any(letter not in _ALPHABET for letter in reduced):
+            raise ValueError("candidate word contains a non-generator letter")
+        seen.add(reduced)
+        selected.append(reduced)
+
+    # Preserve the source-specific long-range structure first, then the four
+    # single-letter moves that were already useful in the V1 portfolio.
+    add(word)
+    add(inverse_word)
+    for letter in _ALPHABET:
+        add((letter,))
+
+    # Edge fragments are the cheapest source-conditioned approximations to the
+    # whole word and its inverse.  Longest first retains more structure while
+    # the fixed width prevents search-cost growth.
+    for basis in (word, inverse_word):
+        max_fragment = min(4, len(basis) - 1)
+        for width in range(max_fragment, 1, -1):
+            add(basis[:width])
+            add(basis[-width:])
+
+    # Deterministic reduced-pair fill guarantees a full portfolio even for
+    # very short or empty source words.
+    for left in _ALPHABET:
+        for right in _ALPHABET:
+            if right == -left:
+                continue
+            add((left, right))
+
+    words = selected[:limit]
+    return tuple(
+        SubstitutionCandidate(target, conjugator, inverse_other)
+        for conjugator in words
+        for target in (0, 1)
+        for inverse_other in (False, True)
+    )
 
 
 def compile_substitution(candidate: SubstitutionCandidate) -> tuple[int, ...]:
