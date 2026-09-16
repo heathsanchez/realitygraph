@@ -34,7 +34,7 @@ def test_bank_ablation_restores_cold_search_exactly():
 
 
 def test_find_orbit_bridge_handles_rotation_inversion_and_swap():
-    from acc_prospective_transfer import find_orbit_bridge
+    from acc_open_ms_transfer import find_orbit_bridge
     from realitygraph.acc import replay
 
     rotation_source = ((2, 1, 1), (1, 2))
@@ -54,7 +54,7 @@ def test_find_orbit_bridge_handles_rotation_inversion_and_swap():
 
 
 def test_manifest_orbit_map_finds_symmetry_equivalent_representative():
-    from acc_prospective_transfer import _manifest_orbit_map, presentation_orbit_key
+    from acc_open_ms_transfer import _manifest_orbit_map, presentation_orbit_key
 
     native = ((2, 1, 1), (1, 2))
     representative = ((1, 1, 2), (-2, -1))
