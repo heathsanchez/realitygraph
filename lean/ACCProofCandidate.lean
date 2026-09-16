@@ -1,4 +1,5 @@
 import AC
+import Mathlib.Tactic.Group
 
 namespace ACCProofCandidate
 
@@ -60,10 +61,20 @@ lemma step7 (n : Nat) (w : W) : AC.Step (s6 n w) (s7 n w) := by
 lemma endpoint (n : Nat) (w : W) (h : w⁻¹ * y * w = y) : s7 n w = ms n w := by
   funext i
   refine Fin.cases ?_ (fun j => ?_) i
-  · simp [s7, s6, s5, s4, s3, s2, s1, ms, ms0, x, y, h, pow_succ, mul_assoc]
+  · change
+      x⁻¹ *
+          ((y⁻¹ * ((x * ms0 (n + 1) * x⁻¹) * (x * w⁻¹)) * y) *
+            (x * w⁻¹)⁻¹) *
+        x =
+      ms0 n
+    simp only [ms0, pow_succ]
+    group
+    rw [h]
+    group
   · have hj : j = 0 := Fin.eq_zero j
     subst j
-    simp [s7, s6, s5, s4, s3, s2, s1, ms, ms0, x, y, h, pow_succ, mul_assoc]
+    change x * w⁻¹ = x * w⁻¹
+    rfl
 
 /-- The exact recurrence discovered by replay: under the centralizer condition
 `w⁻¹ y w = y`, one Miller-Schupp parameter step is AC-reachable.  The official
