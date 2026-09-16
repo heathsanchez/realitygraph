@@ -106,6 +106,20 @@ def main():
             tid=int(x[tc]); did=int(x[dc]); rows=int(float(x[rc])); f=int(float(x[fc])); c=int(float(x[cc])); num=int(float(x[xc]))
         except Exception:continue
         name=str(x[nc])
+        lname=name.lower()
+        # V15 raises the source-distinctness bar before any target payload is opened.
+        # Exclude recurrent generator / market / legacy families already represented
+        # in V7-V14, including obvious renamed replicas.
+        if (
+            lname.startswith("forex_")
+            or lname.startswith("fri_")
+            or lname.startswith("volcanoes")
+            or "credit" in lname
+            or "anneal" in lname
+            or "breast" in lname
+            or "sick" in lname
+        ):
+            continue
         if did in OLD or stem(name) in oldnames or stem(name) in v7names or stem(name) in v8names or stem(name) in v9names or stem(name) in v10names or stem(name) in v11names or stem(name) in v12names or stem(name) in v13names or stem(name) in v14names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":f,"classes":c,"numeric_features":num}
         family=stem(name)
