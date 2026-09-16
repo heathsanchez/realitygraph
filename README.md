@@ -287,6 +287,39 @@ This claim is deliberately narrow. It establishes recursive verified language gr
 
 The frozen evidence record and exact claim boundary are in `docs/research/verified-language-growth-closure-v1.md`.
 
+## Generic recursive developmental executor v2
+
+Run:
+
+    python verified_language_growth_closure_v2.py
+
+The `verified-language-growth-closure-v2` branch moves the recursive developmental loop itself into generic reusable machinery. G1, G2, and G3 are all produced by the same `execute_generation(state, spec)` transition. The executor imports no qualification fixture and contains no dispatch on generation identity or constructor names; generation-specific information is confined to frozen `GenerationSpec` adapters and finite data.
+
+The three-generation qualified chain is:
+
+    nand-d3-0110
+        -> fsm-t1000-o01
+        -> g3-s3-t021101-o010
+
+Every structural transition still requires a complete current-language enumeration plus a separate no-resolution certificate before expansion is licensed. Every admitted capability is independently verified, exactly restarted, exhaustively attacked inside its frozen carrier, and reused on its sealed future set with zero new grammar search.
+
+The third generation supplies a stronger exact expressivity step. The frozen carrier is every binary sequence of lengths 0 through 4. RealityGraph exhausts all 64 binary-input two-state Moore machines and verifies that none can realize the target property `1 iff two consecutive 1 values have occurred`. Only then does it search the declared three-state substrate of all 5,832 raw machines and admit an extensionally novel observer that explicitly depends on the earned G2 capability.
+
+The causal dependency chain is checked by ablation:
+
+    ablate G1 -> G1, G2, G3 inactive
+    ablate G2 -> G1 active; G2, G3 inactive
+    ablate G3 -> G1, G2 active; G3 inactive
+
+A green qualification emits:
+
+    PASS_VERIFIED_LANGUAGE_GROWTH_CLOSURE_V2
+    CLOSED_BOUNDED_DEPTH3
+
+This is a **bounded depth-3 finite qualification**. It does not establish open-ended or unbounded self-development, autonomous invention of verifier authority or terminal values, a universal lowest substrate, universal synthesis optimality, universal cross-domain growth, or closure outside the frozen manifests, carriers, declared substrates, verifiers, and resource envelopes.
+
+The exact evidence record and claim boundary are in `docs/research/verified-language-growth-closure-v2.md`.
+
 ## Verify
 
     python -m unittest discover -s tests -v
@@ -295,5 +328,6 @@ The frozen evidence record and exact claim boundary are in `docs/research/verifi
     python meta_world_demo.py
     python predictive_field_demo.py
     python verified_language_growth_closure_v1.py
+    python verified_language_growth_closure_v2.py
 
 CI runs the unit suite and frozen demos on every push.
