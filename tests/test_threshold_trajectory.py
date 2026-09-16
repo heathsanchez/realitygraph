@@ -1,3 +1,4 @@
+# RED contract: production trajectory module intentionally absent on this commit.
 import unittest
 import numpy as np
 
