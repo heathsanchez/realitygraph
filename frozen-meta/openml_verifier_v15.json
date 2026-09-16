@@ -1,0 +1,16 @@
+{
+  "version": "openml-retained-verifier-policy-v15-v1",
+  "source_run": 35038200844,
+  "source_artifact_sha256": "02bbcd8b3b96e4d317a3cec87af1c7eac39cf8d8b171079381adf86653ce5e54",
+  "learned_from_development_worlds": 8,
+  "validated_on_heldout_worlds": 12,
+  "base_protocol": "V12 adaptive evidence",
+  "candidate_gain_floor": 0.01599671357125708,
+  "direct_gain_threshold": 0.05718096689694352,
+  "retained_shortcut": "DIRECT capabilities with first verifier PASS and acquisition gain >= 0.29726591306461325 become ACTIVE immediately",
+  "retained_direct_shortcut_threshold": 0.29726591306461325,
+  "borderline_shortcut_threshold": null,
+  "fallback": "exact V12 adaptive evidence",
+  "hard_restart_before_use": true,
+  "v15_target_outcomes_used": false
+}
