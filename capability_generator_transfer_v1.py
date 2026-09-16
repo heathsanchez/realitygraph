@@ -14,7 +14,7 @@ from probe_capability_generator_transfer_v1_manifest import main as freeze_manif
 from realitygraph.retained_capability import exact_restart
 from realitygraph.transfer_memory import model_to_law
 
-MANIFEST_SHA="TO_BE_FROZEN"
+MANIFEST_SHA="80757258d4048f66b02814ac3f935987fd5e1680430868f765c058bf1c1b4ff4"
 GRAMMARS=("sum","diff","absdiff")
 MAX_BASE_FEATURES=8
 DEV_WORLDS=8
