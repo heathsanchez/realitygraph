@@ -1,0 +1,23 @@
+name: verified-meta-growth-v3
+
+on:
+  push:
+    branches:
+      - verified-meta-growth-v3
+  workflow_dispatch:
+
+concurrency:
+  group: verified-meta-growth-v3
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inherited V2 baseline
+        run: python -m unittest discover -s tests -v
