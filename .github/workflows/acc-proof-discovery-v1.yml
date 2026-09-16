@@ -2,7 +2,7 @@ name: ACC proof discovery v1
 
 on:
   push:
-    branches: [acc-proof-discovery-v1]
+    branches: [acc-proof-discovery-v1, acc-consequence-closure-v1]
   workflow_dispatch:
 
 permissions:
@@ -44,7 +44,8 @@ jobs:
             tests/test_acc_training_replay.py \
             tests/test_acc_capability.py \
             tests/test_acc_transfer.py \
-            tests/test_acc_source_entry.py -q
+            tests/test_acc_source_entry.py \
+            tests/test_acc_consequence_closure.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
