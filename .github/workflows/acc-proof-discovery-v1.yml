@@ -43,7 +43,8 @@ jobs:
             tests/test_acc.py \
             tests/test_acc_training_replay.py \
             tests/test_acc_capability.py \
-            tests/test_acc_transfer.py -q
+            tests/test_acc_transfer.py \
+            tests/test_acc_source_entry.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
