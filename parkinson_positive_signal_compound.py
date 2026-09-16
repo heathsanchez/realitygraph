@@ -164,20 +164,35 @@ def fit_policy(y, env, base, cells, n_cells, discovery_envs):
             mean = gains.mean(axis=2)
             l1 = pair_l1[start:stop, None] + pair_l1[None, :]
 
-            # Find the best point in this chunk by the exact same lexicographic
-            # objective used everywhere else.
-            for local_i in range(stop - start):
-                for p23 in range(P):
-                    key = (
-                        float(worst[local_i, p23]),
-                        float(mean[local_i, p23]),
-                        -float(l1[local_i, p23]),
-                        -(start + local_i),
-                        -p23,
-                    )
-                    if best_key is None or key > best_key:
-                        best_key = key
-                        best_pair = (start + local_i, p23)
+            # Find the exact lexicographic best point in this chunk in
+            # vectorized NumPy (avoids millions of Python comparisons).
+            flat_worst = worst.ravel()
+            flat_mean = mean.ravel()
+            flat_l1 = l1.ravel()
+            local_ids = np.repeat(
+                np.arange(stop - start, dtype=np.int64), P
+            )
+            p23_ids = np.tile(np.arange(P, dtype=np.int64), stop - start)
+            global_p01 = start + local_ids
+
+            order = np.lexsort((
+                p23_ids,
+                global_p01,
+                flat_l1,
+                -flat_mean,
+                -flat_worst,
+            ))
+            k = int(order[0])
+            key = (
+                float(flat_worst[k]),
+                float(flat_mean[k]),
+                -float(flat_l1[k]),
+                -int(global_p01[k]),
+                -int(p23_ids[k]),
+            )
+            if best_key is None or key > best_key:
+                best_key = key
+                best_pair = (int(global_p01[k]), int(p23_ids[k]))
 
         p01, p23 = best_pair
         i0, i1 = divmod(p01, K)
