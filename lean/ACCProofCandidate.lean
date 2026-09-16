@@ -12,7 +12,8 @@ def y : W := FreeGroup.of (1 : Fin 2)
 
 def ms0 (n : Nat) : W := x⁻¹ * y ^ n * x * (y ^ (n + 1))⁻¹
 
-def ms (n : Nat) (w : W) : Rels := ![ms0 n, x * w⁻¹]
+def ms (n : Nat) (w : W) : Rels :=
+  Fin.cases (ms0 n) (fun _ : Fin 1 => x * w⁻¹)
 
 def s1 (n : Nat) (w : W) : Rels :=
   Function.update (ms (n + 1) w) 0 (x * (ms (n + 1) w 0) * x⁻¹)
@@ -58,7 +59,10 @@ lemma step7 (n : Nat) (w : W) : AC.Step (s6 n w) (s7 n w) := by
 
 lemma endpoint (n : Nat) (w : W) (h : w⁻¹ * y * w = y) : s7 n w = ms n w := by
   funext i
-  fin_cases i <;>
+  refine Fin.cases ?_ (fun j => ?_) i
+  · simp [s7, s6, s5, s4, s3, s2, s1, ms, ms0, x, y, h, pow_succ, mul_assoc]
+  · have hj : j = 0 := Fin.eq_zero j
+    subst j
     simp [s7, s6, s5, s4, s3, s2, s1, ms, ms0, x, y, h, pow_succ, mul_assoc]
 
 /-- The exact recurrence discovered by replay: under the centralizer condition
@@ -76,6 +80,7 @@ theorem millerSchupp_recurrence (n : Nat) (w : W) (h : w⁻¹ * y * w = y) :
   have p5 : AC.Reachable (ms (n + 1) w) (s5 n w) := p4.tail (step5 n w)
   have p6 : AC.Reachable (ms (n + 1) w) (s6 n w) := p5.tail (step6 n w)
   have p7 : AC.Reachable (ms (n + 1) w) (s7 n w) := p6.tail (step7 n w)
-  simpa [endpoint n w h] using p7
+  rw [endpoint n w h] at p7
+  exact p7
 
 end ACCProofCandidate
