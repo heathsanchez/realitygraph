@@ -1,4 +1,4 @@
-from acc_source_entry import source_entry_macros
+from acc_source_entry import source_entry_macros, source_family_split
 
 
 def _trajectory(training_id, n, w_vector, moves):
@@ -45,3 +45,19 @@ def test_source_entry_prefers_nearest_lower_n_then_longer_prefix():
         include_full=False,
     )
     assert macros[:2] == [(6, 7, 8), (6, 7)]
+
+
+def test_source_family_split_holds_out_largest_n_per_recurring_w():
+    rows = [
+        _trajectory("a1", 1, (2, 1), (1, 2)),
+        _trajectory("a3", 3, (2, 1), (3, 4)),
+        _trajectory("b2", 2, (-2, 1), (5, 6)),
+        _trajectory("b4", 4, (-2, 1), (7, 8)),
+        _trajectory("single", 2, (1, 1), (9, 10)),
+    ]
+    acquisition, heldout = source_family_split(rows)
+    assert {row["training_id"] for row in heldout} == {"a3", "b4"}
+    assert {row["training_id"] for row in acquisition} == {"a1", "b2", "single"}
+    assert {tuple(row["w_vector"]) for row in heldout}.isdisjoint(
+        {tuple(row["w_vector"]) for row in acquisition if row["training_id"] == "single"}
+    )
