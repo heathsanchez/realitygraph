@@ -10,6 +10,7 @@ from realitygraph.representation_genesis import (
     apply_program,
     enumerate_programs,
     fit_residual_decoder,
+    mixed_evidence_invoke,
     predict_residual_decoder,
     program_complexity,
 )
@@ -149,14 +150,24 @@ def outer_pair(a, b, programs, matrices, y, env, base):
     verified.sort(key=verifier_key, reverse=True)
     best = verified[0]
 
-    # Refusal is a first-class outcome.  A generated representation does not
-    # get to touch the two unseen environments unless every inner discovery
-    # future improved and the mean gain is non-trivial.
-    invoke = best["worst"] > 0 and best["mean"] > MIN_DISCOVERY_GAIN
+    # The first version required every inner future to improve before touching
+    # the outer future.  That made the experiment incapable of distinguishing
+    # "mixed but potentially rescuable" evidence from a genuinely inadequate
+    # grammar.  The retained selective-representation V4 controller says mixed
+    # verifier evidence is exactly when representation expansion should be
+    # invoked.  Universal inner success is still accepted; mixed evidence is
+    # now allowed to reach the untouched outer diagnostic, but the final compile
+    # gate remains unchanged and future labels never choose the representation.
+    promoted = best["worst"] > 0 and best["mean"] > MIN_DISCOVERY_GAIN
+    mixed = mixed_evidence_invoke(best["ll_gains"], MIN_DISCOVERY_GAIN)
+    invoke = promoted or mixed
+    reason = "promoted" if promoted else "mixed" if mixed else "refuse"
+
     if not invoke:
         return {
             "pair": (a, b),
             "invoked": False,
+            "reason": reason,
             "program": best["program"],
             "inner": best,
             "future_ll": [0.0, 0.0],
@@ -173,6 +184,7 @@ def outer_pair(a, b, programs, matrices, y, env, base):
     return {
         "pair": (a, b),
         "invoked": True,
+        "reason": reason,
         "program": best["program"],
         "inner": best,
         "future_ll": [float(x) for x in future_ll],
@@ -187,11 +199,13 @@ def summarize_events(events):
     passed = [e for e in invoked if e["pass"]]
     counts = Counter(program_name(e["program"]) for e in invoked)
     pass_counts = Counter(program_name(e["program"]) for e in passed)
+    reason_counts = Counter(e["reason"] for e in events)
 
     print()
     print("=== OUTER TWO-ENVIRONMENT FUTURES ===")
     print("INVOKED", len(invoked), "/45")
     print("PASS_BOTH", len(passed), "/45")
+    print("REASONS", dict(reason_counts))
     print(
         "PASS_PRECISION",
         round(len(passed) / max(1, len(invoked)), 4),
@@ -244,6 +258,7 @@ def main():
     print("Generator: deterministic representation programs")
     print("Decoder: one environment-balanced residual direction")
     print("Selector: discovery-only nested natural-environment verifier")
+    print("Controller: promoted OR retained mixed-evidence invocation")
     print("Future labels never choose a representation")
     print()
 
@@ -278,7 +293,9 @@ def main():
         print(
             "PAIR", f"{a},{b}",
             "INVOKE", int(event["invoked"]),
+            "REASON", event["reason"],
             "PROGRAM", program_name(event["program"]),
+            "INNER_POS", event["inner"]["positive"], "/8",
             "INNER_WORST", round(event["inner"]["worst"], 5),
             "INNER_MEAN", round(event["inner"]["mean"], 5),
             "FUTURE_LL", [round(x, 5) for x in event["future_ll"]],
@@ -342,6 +359,9 @@ def main():
         print("REPRESENTATION_SIGNAL_RECURS_BUT_CONTROLLER_NOT_UNIVERSAL")
         print("BEST_RECURRENT_PROGRAM", program_name(winner["program"]))
         print("DO_NOT_DEPLOY_YET__TEST_FROZEN_PROGRAM_SEPARATELY")
+    elif invoked and len(passed) / len(invoked) >= 0.75:
+        print("MIXED_EVIDENCE_CONTROLLER_HAS_SIGNAL_BUT_NO_PROGRAM_RECURS_YET")
+        print("EXPAND_PROGRAM_GRAMMAR_ONLY_AROUND_SUCCESSFUL_LINEAGES")
     else:
         print("NO_GENERATED_REPRESENTATION_COMPILES")
         print("RETAIN_G1_PLUS_G2__REPRESENTATION_GRAMMAR_INADEQUATE_OR_SIGNAL_SATURATED")
