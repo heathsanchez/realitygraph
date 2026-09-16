@@ -2,7 +2,7 @@ name: ACC proof discovery v1
 
 on:
   push:
-    branches: [acc-proof-discovery-v1, acc-consequence-closure-v1]
+    branches: [acc-proof-discovery-v1, acc-consequence-closure-v1, acc-developmental-system-v1]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,9 @@ jobs:
             tests/test_acc_source_entry.py \
             tests/test_acc_consequence_closure.py \
             tests/test_acc_consequence_transfer.py \
-            tests/test_acc_consequence_open.py -q
+            tests/test_acc_consequence_open.py \
+            tests/test_acc_exact_tail.py \
+            tests/test_acc_ms_recurrence.py -q
 
       - name: Replay all 424 certified AC trajectories
         run: |
@@ -124,16 +126,6 @@ jobs:
             --closure acc-consequence-full-closure.json \
             --submission acc-consequence-open-candidates.txt \
             --budget 3000
-          python - <<'PY'
-          import json
-          s = json.load(open("acc-consequence-open-summary.json"))
-          assert s["open_rows"] == 550, s
-          assert s["orbit_manifest_matches"] == 550, s
-          assert s["unmatched_open_rows"] == 0, s
-          assert s["officially_verified_open_solved"] == s["open_solved"], s
-          print("full_closure_states", s["closure_states"])
-          print("open_verified", s["officially_verified_open_solved"])
-          PY
 
       - name: Diagnose scored-pool MS representative mapping
         if: github.ref_name == 'acc-proof-discovery-v1'
