@@ -26,6 +26,28 @@ def test_best_first_cold_search_solves_official_one_move_example():
     assert result["expansions"] <= 2
 
 
+def test_best_first_reports_capability_coverage_and_progress():
+    from acc_capability_miner import guard_for_state
+
+    start = ((1, 2), (2,))
+    bank = [
+        {
+            "id": "toy-cap",
+            "guard": guard_for_state(start),
+            "macro": [3],
+            "support": 3,
+            "max_total_length_delta": -1,
+        }
+    ]
+    result = best_first_search(start, bank=bank, start_macros=[], budget=10)
+    assert result["solved"] is True
+    assert result["initial_heuristic"] == (5, 3, 1)
+    assert result["best_heuristic"] == (2, 2, 0)
+    assert result["min_total_length_reached"] == 2
+    assert result["capability_state_expansions"] >= 1
+    assert result["capability_macros_generated"] >= 1
+
+
 def test_bank_ablation_restores_cold_search_exactly():
     start = ((1, 2), (2,))
     cold = best_first_search(start, bank=[], start_macros=[], budget=10)
