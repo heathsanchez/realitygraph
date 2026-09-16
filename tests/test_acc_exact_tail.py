@@ -27,8 +27,9 @@ def test_tail_bank_retains_verified_suffix_for_each_exact_state():
 def test_tail_bank_keeps_shortest_suffix_on_duplicate_state():
     target = ((1,), (2,))
     state = ((1, 2), (2,))
+    inverted = ((-2, -1), (2,))
     bank = build_tail_bank([
-        _trajectory("long", (state, state, target), (0, 3)),
+        _trajectory("long", (state, inverted, state, target), (0, 0, 3)),
         _trajectory("short", (state, target), (3,)),
     ])
     assert bank[state] == (3,)
