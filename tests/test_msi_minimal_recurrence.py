@@ -5,7 +5,9 @@ from realitygraph.msi_minimal_recurrence import (
     fit_univariate_offset,
     environment_recurrence,
     robust_median_beta,
+    fit_robust_tiny_model,
 )
+from realitygraph.msi_representation_tournament import logistic_loss_from_logits
 
 
 class MSIMinimalRecurrenceTests(unittest.TestCase):
@@ -48,6 +50,26 @@ class MSIMinimalRecurrenceTests(unittest.TestCase):
         self.assertLess(out[1], 0.0)
         self.assertAlmostEqual(out[0], 1.0, places=6)
         self.assertAlmostEqual(out[1], -0.8, places=6)
+
+    def test_robust_tiny_model_transfers_shared_signal_to_held_environment(self):
+        rng = np.random.default_rng(103)
+        per_env = 300
+        env = np.repeat(np.arange(5), per_env)
+        stable = rng.normal(size=len(env))
+        noise = rng.normal(size=len(env))
+        true_logits = -0.15 + 1.15 * stable
+        p = 1.0 / (1.0 + np.exp(-true_logits))
+        y = rng.binomial(1, p)
+        X = np.column_stack([stable, noise])
+        base_logits = np.zeros(len(y))
+        model = fit_robust_tiny_model(
+            X, y, base_logits, env, (0, 1, 2, 3), min_sign_fraction=0.75
+        )
+        held = env == 4
+        parent = logistic_loss_from_logits(y[held], base_logits[held]).mean()
+        fitted = logistic_loss_from_logits(y[held], model['logits'][held]).mean()
+        self.assertLess(fitted, parent)
+        self.assertGreater(model['beta'][0], 0.0)
 
 
 if __name__ == '__main__':
