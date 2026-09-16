@@ -34,7 +34,7 @@ jobs:
         working-directory: official/competition/tools/lean
         run: |
           MATHLIB_NO_CACHE_ON_UPDATE=1 lake update
-          lake exe cache get Mathlib/GroupTheory/PresentedGroup.lean Mathlib/Data/Fin/Tuple/Basic.lean
+          lake exe cache get
           lake build
 
       - name: Check recurrence theorem candidate
