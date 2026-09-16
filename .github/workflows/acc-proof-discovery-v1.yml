@@ -133,6 +133,29 @@ jobs:
             --output acc-open-ms-diagnostic.json \
             --budget 1000
 
+      - name: Run prospective source-conditioned transfer
+        run: |
+          python acc_source_transfer.py \
+            --trajectories acc-training-trajectories.jsonl \
+            --metadata official/competition/tools/verifier/data/ms1190_metadata.csv \
+            --manifest official/competition/tools/verifier/data/manifest.json \
+            --official-tools official/competition/tools \
+            --summary acc-source-transfer-summary.json \
+            --submission acc-source-open-candidates.txt \
+            --audit-budget 50 \
+            --open-budget 3000
+          python - <<'PY'
+          import json
+          s = json.load(open("acc-source-transfer-summary.json"))
+          a = s["source_audit"]
+          o = s["open_transfer"]
+          assert a["ablation_mismatches"] == 0, a
+          assert a["source_macro_presentations"] == a["heldout_presentations"], a
+          assert o["officially_verified_open_solved"] == o["open_solved"], o
+          print("source_audit", json.dumps(a, sort_keys=True))
+          print("source_open", json.dumps(o, sort_keys=True))
+          PY
+
       - name: Upload ACC evidence
         uses: actions/upload-artifact@v4
         with:
@@ -144,3 +167,5 @@ jobs:
             acc-capability-bank.json
             acc-open-ms-candidates.txt
             acc-open-ms-diagnostic.json
+            acc-source-transfer-summary.json
+            acc-source-open-candidates.txt
