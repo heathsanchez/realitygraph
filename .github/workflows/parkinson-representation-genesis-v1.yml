@@ -11,6 +11,7 @@ on:
       - parkinson-capacity-control-sweep-v1
       - parkinson-msi-representation-tournament-v1
       - parkinson-msi-minimal-recurrence-v2
+      - parkinson-object-relative-geometry-v1
   workflow_dispatch:
 concurrency:
   group: parkinson-representation-genesis-v1-${{ github.ref }}
@@ -26,7 +27,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --quiet numpy
       - name: Representation genesis contract
-        run: python -m unittest tests.test_representation_genesis tests.test_canonical_striatal tests.test_canonical_striatal_experiment tests.test_pixel_consequence_atlas tests.test_invariant_3d tests.test_spatial_capacity_audit tests.test_capacity_control_sweep tests.test_msi_representation_tournament tests.test_msi_minimal_recurrence -v
+        run: python -m unittest tests.test_representation_genesis tests.test_canonical_striatal tests.test_canonical_striatal_experiment tests.test_pixel_consequence_atlas tests.test_invariant_3d tests.test_spatial_capacity_audit tests.test_capacity_control_sweep tests.test_msi_representation_tournament tests.test_msi_minimal_recurrence tests.test_object_relative_geometry -v
       - name: Compile local Parkinson experiments
         run: |
           python -m py_compile parkinson_representation_genesis_v1.py
@@ -38,3 +39,4 @@ jobs:
           if [ -f parkinson_capacity_control_sweep_v1.py ]; then python -m py_compile parkinson_capacity_control_sweep_v1.py; fi
           if [ -f parkinson_msi_representation_tournament_v1.py ]; then python -m py_compile parkinson_msi_representation_tournament_v1.py; fi
           if [ -f parkinson_msi_minimal_recurrence_v2.py ]; then python -m py_compile parkinson_msi_minimal_recurrence_v2.py; fi
+          if [ -f parkinson_object_relative_geometry_v1.py ]; then python -m py_compile parkinson_object_relative_geometry_v1.py; fi
