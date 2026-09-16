@@ -331,3 +331,26 @@ The exact evidence record and claim boundary are in `docs/research/verified-lang
     python verified_language_growth_closure_v2.py
 
 CI runs the unit suite and frozen demos on every push.
+
+## Verified meta-growth v3
+
+Run:
+
+    python verified_meta_growth_v3.py
+
+The `verified-meta-growth-v3` branch adds a bounded meta-developmental layer above V2. Instead of retaining only an object-level capability, RealityGraph can now retain an independently calibrated rule connecting an exact structural obstruction class to a repair family.
+
+The sealed qualification uses two different obstruction families. An observation collision learns `add_observable`; a temporal collision learns `add_finite_memory_2`. Acquisition alone creates only a candidate meta-rule. Independent calibration is required before promotion. After an exact object+meta restart, untouched future episodes recover the promoted developmental rule with zero repair-portfolio search, zero competitor strategy calls, and zero object-level future grammar search, while still constructing and independently verifying a new task-specific capability.
+
+The cold temporal path includes complete two-state and three-state Moore-machine repair spaces (64 and 5,832 machines respectively), so the selected repair class is compared against a characterized structural alternative rather than a hand-picked witness. Equal-ranked repairs remain `UNKNOWN_CHOICE`; incomplete current-language or portfolio search remains `UNKNOWN_SEARCH`.
+
+Targeted meta-rule deletion restores the cold portfolio-search path and rediscovers the same repair family, establishing causal persistence of the developmental rule. Wrong obstruction fingerprints, stale authority, stale verifier identity, and sham portfolio identity cannot reuse a promoted rule.
+
+A green sealed qualification emits:
+
+    PASS_VERIFIED_META_GROWTH_V3
+    CLOSED_BOUNDED_META_GROWTH_V3
+
+This claim is deliberately bounded. It establishes verified learning and prospective reuse of repair-family choice inside the declared finite obstruction representation, frozen repair portfolio, authority/verifier boundary, calibration protocol, attacks, and resource envelope. It does **not** establish open-ended meta-growth, arbitrary substrate invention, representation-independent obstruction identity, universal repair optimality, universal cross-domain transfer, learned verifier authority, or unbounded self-development.
+
+The exact evidence record is in `docs/research/verified-meta-growth-v3.md`. The separate `docs/research/v3-preregistration-gap-map.md` records which stronger A/B/G/P confirmatory questions remain open so this developmental evidence is not accidentally counted as preregistered confirmation.
