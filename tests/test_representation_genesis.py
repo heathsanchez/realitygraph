@@ -7,11 +7,13 @@ from realitygraph.representation_genesis import (
     apply_program,
     enumerate_programs,
     fit_residual_decoder,
-    fit_ridge_residual_decoder,
     mixed_evidence_invoke,
     predict_residual_decoder,
-    predict_ridge_residual_decoder,
     program_complexity,
+)
+from realitygraph.ridge_decoder import (
+    fit_ridge_residual_decoder,
+    predict_ridge_residual_decoder,
 )
 
 
