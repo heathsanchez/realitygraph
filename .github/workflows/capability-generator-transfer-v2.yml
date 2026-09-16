@@ -1,0 +1,31 @@
+name: capability-generator-transfer-v2
+on:
+  push:
+    branches:
+      - capability-generator-transfer-v2
+  workflow_dispatch:
+concurrency:
+  group: capability-generator-transfer-v2
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_GENERATOR_RESULT: capability-generator-transfer-v2-summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml pandas
+      - name: Run prospective capability generator transfer V2
+        run: python capability_generator_transfer_v2.py
+      - name: Preserve generator V2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-generator-transfer-v2-evidence
+          path: capability-generator-transfer-v2-summary.json
+          if-no-files-found: warn
+          retention-days: 14
