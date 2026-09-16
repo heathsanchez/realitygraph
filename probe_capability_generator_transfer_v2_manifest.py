@@ -98,10 +98,17 @@ def main():
             or "liver" in low
             or "concrete" in low
             or low == "datastr"
+            or "forest" in low
         ): continue
         if not (250<=rows<=50000 and 3<=feats<=100 and nums>=3): continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":feats,"numeric_features":nums}
-        family=("microwave_contaminant_urbinati" if "contaminant-detection-in-packaged-cocoa-hazelnut-spread-jars" in low else s)
+        family=(
+            "microwave_contaminant_urbinati"
+            if "contaminant-detection-in-packaged-cocoa-hazelnut-spread-jars" in low
+            else "student_performance_por"
+            if ("student-performance-por" in low or "student_performance_por" in low)
+            else s
+        )
         if family not in byfamily or tid<byfamily[family]["task_id"]:
             byfamily[family]=z
 
