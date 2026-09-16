@@ -31,3 +31,41 @@ def test_bank_ablation_restores_cold_search_exactly():
     cold = best_first_search(start, bank=[], start_macros=[], budget=10)
     ablated = best_first_search(start, bank=[], start_macros=[], budget=10)
     assert ablated == cold
+
+
+def test_find_orbit_bridge_handles_rotation_inversion_and_swap():
+    from acc_prospective_transfer import find_orbit_bridge
+    from realitygraph.acc import replay
+
+    rotation_source = ((2, 1, 1), (1, 2))
+    rotation_target = ((1, 1, 2), (1, 2))
+    rotation_moves = find_orbit_bridge(rotation_source, rotation_target)
+    assert replay(rotation_source, rotation_moves)[-1] == rotation_target
+
+    inversion_source = ((1,), (1, 2))
+    inversion_target = ((1,), (-2, -1))
+    inversion_moves = find_orbit_bridge(inversion_source, inversion_target)
+    assert replay(inversion_source, inversion_moves)[-1] == inversion_target
+
+    swap_source = ((1, 2), (2, 1))
+    swap_target = ((2, 1), (1, 2))
+    swap_moves = find_orbit_bridge(swap_source, swap_target)
+    assert replay(swap_source, swap_moves)[-1] == swap_target
+
+
+def test_manifest_orbit_map_finds_symmetry_equivalent_representative():
+    from acc_prospective_transfer import _manifest_orbit_map, presentation_orbit_key
+
+    native = ((2, 1, 1), (1, 2))
+    representative = ((1, 1, 2), (-2, -1))
+    manifest = {
+        "challenges": [
+            {
+                "challenge_id": "ac-00001",
+                "move_spec_version": "ac-r2-v1",
+                "initial_relators": [list(representative[0]), list(representative[1])],
+            }
+        ]
+    }
+    mapping = _manifest_orbit_map(manifest)
+    assert mapping[presentation_orbit_key(native)]["challenge_id"] == "ac-00001"
