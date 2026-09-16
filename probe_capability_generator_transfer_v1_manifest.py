@@ -64,7 +64,15 @@ def main():
         if s in pmlb_names or s in v1names or s in v2names: continue
         if any(tok in low for tok in banned_tokens): continue
         if (
-            "cpmp" in low
+            "arsenic" in low
+            or low.startswith("chscase_")
+            or low.startswith("disclosure_")
+            or "superconduct" in low
+            or "grid_stability" in low
+            or "electrical_grid" in low
+            or "kdd_coil" in low
+            or low.startswith("ele-")
+            or "cpmp" in low
             or "mabbob" in low
             or "bike_sharing" in low
             or "bike-sharing" in low
