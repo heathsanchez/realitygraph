@@ -1,0 +1,104 @@
+{
+  "schema": "realitygraph.abgp.analysis-plan.v1",
+  "status": "REVIEW_PENDING",
+  "normative": true,
+  "familywise_alpha": 0.05,
+  "arm_level_multiplicity": "Holm-Bonferroni over the four arm-level primary p-values A, B, G, P",
+  "binary_rate_interval": "Wilson score 95% interval",
+  "paired_binary_difference_interval": "Newcombe score 95% interval for paired proportions",
+  "zero_discordance_rule": "If a paired binary comparison has no discordant pairs, its one-sided primary p-value is 1.0 unless the effect estimate is exactly zero, in which case it is also 1.0.",
+  "arms": {
+    "A": {
+      "experimental_unit": "task",
+      "n": 256,
+      "primary_outcome": "exact protected-action correctness",
+      "primary_comparison": "verifier-assisted minus equal-compute recheck",
+      "test": "one-sided exact McNemar test, implemented as an exact binomial test on discordant paired outcomes with alternative verifier-assisted > recheck",
+      "effect_estimate": "paired absolute accuracy difference",
+      "effect_floor": 0.05,
+      "fatal_design_gates": [
+        "every admitted message satisfies |A*(m)| > 1",
+        "exactly one admitted verifier message and one repair round",
+        "no repeated binary elimination",
+        "equal compute budget is respected"
+      ]
+    },
+    "B": {
+      "experimental_unit": "ordered acquisition-to-transfer latent-world pair",
+      "n_units": 384,
+      "ordered_directions": 12,
+      "worlds_per_direction": 32,
+      "interventions_per_unit": 4,
+      "unit_success_definition": "exact protected-action ordering agrees for all four frozen structural interventions",
+      "pooled_hard_gate": "at least 0.90 exact protected-order agreement across all individual intervention evaluations",
+      "negative_controls": ["matched_complexity_wrong_class", "shuffled_coupling"],
+      "component_tests": "one-sided exact McNemar tests on paired unit success for treatment versus each negative control",
+      "arm_primary_p_value": "maximum of the two component p-values; both negative-control comparisons must therefore pass",
+      "effect_estimate": "treatment unit-success rate minus each paired negative-control unit-success rate",
+      "effect_floor_each_control": 0.15,
+      "fatal_design_gates": [
+        "no supplied deterministic translation",
+        "no one-to-one primitive dictionary recoverable by construction",
+        "no shared surface symbols or serialization",
+        "no paired cross-grammar demonstrations",
+        "only latent world/task generator, protected objective, and protected action-order semantics are shared"
+      ]
+    },
+    "G": {
+      "experimental_unit": "world-by-dose matched relevance pair",
+      "n_worlds": 256,
+      "nonzero_doses": [0.1, 0.25, 0.5, 1.0],
+      "integer_dose_weights": [2, 5, 10, 20],
+      "primary_binary_outcome": "whether protected action ordering flips after corruption",
+      "primary_statistic": "sum over all matched world-by-dose pairs of integer_dose_weight * (flip_action_relevant - flip_action_irrelevant)",
+      "null_randomization": "within every matched world-by-dose pair, exchange the action-relevant and action-irrelevant labels",
+      "test": "one-sided exact paired randomization test; compute the exact statistic distribution by dynamic programming over discordant pairs",
+      "alternative": "action-relevant corruption produces a more positive dose-weighted flip effect",
+      "effect_floor": "at dose 1.0, action-relevant flip rate minus action-irrelevant flip rate >= 0.15",
+      "matching_rule": "For each world, let M be the smaller eligible-cell count across relevance classes. At dose d, corrupt exactly floor(d*M) cells in each class, with the same corruption magnitude schedule and independently frozen within-class locations. The generator must guarantee M > 0 and at least one corrupted cell for every nonzero dose.",
+      "fatal_design_gates": [
+        "relevance labels computed before corruption",
+        "no post-hoc relevance relabeling",
+        "matched corruption count and magnitude",
+        "same frozen evaluator defines relevance and protected order"
+      ]
+    },
+    "P": {
+      "experimental_unit": "source-distinct held-out task",
+      "n": 256,
+      "primary_outcome": "exact protected-action correctness",
+      "treatment": "hard-restarted retained non-verbal structural object",
+      "primary_baselines": [
+        "cold",
+        "equal_compute_recheck",
+        "verbal_rule_negative",
+        "size_matched_sham",
+        "wrong_class_object"
+      ],
+      "component_tests": "one-sided exact McNemar tests on paired correctness for retained object versus each primary baseline",
+      "arm_primary_p_value": "maximum of all five component p-values; the retained object must significantly beat every listed baseline",
+      "effect_estimate": "retained-object accuracy minus the highest observed primary-baseline accuracy",
+      "effect_floor": 0.05,
+      "ablation_hard_gate": "targeted lineage deletion reduces accuracy to within 0.02 absolute of cold and causes reacquisition search count to become positive",
+      "fatal_design_gates": [
+        "zero verifier access after restart",
+        "zero reconstruction/search before future action",
+        "future applicability selection uses no target labels",
+        "source-distinctness exclusions all hold",
+        "targeted lineage deletion gate holds"
+      ]
+    }
+  },
+  "holm_procedure": {
+    "inputs": "the four unadjusted arm-level p-values",
+    "ordering": "ascending p-value with deterministic arm-name tie break A < B < G < P",
+    "decision": "standard step-down Holm-Bonferroni at alpha 0.05",
+    "report": "raw p-value, Holm-adjusted p-value, effect estimate, effect interval, and hard-gate vector for every arm"
+  },
+  "verdict_rule": {
+    "FAIL": "any fatal design gate fails, or the primary effect direction is non-positive",
+    "PASS": "all fatal/hard gates pass, the preregistered effect floor passes, and the Holm-adjusted arm primary test passes",
+    "PARTIAL": "all fatal design gates pass and the primary effect direction is positive, but one or both of the effect-floor and Holm-adjusted-significance requirements fail"
+  },
+  "combined_result": "The strongest combined interpretation is licensed only when A, B, G, and P are all PASS. No cross-arm compensation is allowed."
+}
