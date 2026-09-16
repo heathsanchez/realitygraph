@@ -139,6 +139,10 @@ def main():
             or "loan" in lname
             or lname == "jm1"
             or "vineyard" in lname
+            or "financial-risk-assessment" in lname
+            or "apple_stock_price_trends" in lname
+            or lname.startswith("chscase_")
+            or lname.startswith("autouniv")
         ):
             continue
         if did in OLD or stem(name) in oldnames or stem(name) in v7names or stem(name) in v8names or stem(name) in v9names or stem(name) in v10names or stem(name) in v11names or stem(name) in v12names or stem(name) in v13names or stem(name) in v14names or stem(name) in v15names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
