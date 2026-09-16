@@ -1,9 +1,13 @@
-import hashlib
 import json
 
 import pytest
 
-from acc_developmental_experiment import load_open_rows, policy_sha256, write_freeze_marker
+from acc_developmental_experiment import (
+    FREEZE_VERSION,
+    load_open_rows,
+    policy_sha256,
+    write_freeze_marker,
+)
 
 
 def _metadata(path):
@@ -26,7 +30,16 @@ def test_open_rows_are_inaccessible_without_matching_frozen_policy(tmp_path):
         load_open_rows(metadata, marker, expected_policy_sha256=digest)
 
     marker.write_text(
-        json.dumps({"policy_sha256": "wrong"}, sort_keys=True) + "\n",
+        json.dumps(
+            {
+                "version": FREEZE_VERSION,
+                "policy_sha256": "wrong",
+                "split_digest": "split-unit",
+                "open_rows_loaded": False,
+            },
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
     )
     with pytest.raises(RuntimeError, match="hash mismatch"):
