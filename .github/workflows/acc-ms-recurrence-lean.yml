@@ -1,0 +1,45 @@
+name: ACC Miller-Schupp recurrence Lean
+
+on:
+  push:
+    branches: [acc-proof-ms-recurrence-v1]
+  workflow_dispatch:
+
+concurrency:
+  group: acc-ms-recurrence-lean
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout RealityGraph proof branch
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned official ACC repository
+        uses: actions/checkout@v4
+        with:
+          repository: SAIRcompetition/Andrews-Curtis
+          ref: a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e
+          path: official
+
+      - name: Verify official pin
+        run: test "$(git -C official rev-parse HEAD)" = "a0fd6e6f52d82c93ccc06ab91d81e8fa3678256e"
+
+      - name: Install pinned Lean toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare pinned Mathlib and check recurrence theorem
+        run: |
+          set -euo pipefail
+          cp ACCMSRecurrence.lean official/competition/tools/lean/ACCMSRecurrence.lean
+          cd official/competition/tools/lean
+          MATHLIB_NO_CACHE_ON_UPDATE=1 lake update
+          lake exe cache get Mathlib/GroupTheory/PresentedGroup.lean Mathlib/Data/Fin/Tuple/Basic.lean
+          lake env lean ACCMSRecurrence.lean
