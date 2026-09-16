@@ -7,8 +7,10 @@ from realitygraph.representation_genesis import (
     apply_program,
     enumerate_programs,
     fit_residual_decoder,
+    fit_ridge_residual_decoder,
     mixed_evidence_invoke,
     predict_residual_decoder,
+    predict_ridge_residual_decoder,
     program_complexity,
 )
 
@@ -131,6 +133,55 @@ class RepresentationGenesisTests(unittest.TestCase):
         self.assertFalse(mixed_evidence_invoke([0.004, 0.002, 0.001], 1e-4))
         self.assertFalse(mixed_evidence_invoke([-0.004, -0.002, -0.001], 1e-4))
         self.assertFalse(mixed_evidence_invoke([0.0, 0.0, 0.0], 1e-4))
+
+    def test_ridge_decoder_does_not_read_future_labels(self):
+        rng = np.random.default_rng(101)
+        x = rng.normal(size=(48, 6))
+        env = np.repeat(np.arange(4), 12)
+        y = (1.1 * x[:, 0] - 0.7 * x[:, 2] + 0.3 * x[:, 4] > 0).astype(int)
+        base = np.full(48, 0.5)
+
+        first = fit_ridge_residual_decoder(x, y, base, env, (0, 1, 2), l2=1.0)
+        changed = y.copy()
+        changed[env == 3] = 1 - changed[env == 3]
+        second = fit_ridge_residual_decoder(x, changed, base, env, (0, 1, 2), l2=1.0)
+
+        self.assertTrue(np.allclose(first.mean, second.mean))
+        self.assertTrue(np.allclose(first.scale, second.scale))
+        self.assertTrue(np.allclose(first.beta, second.beta))
+        self.assertAlmostEqual(first.alpha, second.alpha)
+
+    def test_ridge_decoder_keeps_parent_for_constant_representation(self):
+        x = np.ones((40, 5), dtype=float)
+        env = np.repeat(np.arange(4), 10)
+        y = np.tile([0, 1], 20)
+        base = np.linspace(0.35, 0.65, 40)
+
+        model = fit_ridge_residual_decoder(x, y, base, env, (0, 1, 2, 3), l2=1.0)
+        pred = predict_ridge_residual_decoder(model, x, base)
+
+        self.assertTrue(np.allclose(model.beta, 0.0))
+        self.assertAlmostEqual(model.alpha, 0.0)
+        self.assertTrue(np.allclose(pred, base))
+
+    def test_ridge_decoder_improves_multivariate_signal_with_parent_offset_fixed(self):
+        rng = np.random.default_rng(20260916)
+        x = rng.normal(size=(240, 5))
+        env = np.tile(np.arange(4), 60)
+        latent = 1.4 * x[:, 0] - 1.0 * x[:, 1] + 0.8 * x[:, 3]
+        y = (latent > 0).astype(int)
+        base = np.full(240, 0.5)
+
+        model = fit_ridge_residual_decoder(x, y, base, env, (0, 1, 2, 3), l2=1.0)
+        pred = predict_ridge_residual_decoder(model, x, base)
+
+        def loss(p):
+            p = np.clip(p, 1e-9, 1 - 1e-9)
+            return float(np.mean(-(y * np.log(p) + (1 - y) * np.log(1 - p))))
+
+        self.assertGreater(np.linalg.norm(model.beta), 0.0)
+        self.assertGreater(model.alpha, 0.0)
+        self.assertLess(loss(pred), loss(base))
 
 
 if __name__ == "__main__":
