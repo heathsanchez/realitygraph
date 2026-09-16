@@ -94,6 +94,10 @@ def main():
             or "satellite" in low
             or "qsar" in low
             or "titanic" in low
+            or "pokmon" in low
+            or "liver" in low
+            or "concrete" in low
+            or low == "datastr"
         ): continue
         if not (250<=rows<=50000 and 3<=feats<=100 and nums>=3): continue
         z={"task_id":tid,"data_id":did,"name":name,"instances":rows,"features":feats,"numeric_features":nums}
