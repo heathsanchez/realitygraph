@@ -29,3 +29,4 @@ jobs:
           python -m py_compile parkinson_ridge_decoder_v2.py
           python -m py_compile parkinson_canonical_striatal_v1.py
           python -m py_compile parkinson_pixel_consequence_atlas_v1.py
+          python -m py_compile parkinson_invariant_3d_v1.py
