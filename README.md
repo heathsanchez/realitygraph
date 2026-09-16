@@ -230,9 +230,9 @@ Run:
 
     python field_demo.py
 
-World A starts with all 256 elementary binary radius-1 world-laws as live hypotheses. The learner is not told which law is true.
+World A starts with all 256 elementary binary radius-1 world-laws as live hypotheses. The learner is not told which rule is true.
 
-It evaluates every 8-cell experiment against every possible law:
+It evaluates every 8-cell experiment against every possible rule:
 
     256 candidate experiments
     x 256 possible world-laws
@@ -264,6 +264,29 @@ A proposer may be symbolic search, an LLM, a human, another kernel, or another .
     proposal != truth
     verified consequence -> earned structure
 
+## Verified language-growth closure v1
+
+Run:
+
+    python verified_language_growth_closure_v1.py
+
+The `verified-language-growth-closure-v1` branch qualifies a **bounded recursive developmental loop** over exact finite fixtures.
+
+The old representational language is not allowed to grow merely because search failed. Expansion is licensed only by typed `UnknownExpressivity` evidence carrying both a completeness certificate for the declared old language and an independently replayable no-resolution certificate. `UnknownSearch` cannot expand the grammar, and `UnknownChoice` remains unresolved unless later evidence orders the alternatives.
+
+Generation 1 exhausts the four Boolean functions available to the old `x`-only observer language, certifies that parity is not expressible there, and then searches a declared lower NAND substrate. It admits the smallest verified extension found by compositional depth, `nand-d3-0110`, restarts it exactly, reuses it on sealed future inputs with zero new grammar search, survives exhaustive finite attack, composes with another retained capability, and loses the earned reach again under ablation.
+
+Generation 2 begins from the changed present. It exhausts all 16 stateless Boolean denotations of the current pair, certifies that the required history-sensitive distinction is absent, and then admits a verified two-state Moore-machine observer whose constructor and compiled capability explicitly depend on the Generation-1 capability. Ablating G1 transitively invalidates G2; ablating only G2 preserves G1.
+
+The dedicated CI gate also rejects stale certificates, extensionally duplicate sham growth, unresolved search masquerading as expressivity failure, and unsupported closure. A green qualification emits:
+
+    PASS_VERIFIED_LANGUAGE_GROWTH_CLOSURE_V1
+    CLOSED_BOUNDED
+
+This claim is deliberately narrow. It establishes recursive verified language growth for the declared finite grammars, substrates, carriers, verifiers, attacks, and two-generation qualification. It does **not** establish open-ended autonomous ontology invention, universal adequacy, unbounded self-improvement, or that every future expressive obstruction can be diagnosed or repaired.
+
+The frozen evidence record and exact claim boundary are in `docs/research/verified-language-growth-closure-v1.md`.
+
 ## Verify
 
     python -m unittest discover -s tests -v
@@ -271,5 +294,6 @@ A proposer may be symbolic search, an LLM, a human, another kernel, or another .
     python field_demo.py
     python meta_world_demo.py
     python predictive_field_demo.py
+    python verified_language_growth_closure_v1.py
 
 CI runs the unit suite and frozen demos on every push.
