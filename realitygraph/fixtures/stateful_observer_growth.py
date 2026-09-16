@@ -119,9 +119,8 @@ def enumerate_stateful_candidates(g1_constructor: FiniteConstructor, g1_capabili
             old = best_by_signature.get(signature)
             if old is None or key < old[0]:
                 best_by_signature[signature] = (key, constructor, machine)
-    ordered = sorted(
-        (item[1], item[2]) for item in best_by_signature.values()
-    , key=lambda pair: (pair[0].complexity, pair[0].constructor_id))
+    pairs = [(item[1], item[2]) for item in best_by_signature.values()]
+    ordered = sorted(pairs, key=lambda pair: (pair[0].complexity, pair[0].constructor_id))
     candidates = tuple(pair[0] for pair in ordered)
     machines = {pair[0].constructor_id: pair[1] for pair in ordered}
     return candidates, machines
