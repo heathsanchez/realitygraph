@@ -34,7 +34,8 @@ class SubmissionWrapperTests(unittest.TestCase):
                 self.assertIn('parkinson_runtime_patch.py', names)
                 self.assertIn('realitygraph/helper.py', names)
                 wrapper = zf.read('main.py').decode()
-                self.assertIn('already_parent=False', wrapper)
+                self.assertIn('ALREADY_PARENT = False', wrapper)
+                self.assertIn('already_parent=ALREADY_PARENT', wrapper)
                 self.assertIn('base_main.py', wrapper)
                 self.assertIn('submission.csv', wrapper)
 
