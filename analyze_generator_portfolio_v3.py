@@ -29,7 +29,7 @@ def main():
     rs=evaluate(raw); es=evaluate(allg)
     rc=certmap(rs); rw={w["task_id"]:w for w in raw}; ew={w["task_id"]:w for w in allg}
 
-    attempts=[w["task_id"] for w in raw if mixed(rc[w["task_id"]])]
+    attempts=[w["task_id"] for w in raw if (not rs["source_stats"][w["task_id"]]["promoted"]) and mixed(rc[w["task_id"]])]
     effective=[tid for tid in attempts if ew[tid]["selected_origin"]!="raw"]
     controlled=[ew[w["task_id"]] if w["task_id"] in effective else w for w in raw]
     cs=evaluate(controlled)
@@ -61,7 +61,7 @@ def main():
 
     result={
       "status":"EXPLORATORY_PILOT_ONLY","source_run":35052946216,
-      "controller":"open grammar portfolio only when raw verifier evidence is mixed",
+      "controller":"open grammar portfolio only when raw is not promoted and verifier evidence is mixed",
       "portfolio":list(GRAMMARS),
       "invalid":invalid,"attempts":attempts,"effective":effective,"rescues":rescues,"harms":harms,
       "raw":{"verified":rs["verified_events"],"failures":rs["failures"],"precision":rs["survival_precision"]},
@@ -72,7 +72,7 @@ def main():
       "rows":rows,
     }
     Path("capability-generator-portfolio-pilot.json").write_text(json.dumps(result,sort_keys=True,indent=2)+"\n")
-    print("CONDITIONAL GENERATOR PORTFOLIO / V3 EXPLORATORY PILOT")
+    print("REPAIR-ONLY GENERATOR PORTFOLIO / V3 EXPLORATORY PILOT")
     print("------------------------------------------------------")
     print(f"attempts={attempts} effective={effective} rescues={rescues} harms={harms}")
     print(f"raw verified={rs['verified_events']} failures={rs['failures']} precision={rs['survival_precision']:.4f}")
