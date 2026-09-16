@@ -35,7 +35,7 @@ def main():
     banned_tokens=(
       "forex","credit","loan","fri","volcano","puma","kin8","boston","heart",
       "auto","colleges","wine","ailerons","cpu","house","housing","bank",
-      "stock","financial","energy","abalone","diabetes","servo","friedman"
+      "stock","financial","energy","abalone","diabetes","servo","friedman",\n      "elevator","breast","kidney","covertype","rmftsa","bng("
     )
     byfamily={}
     for _,x in tasks.iterrows():
