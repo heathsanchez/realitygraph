@@ -34,7 +34,7 @@ def test_consequence_closure_creates_warm_only_solution_and_ablates_exactly():
         )
     ]
 
-    summary = compare_closure_on_split(acquisition, heldout, budget=1)
+    summary = compare_closure_on_split(acquisition, heldout, budget=2)
     assert summary["closure_states"] == 2
     assert summary["cold_solved"] == 0
     assert summary["warm_solved"] == 1
