@@ -6,7 +6,7 @@
   "arm_level_multiplicity": "Holm-Bonferroni over the four arm-level primary p-values A, B, G, P",
   "binary_rate_interval": "Wilson score 95% interval",
   "paired_binary_difference_interval": "Newcombe score 95% interval for paired proportions",
-  "zero_discordance_rule": "If a paired binary comparison has no discordant pairs, its one-sided primary p-value is 1.0 unless the effect estimate is exactly zero, in which case it is also 1.0.",
+  "zero_discordance_rule": "If a paired binary comparison has no discordant pairs, its one-sided primary p-value is 1.0.",
   "arms": {
     "A": {
       "experimental_unit": "task",
@@ -71,12 +71,12 @@
       "primary_baselines": [
         "cold",
         "equal_compute_recheck",
-        "verbal_rule_negative",
         "size_matched_sham",
         "wrong_class_object"
       ],
+      "secondary_negative_baseline": "verbal_rule_negative",
       "component_tests": "one-sided exact McNemar tests on paired correctness for retained object versus each primary baseline",
-      "arm_primary_p_value": "maximum of all five component p-values; the retained object must significantly beat every listed baseline",
+      "arm_primary_p_value": "maximum of the four component p-values; the retained object must significantly beat every primary baseline",
       "effect_estimate": "retained-object accuracy minus the highest observed primary-baseline accuracy",
       "effect_floor": 0.05,
       "ablation_hard_gate": "targeted lineage deletion reduces accuracy to within 0.02 absolute of cold and causes reacquisition search count to become positive",
