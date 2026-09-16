@@ -36,6 +36,29 @@ class FinalTrajectoryModelTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 export_model(model, fh.name)
 
+    def test_runtime_patch_can_start_from_already_g1g2_parent(self):
+        import parkinson_runtime_patch as patch
+
+        model = {
+            "anchor": {"name": "a", "mean": [0.0], "scale": [1.0], "beta": [0.0], "shrinkage": 0.5},
+            "residual": {"names": [], "mean": [], "scale": [], "beta": [], "shrinkage": 0.0},
+        }
+        old_map = patch.runtime_signal_map
+        old_bank = patch.dense_threshold_trajectory_features
+        old_parent = patch.parent_probability
+        try:
+            patch.runtime_signal_map = lambda _: (np.zeros((64, 64)), np.ones((64, 64)))
+            patch.dense_threshold_trajectory_features = lambda _: (
+                np.array([[0.0]], dtype=float), ["a"], ["trajectory"]
+            )
+            patch.parent_probability = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must be skipped"))
+            got = patch.patch_probability("unused.nii.gz", 0.7, model, already_parent=True)
+            self.assertAlmostEqual(got, 0.7, places=12)
+        finally:
+            patch.runtime_signal_map = old_map
+            patch.dense_threshold_trajectory_features = old_bank
+            patch.parent_probability = old_parent
+
 
 if __name__ == "__main__":
     unittest.main()
