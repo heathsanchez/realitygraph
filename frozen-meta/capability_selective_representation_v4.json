@@ -1,0 +1,9 @@
+{
+  "version": "capability-selective-representation-v4",
+  "portfolio": ["sum", "diff", "absdiff"],
+  "controller_rule": "invoke local portfolio search iff raw capability was not promoted and raw verifier evidence contains at least one pass and at least one fail; otherwise retain raw",
+  "portfolio_selection_rule": "within an invoked world, construct raw plus all frozen portfolio grammars and select the highest calibration-gain candidate before verifier gating",
+  "pilot_source_runs": [35052246708, 35052502246, 35052946216, 35053355665],
+  "uses_deployment_outcomes_during_v4": false,
+  "v4_target_outcomes_used": false
+}
