@@ -93,9 +93,9 @@ jobs:
       - name: Diagnose scored-pool MS representative mapping
         run: python acc_mapping_diagnostic.py
 
-      - name: Run frozen held-out audit and open MS transfer
+      - name: Run frozen held-out audit and bridged open MS transfer
         run: |
-          python acc_prospective_transfer.py \
+          python acc_open_ms_transfer.py \
             --trajectories acc-training-trajectories.jsonl \
             --metadata official/competition/tools/verifier/data/ms1190_metadata.csv \
             --manifest official/competition/tools/verifier/data/manifest.json \
@@ -116,7 +116,8 @@ jobs:
           assert a["warm_only_solved"] > 0, a
           assert a["warm_expansions_on_both"] < a["cold_expansions_on_both"], a
           assert o["open_metadata_rows"] == 550, o
-          assert o["exact_manifest_matches"] == 550, o
+          assert o["orbit_manifest_matches"] == 550, o
+          assert o["bridged_manifest_matches"] == 550, o
           assert o["unmatched_open_rows"] == 0, o
           assert o["officially_verified_open_solved"] == o["open_solved"], o
           print("heldout_warm_only", a["warm_only_solved"])
