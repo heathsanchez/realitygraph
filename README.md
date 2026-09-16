@@ -354,3 +354,27 @@ A green sealed qualification emits:
 This claim is deliberately bounded. It establishes verified learning and prospective reuse of repair-family choice inside the declared finite obstruction representation, frozen repair portfolio, authority/verifier boundary, calibration protocol, attacks, and resource envelope. It does **not** establish open-ended meta-growth, arbitrary substrate invention, representation-independent obstruction identity, universal repair optimality, universal cross-domain transfer, learned verifier authority, or unbounded self-development.
 
 The exact evidence record is in `docs/research/verified-meta-growth-v3.md`. The separate `docs/research/v3-preregistration-gap-map.md` records which stronger A/B/G/P confirmatory questions remain open so this developmental evidence is not accidentally counted as preregistered confirmation.
+
+## A/B/G/P preregistration DEV harness
+
+Run:
+
+    python abgp_dev_matrix.py
+
+The `abgp-preregistration-freeze-v1` branch implements the **development-only** harness for the preregistered A/B/G/P study on capability identity and protected future-action structure. Its purpose is to qualify the experimental machinery without consuming the confirmatory experiment.
+
+The normative design and analysis are frozen in `preregistration/abgp-design-manifest-v1.json` and `preregistration/abgp-analysis-plan-v1.json`. The harness enforces a hard seed firewall: development uses `ABGP-DEV-v1`; `ABGP-CONFIRM-v1` is rejected before task generation on this branch.
+
+The DEV harness exercises all four scientific interfaces: non-identifying verifier messages with equal-compute controls (A), four independently parameterized grammar families with all 12 ordered transfer directions and structural interventions (B), preclassified action-relevance corruption with exact dose-weighted randomization analysis (G), and hard-restarted retained non-verbal structure with zero future verifier/search plus targeted deletion (P).
+
+Analysis is exact and raw-replayable: paired McNemar tests, deterministic Holm-Bonferroni correction, exact dynamic-programmed randomization for G, and mechanical PASS/PARTIAL/FAIL gates operate from the emitted JSON artifact rather than hidden runtime state.
+
+A green DEV qualification emits:
+
+    ABGP_DEV_MATRIX_OK
+    ABGP_DEV_SAFETY_BOUNDARY_OK
+    DEVELOPMENT_MECHANICS_ONLY_NOT_CONFIRMATORY_EVIDENCE
+
+Those DEV outcomes are **not A/B/G/P confirmatory evidence** and must not be used as estimates of confirmatory effect size or truth. The manifest remains `REVIEW_PENDING` with `confirmatory_execution_enabled=false`. The review-lock builder and committed lock template cannot freeze or unlock confirmation; a separate future review is required before any confirmatory seed can be exposed.
+
+The exact DEV qualification record and claim boundary are in `docs/research/abgp-dev-harness-v1.md`.
