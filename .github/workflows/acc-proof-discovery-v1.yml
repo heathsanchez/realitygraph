@@ -90,6 +90,9 @@ jobs:
           print(f"official_verifier_accepted={accepted}/424")
           PY
 
+      - name: Diagnose scored-pool MS representative mapping
+        run: python acc_mapping_diagnostic.py
+
       - name: Run frozen held-out audit and open MS transfer
         run: |
           python acc_prospective_transfer.py \
