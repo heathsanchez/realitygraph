@@ -1,0 +1,31 @@
+name: openml-regression-transfer-v1
+on:
+  push:
+    branches:
+      - openml-regression-transfer-v1
+  workflow_dispatch:
+concurrency:
+  group: openml-regression-transfer-v1
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REALITYGRAPH_OPENML_REGRESSION_RESULT: openml-regression-transfer-v1-summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet openml pandas
+      - name: Run cross-family regression developmental transfer
+        run: python openml_regression_transfer_v1.py
+      - name: Preserve regression transfer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openml-regression-transfer-v1-evidence
+          path: openml-regression-transfer-v1-summary.json
+          if-no-files-found: warn
+          retention-days: 14
