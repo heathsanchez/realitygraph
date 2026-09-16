@@ -6,6 +6,8 @@
   "base_branch": "verified-meta-growth-v3",
   "base_commit": "45c766cd3d5410cea90790a67958390be9ccb896",
   "design_spec": "docs/superpowers/specs/2026-09-17-abgp-confirmatory-design.md",
+  "analysis_plan": "preregistration/abgp-analysis-plan-v1.json",
+  "analysis_plan_is_normative": true,
   "seed_namespaces": {
     "development": "ABGP-DEV-v1",
     "confirmatory": "ABGP-CONFIRM-v1"
@@ -15,6 +17,7 @@
     "primary_hypotheses": ["A", "B", "G", "P"],
     "familywise_alpha": 0.05,
     "multiplicity": "Holm-Bonferroni across four primary arm-level tests",
+    "exact_test_definitions_live_in": "preregistration/abgp-analysis-plan-v1.json",
     "full_pass_requires_effect_floor": true,
     "full_pass_requires_adjusted_significance": true
   },
@@ -68,7 +71,7 @@
       "relevance_definition": "changing the cell can alter protected ordering among live actions under the frozen evaluator",
       "relevance_computed_before_corruption": true,
       "matched_corruption_count_and_magnitude": true,
-      "primary_test": "relevance_by_corruption_dose_interaction_on_exact_action_order_flip_probability",
+      "primary_test": "exact paired dose-weighted relevance-label randomization test defined in abgp-analysis-plan-v1.json",
       "minimum_flip_rate_gap_at_max_nonzero_dose": 0.15,
       "secondary_metrics": ["downstream_accuracy", "zero_target_entropy_rate", "dose_monotonicity", "matched_random_location_control"]
     },
@@ -99,6 +102,7 @@
     }
   },
   "verdicts": ["PASS", "PARTIAL", "FAIL"],
+  "verdict_rule_source": "preregistration/abgp-analysis-plan-v1.json",
   "combined_full_claim_requires": {"A": "PASS", "B": "PASS", "G": "PASS", "P": "PASS"},
   "development_policy": {
     "allowed_seed_namespace": "ABGP-DEV-v1",
@@ -117,6 +121,7 @@
   },
   "final_lock_requirements": [
     "design_manifest_digest",
+    "analysis_plan_digest",
     "repository_tree_hash",
     "arm_generator_code_hashes",
     "verifier_implementation_hash",
@@ -134,7 +139,7 @@
     "one_shot_execution_marker_policy"
   ],
   "final_lock_status_required": "FROZEN",
-  "confirmatory_change_policy": "Any post-unlock change to thresholds, counts, grammar independence, intervention classes, corruption schedule, source-distinctness, PASS semantics, or scientific code requires a new preregistration version and new confirmatory namespace.",
+  "confirmatory_change_policy": "Any post-unlock change to thresholds, counts, grammar independence, intervention classes, corruption schedule, source-distinctness, statistical tests, PASS semantics, or scientific code requires a new preregistration version and new confirmatory namespace.",
   "claim_boundary": {
     "representation_independent_invention": false,
     "universal_grammar_invariance": false,
