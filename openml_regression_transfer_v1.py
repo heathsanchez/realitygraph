@@ -22,7 +22,7 @@ from realitygraph.transfer_memory import model_to_law
 POLICY_PATH=Path("frozen-meta/adaptive_policy.mg")
 POLICY_SHA="3da082adbcfcacc53c9745a0b6af42a4ea33655e43c3768bc755fdf41168fa92"
 VERIFIER_PATH=Path("frozen-meta/openml_verifier_v15.json")
-MANIFEST_SHA="TO_BE_FROZEN"
+MANIFEST_SHA="6764e1a698639223e016fb0f50b658775e43af35c9b6744fb1dc7aa8ea14f549"
 
 def finite_float(value):
     try:
