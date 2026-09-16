@@ -69,7 +69,7 @@ jobs:
           assert summary['confirmatory_namespace_used'] is False
           assert summary['scientific_status'] == 'DEVELOPMENT_MECHANICS_ONLY_NOT_CONFIRMATORY_EVIDENCE'
           assert set(summary['raw_records']) == {'A', 'B', 'G', 'P'}
-          assert summary['analysis']['analysis_plan_digest'] == summary['analysis_plan_digest']
+          assert summary['analysis']['analysis_plan_digest'] == summary['design']['analysis_plan_digest']
           print('ABGP_DEV_SAFETY_BOUNDARY_OK')
           PY
 
