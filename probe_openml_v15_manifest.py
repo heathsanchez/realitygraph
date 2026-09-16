@@ -123,6 +123,11 @@ def main():
             or "jungle_chess" in lname
             or "ilpd" in lname
             or lname == "boston"
+            or "thyroid" in lname
+            or lname.startswith("disclosure_")
+            or "loan" in lname
+            or lname == "jm1"
+            or "vineyard" in lname
         ):
             continue
         if did in OLD or stem(name) in oldnames or stem(name) in v7names or stem(name) in v8names or stem(name) in v9names or stem(name) in v10names or stem(name) in v11names or stem(name) in v12names or stem(name) in v13names or stem(name) in v14names or not(200<=rows<=50000 and 2<=f<=100 and 2<=c<=10 and num>=2):continue
