@@ -1,0 +1,19 @@
+{
+  "version": "openml-portfolio-verifier-v14-v1",
+  "manifest_digest": "6b87c8379d32914063e492a8ff1e08037a06f333400661b8322ab7c58ddf9b57",
+  "development_worlds": 8,
+  "heldout_worlds": 12,
+  "split": "first 8 vs remaining 12 in source-only frozen manifest order",
+  "base_protocol": "V12 exact adaptive evidence",
+  "shortcut_grammar": [
+    "DIRECT: after first verifier PASS, permit ACTIVE when acquisition gain >= learned direct threshold",
+    "BORDERLINE: after first two verifier PASSes, permit ACTIVE when acquisition gain >= learned borderline threshold"
+  ],
+  "threshold_learning": "lowest development-set gain threshold giving at least one shortcut and zero false promotions after full development deployment; otherwise disabled",
+  "suspension_rules": "unchanged from V12",
+  "hard_restart_policy_before_heldout": true,
+  "hard_restart_capabilities_before_heldout_deployment": true,
+  "heldout_pass_gate": ">=10% fewer verifier checks than V12, deployment verified events >= V12, failures <= V12, survival precision >= V12",
+  "search_after_acquisition": false,
+  "v14_heldout_outcomes_used_to_learn_policy": false
+}
