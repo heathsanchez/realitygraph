@@ -65,6 +65,7 @@ def build_review_lock(
         if field
         not in {
             "design_manifest_digest",
+            "analysis_plan_digest",
             "arm_generator_code_hashes",
             "analysis_implementation_hash",
         }
