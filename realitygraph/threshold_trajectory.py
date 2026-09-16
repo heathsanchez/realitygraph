@@ -73,7 +73,6 @@ def curve_features(values, thresholds=THRESHOLDS, *, prefix='curve'):
     delta = np.diff(v)
     out.extend(delta.tolist())
 
-    # Unequal-grid safe second derivative through adjacent first derivatives.
     first = delta / dt
     curv = []
     for i in range(1, len(t) - 1):
@@ -89,7 +88,7 @@ def curve_features(values, thresholds=THRESHOLDS, *, prefix='curve'):
 
     tc = t - float(t.mean())
     slope = float(np.dot(tc, v - float(v.mean())) / max(float(np.dot(tc, tc)), 1e-12))
-    auc = float(np.trapz(v, t) / max(float(t[-1] - t[0]), 1e-12))
+    auc = float(np.trapezoid(v, t) / max(float(t[-1] - t[0]), 1e-12))
     abs_delta = np.abs(delta)
     j = int(np.argmax(abs_delta))
     max_abs_delta = float(abs_delta[j])
@@ -149,18 +148,11 @@ def _threshold_observables(side: np.ndarray, frac: float):
 
 def _side_trajectory(side: np.ndarray, thresholds=THRESHOLDS):
     t = np.asarray(thresholds, dtype=np.float64)
-    rows = np.stack([_threshold_observables(side, x) for x in t], axis=0)
-    return rows
+    return np.stack([_threshold_observables(side, x) for x in t], axis=0)
 
 
 def dense_threshold_trajectory_features(maps: np.ndarray, thresholds=THRESHOLDS):
-    """Dense 40--80% threshold trajectories in the subject's intrinsic uptake frame.
-
-    The representation is label-free and positive-scale invariant. Only observables
-    already implicated by V1/V2 are traced: uptake level/dispersion, longitudinal
-    mass quantiles and widths, longitudinal centroid, and minor spread. Curves are
-    emitted for left, right and bilateral mean views.
-    """
+    """Dense 40--80% threshold trajectories in the subject's intrinsic uptake frame."""
     x = np.asarray(maps, dtype=np.float64)
     t = np.asarray(thresholds, dtype=np.float64)
     if x.ndim != 3:
