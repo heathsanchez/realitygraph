@@ -6,6 +6,11 @@ from realitygraph.capability_graph import CapabilityGraph
 from realitygraph.developmental_executor import execute_generation
 from realitygraph.developmental_state import DevelopmentalState
 from realitygraph.developmental_types import canonical_digest
+from realitygraph.fixtures.generation_specs_v2 import (
+    initial_v2_state,
+    make_g1_spec,
+    make_g2_spec,
+)
 from realitygraph.generation_spec import (
     CandidateEnumeration,
     FutureEvaluation,
@@ -203,6 +208,22 @@ class DevelopmentalExecutorTests(unittest.TestCase):
         self.assertNotIn("realitygraph.fixtures", source)
         for forbidden in ("G1", "G2", "G3", "generation_id ==", "constructor_id =="):
             self.assertNotIn(forbidden, source)
+
+    def test_v1_g1_and_g2_are_executed_by_same_entry_point(self):
+        state0 = initial_v2_state()
+        result1 = execute_generation(state0, make_g1_spec())
+        result2 = execute_generation(result1.state, make_g2_spec(result1.state))
+        self.assertEqual(result1.trace.route, "COMPILED")
+        self.assertEqual(result2.trace.route, "COMPILED")
+        self.assertIsNotNone(result1.capability)
+        self.assertIsNotNone(result2.capability)
+        self.assertEqual(
+            result2.capability.dependencies,
+            (result1.capability.capability_id,),
+        )
+        self.assertEqual(result1.future.grammar_search_calls, 0)
+        self.assertEqual(result2.future.grammar_search_calls, 0)
+        self.assertEqual(result2.state.generation_index, 2)
 
 
 if __name__ == "__main__":
