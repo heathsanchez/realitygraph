@@ -17,11 +17,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet numpy scipy nibabel opencv-python-headless
-      - run: python -m unittest tests.test_final_trajectory_model -v
+      - run: python -m unittest tests.test_final_trajectory_model tests.test_submission_wrapper -v
       - run: |
-          if [ -f parkinson_final_submission_v5.py ]; then
-            python -m py_compile parkinson_final_submission_v5.py
-          else
-            echo "parkinson_final_submission_v5.py missing"
-            exit 1
+          python -m py_compile parkinson_final_submission_v5.py
+          if [ -f parkinson_build_final_zip_v5.py ]; then
+            python -m py_compile parkinson_build_final_zip_v5.py
           fi
