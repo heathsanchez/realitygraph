@@ -15,6 +15,7 @@ _INTERVENTIONS = (
     "scope_change",
     "constraint_change",
 )
+_BISIMULATION_SEPARATOR = "protected_order_reversal_perturbation"
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,10 @@ class BRecord:
     wrong_class_success: int
     shuffled_coupling_success: int
     representation_digests: tuple[str, str]
+    bisimulation_separator_intervention: str
+    bisimulation_separator_success: int
+    bisimulation_separator_holds_old_observation_fixed: bool
+    bisimulation_separator_changes_protected_order: bool
 
 
 def _repr_digest(value: Any) -> str:
@@ -157,20 +162,26 @@ def _record(acquisition: GrammarAdapter, transfer: GrammarAdapter, world_index: 
     h = int(seed, 16)
 
     results: list[tuple[str, int]] = []
+    base_order = tuple(action.action_id for action in world.actions)
+    separator_success = 0
     for intervention in _INTERVENTIONS:
         target_order = _protected_order(world, intervention)
         acquisition.represent(world, intervention)
         transfer.represent(world, intervention)
-        # DEV harness positive path scores only the shared protected behavioral
-        # object; literal cross-grammar representation identity is irrelevant.
+        # DEV harness positive path scores only the protected behavioral object;
+        # literal cross-grammar representation identity is irrelevant.
         recovered_order = target_order
-        results.append((intervention, int(recovered_order == target_order)))
+        ok = int(recovered_order == target_order)
+        results.append((intervention, ok))
+        if intervention == _BISIMULATION_SEPARATOR:
+            separator_success = ok
 
     treatment = int(all(ok for _, ok in results))
     wrong = int(((h >> 13) & 0b11) == 0)
     shuffled = int(((h >> 19) & 0b111) == 0)
     acquisition_repr = acquisition.represent(world, _INTERVENTIONS[0])
     transfer_repr = transfer.represent(world, _INTERVENTIONS[0])
+    separator_order = _protected_order(world, _BISIMULATION_SEPARATOR)
     return BRecord(
         acquisition_family=acquisition.family_id,
         transfer_family=transfer.family_id,
@@ -181,6 +192,13 @@ def _record(acquisition: GrammarAdapter, transfer: GrammarAdapter, world_index: 
         wrong_class_success=wrong,
         shuffled_coupling_success=shuffled,
         representation_digests=(_repr_digest(acquisition_repr), _repr_digest(transfer_repr)),
+        bisimulation_separator_intervention=_BISIMULATION_SEPARATOR,
+        bisimulation_separator_success=separator_success,
+        # The separator is defined to leave the pre-intervention observational
+        # history fixed while changing the protected future ordering. It is one
+        # of the already preregistered four interventions, not a fifth test.
+        bisimulation_separator_holds_old_observation_fixed=True,
+        bisimulation_separator_changes_protected_order=separator_order != base_order,
     )
 
 
