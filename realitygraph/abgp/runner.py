@@ -29,19 +29,49 @@ def _a_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         "message_nonidentifying": all(r.compatible_optimal_action_count > 1 for r in records),
         "single_message": all(r.verifier_message_count == 1 for r in records),
         "single_repair_round": all(r.repair_round_count == 1 for r in records),
-        "budget_ok": all(r.equal_compute_units == r.verifier_compute_units for r in records),
+        "compute_budget_matched": all(
+            r.equal_compute_units == r.verifier_compute_units == r.bayes_compute_units
+            for r in records
+        ),
+        "information_budget_matched": all(
+            r.bayes_received_same_message
+            and r.bayes_received_same_constructor_observation
+            and r.bayes_hidden_verifier_state_reads == 0
+            and r.bayes_protected_answer_reads == 0
+            for r in records
+        ),
     }
     return (
         {
-            "pairs": [[r.equal_recheck_correct, r.verifier_correct] for r in records],
+            "treatment": [r.verifier_correct for r in records],
+            "baselines": {
+                "equal_compute_recheck": [r.equal_recheck_correct for r in records],
+                "information_matched_bayes": [
+                    r.information_matched_bayes_correct for r in records
+                ],
+            },
             "hard_gates": hard,
         },
         {
+            "inferential_unit": "paired_task",
             "task_count": len(records),
             "all_messages_nonidentifying": hard["message_nonidentifying"],
             "max_verifier_messages_per_task": max(r.verifier_message_count for r in records),
             "max_repair_rounds_per_task": max(r.repair_round_count for r in records),
-            "equal_compute_matched": hard["budget_ok"],
+            "compute_budget_matched": hard["compute_budget_matched"],
+            "information_budget_matched": hard["information_budget_matched"],
+            "bayes_allowed_inputs": [
+                "constructor_visible_pre_message_observation",
+                "admitted_message_id_and_content",
+                "compatible_action_set_induced_by_message",
+                "frozen_action_prior",
+            ],
+            "bayes_forbidden_inputs": [
+                "verifier_private_state",
+                "protected_answer",
+                "target_label",
+                "post_message_hidden_data",
+            ],
         },
     )
 
@@ -54,6 +84,12 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         for i in range(len(alphabets))
         for j in range(i + 1, len(alphabets))
     )
+    separator_ok = all(
+        r.bisimulation_separator_success == 1
+        and r.bisimulation_separator_holds_old_observation_fixed
+        and r.bisimulation_separator_changes_protected_order
+        for r in records
+    )
     hard = {
         "grammar_independence": disjoint
         and len({g.serialization_schema for g in families}) == 4
@@ -62,23 +98,39 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         "no_primitive_dictionary_by_construction": len({len(g.primitives) for g in families}) == 4,
         "no_shared_surface_serialization": disjoint,
         "all_12_ordered_directions": len({(r.acquisition_family, r.transfer_family) for r in records}) == 12,
+        "bisimulation_separator_present": separator_ok,
     }
     intervention_bits = [bit for record in records for _, bit in record.intervention_results]
+    direction_labels = [f"{r.acquisition_family}->{r.transfer_family}" for r in records]
+    separator_bits = [r.bisimulation_separator_success for r in records]
     return (
         {
             "treatment": [r.treatment_success for r in records],
             "wrong_class": [r.wrong_class_success for r in records],
             "shuffled_coupling": [r.shuffled_coupling_success for r in records],
+            "direction_labels": direction_labels,
             "intervention_agreement": intervention_bits,
+            "bisimulation_separator_agreement": separator_bits,
             "hard_gates": hard,
         },
         {
+            "inferential_unit": "world_within_ordered_grammar_direction",
             "record_count": len(records),
             "ordered_directions": len({(r.acquisition_family, r.transfer_family) for r in records}),
+            "interventions_per_unit": 4,
             "intervention_evaluations": len(intervention_bits),
+            "interventions_count_as_independent_n": False,
+            "primary_inference": "direction_stratified_intersection_union_max_component_p",
             "surface_alphabets_pairwise_disjoint": disjoint,
             "serialization_schema_count": len({g.serialization_schema for g in families}),
             "inference_route_count": len({g.inference_route for g in families}),
+            "bisimulation_separator_intervention": "protected_order_reversal_perturbation",
+            "bisimulation_separator_holds_old_observation_fixed": all(
+                r.bisimulation_separator_holds_old_observation_fixed for r in records
+            ),
+            "bisimulation_separator_changes_protected_order": all(
+                r.bisimulation_separator_changes_protected_order for r in records
+            ),
         },
     )
 
@@ -100,6 +152,7 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         {
             "pairs": [
                 {
+                    "world_id": r.world_index,
                     "weight": weights[r.dose],
                     "relevant": r.relevant_flip,
                     "irrelevant": r.irrelevant_flip,
@@ -111,8 +164,13 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "hard_gates": hard,
         },
         {
+            "inferential_unit": "world",
+            "randomization_unit": "world",
             "world_count": len({r.world_index for r in records}),
             "record_count": len(records),
+            "nonzero_doses_per_world": 4,
+            "dose_measurements_are_repeated_within_world": True,
+            "null_randomization": "joint_relevance_label_swap_for_all_nonzero_doses_within_world",
             "relevance_computed_before_corruption": hard["preclassified"],
             "matched_count_and_magnitude": hard["matched_corruption"],
         },
@@ -127,12 +185,39 @@ def _p_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     cold = [r.cold_correct for r in records]
     post = [r.post_deletion_correct for r in records]
     reacquisition_total = sum(r.reacquisition_search_count_after_deletion for r in records)
+    procedure_entries = sum(r.reacquisition_procedure_entries for r in records)
+    untracked = sum(r.untracked_regeneration_count for r in records)
+
+    boundary_audited = all(
+        r.cross_restart_state_keys == ("retained_object_bytes",)
+        and len(r.retained_object_digest) == 64
+        and len(r.post_restart_environment_digest) == 64
+        and r.future_source_example_reads == 0
+        and r.future_search_state_reads == 0
+        and r.future_verifier_state_reads == 0
+        and r.future_reconstruction_calls == 0
+        and r.future_acquisition_cache_reads == 0
+        for r in records
+    )
+    lineage_removed = all(not r.lineage_present_after_deletion for r in records)
+    reacquisition_tracked = all(
+        r.reacquisition_procedure_id == "P_ACQUIRE_V1"
+        and r.reacquisition_procedure_entries > 0
+        and r.reacquisition_search_count_after_deletion > 0
+        for r in records
+    )
+    bisimulation_separator = all(r.bisimulation_separating_task for r in records)
+
     hard = {
         "zero_verifier": sum(r.future_verifier_calls for r in records) == 0,
         "zero_search": sum(r.future_reconstruction_search_count for r in records) == 0,
         "label_free": all(not r.applicability_used_target_labels for r in records),
         "source_distinct": all(r.source_distinct and not r.forbidden_shared_features for r in records),
-        "targeted_deletion": post == cold and reacquisition_total > 0,
+        "restart_boundary_audited": boundary_audited,
+        "bisimulation_separator_present": bisimulation_separator,
+        "lineage_removed": lineage_removed,
+        "reacquisition_tracked": reacquisition_tracked,
+        "no_untracked_regeneration": untracked == 0,
     }
     return (
         {
@@ -143,20 +228,43 @@ def _p_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
                 "verbal_rule_negative": [r.verbal_rule_negative_correct for r in records],
                 "size_matched_sham": [r.sham_correct for r in records],
                 "wrong_class_object": [r.wrong_class_correct for r in records],
+                "target_only_bisimulation": [
+                    r.target_only_bisimulation_correct for r in records
+                ],
             },
             "hard_gates": hard,
             "post_deletion_accuracy": _mean(post),
             "cold_accuracy": _mean(cold),
             "reacquisition_search_count": reacquisition_total,
+            "reacquisition_procedure_entries": procedure_entries,
+            "untracked_regeneration_count": untracked,
         },
         {
+            "inferential_unit": "source_distinct_future_task",
             "task_count": len(records),
             "future_verifier_calls": sum(r.future_verifier_calls for r in records),
             "future_reconstruction_search_count": sum(r.future_reconstruction_search_count for r in records),
             "all_source_distinct": hard["source_distinct"],
             "all_label_free": hard["label_free"],
+            "sole_cross_restart_state_key": "retained_object_bytes",
+            "restart_boundary_audited": boundary_audited,
+            "retained_object_digests": sorted({r.retained_object_digest for r in records}),
+            "post_restart_environment_digests": sorted(
+                {r.post_restart_environment_digest for r in records}
+            ),
+            "forbidden_future_path_reads": {
+                "source_examples": sum(r.future_source_example_reads for r in records),
+                "search_state": sum(r.future_search_state_reads for r in records),
+                "verifier_state": sum(r.future_verifier_state_reads for r in records),
+                "reconstruction": sum(r.future_reconstruction_calls for r in records),
+                "acquisition_cache": sum(r.future_acquisition_cache_reads for r in records),
+            },
+            "lineage_removed_after_deletion": lineage_removed,
+            "reacquisition_procedure_id": "P_ACQUIRE_V1",
+            "reacquisition_procedure_entries": procedure_entries,
             "reacquisition_search_count_after_deletion": reacquisition_total,
-            "unique_retained_object_digests": len({r.retained_object_digest for r in records}),
+            "untracked_regeneration_count": untracked,
+            "bisimulation_separator_present": bisimulation_separator,
         },
     )
 
