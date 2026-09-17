@@ -15,7 +15,7 @@ CAPABILITIES = (
     'PARITY_DIFFERENCE',
     'EVENXX_DIFFERENCE',
 )
-RETAINED_CAPABILITIES = ('PARITY_DIFFERENCE', 'EVENXX_DIFFERENCE', 'WRONGX_DIFFERENCE')
+RETAINED_CAPABILITIES = ('PARITY_DIFFERENCE', 'EVENXX_DIFFERENCE', 'WRONGX_DIFFERENCE', 'VERBAL_FIRST_LAST')
 SCHEMA = 'abgp.retained-structural-parity.v1'
 SCOPE = 'future-symbol-sequence-v1/even-length'
 
@@ -64,6 +64,8 @@ def _apply(name, seq):
         return 1 - (d & 1)
     if name == 'WRONGX_DIFFERENCE':
         return int(d > 0)
+    if name == 'VERBAL_FIRST_LAST':
+        return int(seq[-1] != seq[0])
     raise ValueError('unknown structural candidate')
 
 
@@ -94,6 +96,7 @@ def acquire_structural(request):
         'retained': retained,
         'sham': _retained('EVENXX_DIFFERENCE', source_digest),
         'wrong_class': _retained('WRONGX_DIFFERENCE', source_digest),
+        'verbal_rule': _retained('VERBAL_FIRST_LAST', source_digest),
         'candidate_count': len(CAPABILITIES),
         'survivor_count': len(survivors),
         'survivors': survivors,

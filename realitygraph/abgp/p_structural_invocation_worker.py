@@ -7,7 +7,7 @@ from runtime import digest, serve, validate_request
 
 SCHEMA = 'abgp.retained-structural-parity.v1'
 SCOPE = 'future-symbol-sequence-v1/even-length'
-CAPABILITIES = ('PARITY_DIFFERENCE', 'EVENXX_DIFFERENCE', 'WRONGX_DIFFERENCE')
+CAPABILITIES = ('PARITY_DIFFERENCE', 'EVENXX_DIFFERENCE', 'WRONGX_DIFFERENCE', 'VERBAL_FIRST_LAST')
 
 
 def _retained(raw):
@@ -46,6 +46,8 @@ def _action(capability, symbols):
         return 1 - (d & 1)
     if capability == 'WRONGX_DIFFERENCE':
         return int(d > 0)
+    if capability == 'VERBAL_FIRST_LAST':
+        return int(symbols[-1] != symbols[0])
     raise ValueError('unsupported capability')
 
 

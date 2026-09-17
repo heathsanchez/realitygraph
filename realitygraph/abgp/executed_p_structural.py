@@ -100,6 +100,7 @@ def run_structural_p_episode(episode_index: int) -> dict[str, Any]:
     equal_recheck_runs = invoke_many(None)
     sham_runs = invoke_many(acquisition['sham'])
     wrong_runs = invoke_many(acquisition['wrong_class'])
+    verbal_runs = invoke_many(acquisition['verbal_rule'])
 
     old_posterior_runs = [
         run_worker(
@@ -137,6 +138,7 @@ def run_structural_p_episode(episode_index: int) -> dict[str, Any]:
         'equal_compute_recheck': [row['action'] for row in equal_recheck_runs],
         'size_matched_sham': [row['action'] for row in sham_runs],
         'wrong_class_object': [row['action'] for row in wrong_runs],
+        'verbal_rule_negative': [row['action'] for row in verbal_runs],
         'target_only_bisimulation_bayes': [row['action'] for row in target_only_runs],
         'old_posterior': [row['action'] for row in old_posterior_runs],
         'deleted': [row['action'] for row in deleted_runs],
@@ -177,6 +179,7 @@ def run_structural_p_episode(episode_index: int) -> dict[str, Any]:
             'equal_compute_recheck': equal_recheck_runs,
             'size_matched_sham': sham_runs,
             'wrong_class_object': wrong_runs,
+            'verbal_rule_negative': verbal_runs,
             'target_only_bisimulation_bayes': target_only_runs,
             'old_posterior': old_posterior,
             'old_posterior_invocations': old_posterior_runs,
@@ -191,7 +194,7 @@ def run_structural_p_episode(episode_index: int) -> dict[str, Any]:
         'future_verifier_calls': sum(
             row['trace']['verifier_calls']
             for group in (retained_runs, cold_runs, equal_recheck_runs, sham_runs, wrong_runs,
-                          old_posterior_runs, target_only_runs, deleted_runs, reacquired_runs)
+                          verbal_runs, old_posterior_runs, target_only_runs, deleted_runs, reacquired_runs)
             for row in group
         ),
         'future_reconstruction_search_count': sum(
@@ -213,6 +216,7 @@ def run_structural_p_batch(
     baselines = {
         'cold': [episode['scores']['cold'] for episode in episodes],
         'equal_compute_recheck': [episode['scores']['equal_compute_recheck'] for episode in episodes],
+        'verbal_rule_negative': [episode['scores']['verbal_rule_negative'] for episode in episodes],
         'size_matched_sham': [episode['scores']['size_matched_sham'] for episode in episodes],
         'wrong_class_object': [episode['scores']['wrong_class_object'] for episode in episodes],
         'target_only_bisimulation_bayes': [
