@@ -26,11 +26,11 @@ class PlanningReviewTests(unittest.TestCase):
     def test_rounded_counts_clear_conservative_eighty_percent_lower_bound(self):
         from realitygraph.abgp.planning_review import build_planning_proposal
         proposal = build_planning_proposal(load_analysis_plan('preregistration/abgp-analysis-plan-v1.json'))
-        self.assertEqual(proposal['arms']['A']['proposed_n'], 1600)
-        self.assertEqual(proposal['arms']['B']['proposed_worlds_per_direction'], 700)
-        self.assertEqual(proposal['arms']['B']['proposed_total_worlds'], 8400)
-        self.assertEqual(proposal['arms']['G']['proposed_n'], 200)
-        self.assertEqual(proposal['arms']['P']['proposed_n'], 1900)
+        self.assertEqual(proposal['arms']['A']['proposed_n'], 4096)
+        self.assertEqual(proposal['arms']['B']['proposed_worlds_per_direction'], 1015)
+        self.assertEqual(proposal['arms']['B']['proposed_total_worlds'], 12180)
+        self.assertEqual(proposal['arms']['G']['proposed_n'], 421)
+        self.assertEqual(proposal['arms']['P']['proposed_n'], 4096)
         for arm in 'ABGP':
             self.assertGreaterEqual(proposal['arms'][arm]['conservative_complete_pass_lower_bound'], 0.80)
 
@@ -41,7 +41,7 @@ class PlanningReviewTests(unittest.TestCase):
         self.assertEqual(b['planning_world_all_four_agreement'], 0.95)
         self.assertEqual(b['observed_pooled_agreement_gate'], 0.90)
         self.assertGreaterEqual(b['conservative_agreement_gate_power'], 0.80)
-        self.assertEqual(b['independent_unit_count_for_agreement_planning'], 8400)
+        self.assertEqual(b['independent_unit_count_for_agreement_planning'], 12180)
         self.assertEqual(b['interventions_per_world'], 4)
 
     def test_p_deletion_closeness_is_a_mechanical_assumption_not_fake_power(self):
