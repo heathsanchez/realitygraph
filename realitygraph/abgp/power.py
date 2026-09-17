@@ -1,43 +1,135 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import comb
+from functools import lru_cache
+from math import comb, exp, lgamma, log, log1p
 from typing import Any, Mapping
 
 from .manifest import ABGPAnalysisPlan
 
 
 def _binomial_probability(n: int, k: int, p: float) -> float:
+    """Numerically stable Binomial(n,p) point probability."""
+
     if k < 0 or k > n:
         return 0.0
     if p <= 0.0:
         return 1.0 if k == 0 else 0.0
     if p >= 1.0:
         return 1.0 if k == n else 0.0
-    return comb(n, k) * (p**k) * ((1.0 - p) ** (n - k))
+    log_probability = (
+        lgamma(n + 1.0)
+        - lgamma(k + 1.0)
+        - lgamma(n - k + 1.0)
+        + k * log(p)
+        + (n - k) * log1p(-p)
+    )
+    if log_probability < -745.0:
+        return 0.0
+    return exp(log_probability)
 
 
-def _null_critical_wins(discordant: int, alpha: float) -> int | None:
-    if discordant <= 0:
-        return None
-    denominator = 2**discordant
-    tail_numerator = 0
-    critical: int | None = None
-    for wins in range(discordant, -1, -1):
-        tail_numerator += comb(discordant, wins)
-        if tail_numerator / denominator <= alpha:
-            critical = wins
-        else:
-            break
-    return critical
+def _beta_continued_fraction(a: float, b: float, x: float) -> float:
+    """Continued fraction for the regularized incomplete beta function.
+
+    This is the standard Lentz/Numerical-Recipes recurrence.  It keeps the
+    qualification calculation dependency-free while remaining stable at the
+    large preregistered sample sizes used by the pre-freeze power audit.
+    """
+
+    max_iterations = 300
+    epsilon = 3.0e-14
+    fp_min = 1.0e-300
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < fp_min:
+        d = fp_min
+    d = 1.0 / d
+    h = d
+    for m in range(1, max_iterations + 1):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < fp_min:
+            d = fp_min
+        c = 1.0 + aa / c
+        if abs(c) < fp_min:
+            c = fp_min
+        d = 1.0 / d
+        h *= d * c
+
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < fp_min:
+            d = fp_min
+        c = 1.0 + aa / c
+        if abs(c) < fp_min:
+            c = fp_min
+        d = 1.0 / d
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < epsilon:
+            return h
+    raise ArithmeticError("incomplete-beta continued fraction did not converge")
 
 
-def _binomial_upper_tail(n: int, minimum: int, p: float) -> float:
+def _regularized_beta(x: float, a: float, b: float) -> float:
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    front = exp(
+        lgamma(a + b)
+        - lgamma(a)
+        - lgamma(b)
+        + a * log(x)
+        + b * log1p(-x)
+    )
+    if x < (a + 1.0) / (a + b + 2.0):
+        value = front * _beta_continued_fraction(a, b, x) / a
+    else:
+        value = 1.0 - front * _beta_continued_fraction(b, a, 1.0 - x) / b
+    return min(1.0, max(0.0, value))
+
+
+def _binomial_upper_tail_probability(n: int, minimum: int, p: float) -> float:
+    """P[X >= minimum] for X~Binomial(n,p), stable for n in the thousands."""
+
     if minimum <= 0:
         return 1.0
     if minimum > n:
         return 0.0
-    return sum(_binomial_probability(n, k, p) for k in range(minimum, n + 1))
+    if p <= 0.0:
+        return 0.0
+    if p >= 1.0:
+        return 1.0
+    return _regularized_beta(p, float(minimum), float(n - minimum + 1))
+
+
+@lru_cache(maxsize=None)
+def _null_critical_wins(discordant: int, alpha: float) -> int | None:
+    """Smallest treatment-win count whose exact one-sided null tail <= alpha."""
+
+    if discordant <= 0:
+        return None
+    if _binomial_upper_tail_probability(discordant, discordant, 0.5) > alpha:
+        return None
+    low = 0
+    high = discordant
+    while low < high:
+        middle = (low + high) // 2
+        if _binomial_upper_tail_probability(discordant, middle, 0.5) <= alpha:
+            high = middle
+        else:
+            low = middle + 1
+    return low
+
+
+def _binomial_upper_tail(n: int, minimum: int, p: float) -> float:
+    return _binomial_upper_tail_probability(n, minimum, p)
 
 
 def paired_exact_power(
@@ -46,11 +138,12 @@ def paired_exact_power(
     p01: Fraction,
     alpha: Fraction,
 ) -> float:
-    """Exact unconditional power of the one-sided paired McNemar/binomial test.
+    """Exact-test unconditional power of one-sided paired McNemar/binomial.
 
-    `p10` is P(control=0,treatment=1); `p01` is the reverse discordance.
-    The test conditions on the realized discordant count, while power averages over
-    its exact Binomial(n, p10+p01) distribution.
+    ``p10`` is P(control=0,treatment=1); ``p01`` is the reverse discordance.
+    The rejection region is the exact conditional Binomial(d,.5) McNemar region.
+    Power averages over the exact Binomial(n,p10+p01) discordance law, with the
+    probabilities evaluated by stable incomplete-beta/log-gamma arithmetic.
     """
 
     if n <= 0:
@@ -126,13 +219,7 @@ def g_conditional_power(
     max_dose_effect: float,
     alpha: float,
 ) -> float:
-    """Conditional exact power for G under a frozen discordance nuisance law.
-
-    At dose d, exactly round(n*q*d) matched pairs are discordant. Conditional on
-    discordance, the relevant-minus-irrelevant sign has probability theta chosen
-    so that the expected dose-1 gap is `max_dose_effect`. This mirrors the exact
-    sign-randomization test while varying the nuisance discordance rate explicitly.
-    """
+    """Conditional exact power for G under a frozen discordance nuisance law."""
 
     if n_worlds <= 0:
         raise ValueError("n_worlds must be positive")
