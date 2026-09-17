@@ -31,6 +31,7 @@ _BOUND_FILES = (
     "realitygraph/abgp/executed_matrix.py",
     "realitygraph/abgp/implementation_qualification.py",
     "realitygraph/abgp/planning_review.py",
+    "realitygraph/abgp/final_candidate.py",
     "realitygraph/abgp/exchangeability.py",
     "realitygraph/abgp/p_structural_acquisition_worker.py",
     "realitygraph/abgp/p_structural_invocation_worker.py",
