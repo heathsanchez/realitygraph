@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from .manifest import load_analysis_plan
+from .validity import validate_arm_input
 
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -32,11 +33,7 @@ def _binomial_upper_tail(successes: int, trials: int) -> float:
 
 
 def exact_mcnemar_one_sided(pairs: Iterable[Sequence[int | bool]]) -> float:
-    """Exact one-sided McNemar p-value for treatment > control.
-
-    Each pair is ``(control_correct, treatment_correct)``. Ties are ignored;
-    under the sharp null, treatment wins among discordant pairs are Binomial(n, .5).
-    """
+    """Exact one-sided McNemar p-value for treatment > control."""
 
     wins = 0
     losses = 0
@@ -83,12 +80,7 @@ def holm_bonferroni(raw_pvalues: Mapping[str, float], alpha: float) -> dict[str,
 def g_exact_randomization_pvalue(
     discordant_weight_counts: Mapping[int, int], observed_statistic: int
 ) -> float:
-    """Exact one-sided sign-randomization p-value for G's weighted statistic.
-
-    Under the preregistered null, each discordant matched pair independently
-    exchanges relevance labels, so its signed contribution is +weight or -weight
-    with equal probability. Dynamic programming computes the full exact null.
-    """
+    """Exact one-sided sign-randomization p-value for G's weighted statistic."""
 
     distribution: dict[int, int] = {0: 1}
     n = 0
@@ -129,13 +121,6 @@ def _wilson_interval(successes: int, n: int, z: float = 1.959963984540054) -> tu
 def _paired_effect_interval(
     control: Sequence[int | bool], treatment: Sequence[int | bool]
 ) -> tuple[float, float]:
-    """Score-envelope interval for a paired absolute-rate difference.
-
-    This interval is descriptive only; all primary decisions use the exact paired
-    tests and frozen effect floors. It combines Wilson marginal score intervals
-    without using observed significance to choose an interval method.
-    """
-
     n = len(control)
     if n != len(treatment) or n == 0:
         raise ValueError("paired interval requires equal non-empty vectors")
@@ -149,6 +134,17 @@ def _paired_effect_interval(
     return (max(-1.0, lower), min(1.0, upper))
 
 
+def _validity_fields(arm: str, raw: Mapping[str, Any]) -> dict[str, Any]:
+    issues = validate_arm_input(arm, raw)
+    return {
+        "validity_pass": not issues,
+        "validity_reason_codes": [issue.code for issue in issues],
+        "validity_issues": [
+            {"code": issue.code, "detail": issue.detail} for issue in issues
+        ],
+    }
+
+
 def analyze_a(raw: Mapping[str, Any]) -> dict[str, Any]:
     pairs = [tuple(pair) for pair in raw.get("pairs", ())]
     if not pairs:
@@ -156,13 +152,16 @@ def analyze_a(raw: Mapping[str, Any]) -> dict[str, Any]:
     control = [pair[0] for pair in pairs]
     treatment = [pair[1] for pair in pairs]
     effect = _paired_effect(control, treatment)
+    validity = _validity_fields("A", raw)
     return {
         "raw_pvalue": exact_mcnemar_one_sided(pairs),
         "effect": effect,
         "effect_interval": _paired_effect_interval(control, treatment),
         "effect_floor_pass": effect >= 0.05,
-        "hard_gates_pass": _all_gates(raw.get("hard_gates")),
+        "hard_gates_pass": validity["validity_pass"],
+        "scientific_hard_gates_pass": True,
         "effect_direction_positive": effect > 0.0,
+        **validity,
     }
 
 
@@ -182,6 +181,8 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
     if not intervention:
         raise ValueError("B requires pooled intervention-agreement records")
     pooled = _mean_binary(intervention)
+    validity = _validity_fields("B", raw)
+    scientific_hard = pooled >= 0.90
     return {
         "raw_pvalue": max(pvalues.values()),
         "component_pvalues": pvalues,
@@ -189,9 +190,11 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
         "effect": min(effects.values()),
         "effect_floor_pass": min(effects.values()) >= 0.15,
         "pooled_intervention_agreement": pooled,
-        "pooled_agreement_gate": pooled >= 0.90,
-        "hard_gates_pass": _all_gates(raw.get("hard_gates")) and pooled >= 0.90,
+        "pooled_agreement_gate": scientific_hard,
+        "hard_gates_pass": validity["validity_pass"] and scientific_hard,
+        "scientific_hard_gates_pass": scientific_hard,
         "effect_direction_positive": min(effects.values()) > 0.0,
+        **validity,
     }
 
 
@@ -214,6 +217,7 @@ def analyze_g(raw: Mapping[str, Any]) -> dict[str, Any]:
     if not relevant_max or len(relevant_max) != len(irrelevant_max):
         raise ValueError("G requires paired maximum-dose flip vectors")
     max_gap = _mean_binary(relevant_max) - _mean_binary(irrelevant_max)
+    validity = _validity_fields("G", raw)
     return {
         "raw_pvalue": g_exact_randomization_pvalue(counts, observed),
         "observed_statistic": observed,
@@ -221,8 +225,10 @@ def analyze_g(raw: Mapping[str, Any]) -> dict[str, Any]:
         "max_dose_flip_gap": max_gap,
         "effect": max_gap,
         "effect_floor_pass": max_gap >= 0.15,
-        "hard_gates_pass": _all_gates(raw.get("hard_gates")),
+        "hard_gates_pass": validity["validity_pass"],
+        "scientific_hard_gates_pass": True,
         "effect_direction_positive": observed > 0 and max_gap > 0.0,
+        **validity,
     }
 
 
@@ -255,8 +261,7 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
     deletion_accuracy = float(raw.get("post_deletion_accuracy", 0.0))
     reacquisition = int(raw.get("reacquisition_search_count", 0))
     deletion_gate = abs(deletion_accuracy - cold_accuracy) <= 0.02 and reacquisition > 0
-    supplied_gates = dict(raw.get("hard_gates", {}))
-    supplied_gates["computed_targeted_deletion"] = deletion_gate
+    validity = _validity_fields("P", raw)
     effect = min(effects.values())
     return {
         "raw_pvalue": max(component_pvalues.values()),
@@ -267,8 +272,10 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
         "effect": effect,
         "effect_floor_pass": effect >= 0.05,
         "targeted_deletion_gate": deletion_gate,
-        "hard_gates_pass": _all_gates(supplied_gates),
+        "hard_gates_pass": validity["validity_pass"] and deletion_gate,
+        "scientific_hard_gates_pass": deletion_gate,
         "effect_direction_positive": effect > 0.0,
+        **validity,
     }
 
 
@@ -276,7 +283,9 @@ def _finalize_verdict(analysis: dict[str, Any], adjusted_pvalue: float, alpha: f
     result = dict(analysis)
     result["holm_adjusted_pvalue"] = adjusted_pvalue
     result["holm_significance_pass"] = adjusted_pvalue <= alpha
-    if not result["hard_gates_pass"] or not result["effect_direction_positive"]:
+    if result.get("validity_reason_codes"):
+        verdict = "INVALID"
+    elif not result.get("scientific_hard_gates_pass", True) or not result["effect_direction_positive"]:
         verdict = "FAIL"
     elif result["effect_floor_pass"] and result["holm_significance_pass"]:
         verdict = "PASS"
@@ -287,11 +296,6 @@ def _finalize_verdict(analysis: dict[str, Any], adjusted_pvalue: float, alpha: f
 
 
 def _canonical_json_value(value: Any) -> Any:
-    """Normalize analysis output to the exact JSON data model used by artifacts.
-
-    This makes the live analysis object byte-replayable after JSON serialization:
-    tuples become lists and non-string mapping keys become their JSON string form.
-    """
     return json.loads(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
 
 
@@ -315,7 +319,12 @@ def analyze_matrix(raw_matrix: Mapping[str, Any]) -> dict[str, Any]:
         )
         for arm in _ARM_ORDER
     }
-    combined = "PASS" if all(finalized[arm]["verdict"] == "PASS" for arm in _ARM_ORDER) else "NOT_FULL_PASS"
+    if any(finalized[arm]["verdict"] == "INVALID" for arm in _ARM_ORDER):
+        combined = "INVALID"
+    elif all(finalized[arm]["verdict"] == "PASS" for arm in _ARM_ORDER):
+        combined = "PASS"
+    else:
+        combined = "NOT_FULL_PASS"
     return _canonical_json_value(
         {
             "analysis_plan_digest": plan.digest,
