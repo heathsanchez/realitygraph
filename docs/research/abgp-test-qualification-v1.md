@@ -1,40 +1,28 @@
 # ABGP Test Qualification V1 — Evidence Record
 
-Status: **METHODOLOGICALLY QUALIFIED / NOT CONFIRMATORY EVIDENCE**
+Status: **DEV/QUAL HARNESS QUALIFIED / END-TO-END IMPLEMENTATION QUALIFICATION PENDING / NOT CONFIRMATORY EVIDENCE**
 
-This record binds the pre-freeze qualification of the A/B/G/P experimental machinery on branch `abgp-preregistration-freeze-v1`. It does **not** report A/B/G/P confirmatory results. `ABGP-CONFIRM-v1` was not derived, inspected, or executed.
+> Scope correction, 17 September 2026: earlier wording used `QUALIFIED` too broadly. The qualification run below validates the statistical/synthetic-fixture harness, replay, exact-reference checks, and namespace firewall. It does **not** establish that every scientific arm is implemented end to end, and it does not establish power for every complete arm-level PASS event.
 
-## Observed qualification run
+This record binds the pre-freeze DEV/QUAL harness evidence on branch `abgp-preregistration-freeze-v1`. It does **not** report A/B/G/P confirmatory results. `ABGP-CONFIRM-v1` was not derived, inspected, or executed.
+
+## Observed harness-qualification run
 
 - Qualification/workflow head: `2ae1b0a96ebcff97f3f003d734cb991feaceddd3`
 - GitHub Actions run: `35183954190`
 - Job: `105081887960`
-- Run URL: `https://github.com/heathsanchez/realitygraph/actions/runs/35183954190`
 - Result: `SUCCESS`
 - Full regression: **200/200 tests passed**
-- Qualification verdict: `QUALIFIED`
-- Qualification fixtures: **21** total
+- Synthetic qualification fixtures: **21** total
   - planted positive: **4**
   - ordinary explanation: **13**
   - broken mechanics: **4**
-- Every frozen fixture matched its expected scientific/validity outcome.
+- Every frozen fixture matched its expected analyzer/validity outcome.
 - Independent statistical-reference audit: `PASS`
-- Pre-freeze power audit: `QUALIFIED`
 - `confirmatory_namespace_used=false`
 - `confirmatory_namespace_accessed=false`
 
-The explicit CLI emitted:
-
-```text
-REALITYGRAPH / ABGP TEST QUALIFICATION V1
-verdict QUALIFIED
-fixtures 21
-statistical_reference PASS
-power_qualified 1
-confirmatory_namespace_used 0
-qualification_digest e1e01c892e1006bc68b507865a429a733a168cb3156e57815ba57dac6c6a9206
-ABGP_QUALIFIED
-```
+The CLI emitted `ABGP_QUALIFIED`. In this corrected record, that token is interpreted narrowly as **DEV/QUAL harness qualification** only.
 
 ## Qualification artifact
 
@@ -44,24 +32,44 @@ ABGP_QUALIFIED
 - `abgp-qualification-summary.json` SHA-256: `4e69329d127381661cc6ce49fffdbecc5c84e621efe0ba7efdbbd43d81517bcf`
 - Internal qualification digest: `e1e01c892e1006bc68b507865a429a733a168cb3156e57815ba57dac6c6a9206`
 
-The uploaded evidence bundle also contains the DEV matrix and the independent-P episode-budget audit. The bundle contains DEV/QUAL evidence only.
+These hashes preserve the original evidence exactly. The correction changes its interpretation, not the recorded bytes.
 
-## Frozen inferential units and power qualification
+## What the harness evidence supports
 
-The qualification rule requires at least 0.80 power at the preregistered minimum meaningful effect throughout the declared nuisance envelope, using component alpha `0.0125`. Counts remain `REVIEW_PENDING`; this table records the present review candidate that passed qualification.
+The DEV/QUAL suite supports the following narrower claims:
 
-| Arm | Inferential unit / dependence handling | Candidate n | Effect floor | Nuisance envelope | Minimum qualified power |
-|---|---|---:|---:|---|---:|
-| A | independent acquisition → separately seeded sealed-future episode; same acquisition history/message for fixed-language Bayes; no future verifier/message | 4,096 episodes | 0.05 | paired discordance q = 0.05, 0.10, 0.25, 0.50, 0.75, 1.00 | **0.8252540787** |
-| B | ordered acquisition→transfer world pair; 4 interventions nested inside the world; 12 ordered directions × 3 controls = 36 IUT components; dependence-agnostic union-bound guarantee | 1,015 worlds/direction = 12,180 units | 0.15 each component | paired discordance q = 0.15, 0.30, 0.50, 0.75, 1.00 | **0.8005982642** |
-| G | independent world; one relevance-label exchange jointly across all nonzero doses; lower-dose signal set to zero for conservative power qualification | 421 worlds | 0.15 max-dose gap | max-dose discordance q = 0.15, 0.30, 0.50, 0.75, 1.00 | **0.8012420003** |
-| P | independent acquisition → serialize → hard restart → fixed four-probe future episode; four probes collapse to one binary episode outcome and never inflate n | 4,096 episodes | 0.05 each primary baseline | paired discordance q = 0.05, 0.10, 0.25, 0.50, 0.75, 1.00 | **0.8252540787** |
+- exact paired-test and Holm analysis plumbing executes deterministically;
+- the B 36-component IUT analysis path is exercised on synthetic/frozen fixture inputs;
+- the world-blocked G statistic and exact DP agree with independent brute-force/reference calculations;
+- planted-positive, ordinary-explanation, and INVALID fixtures are routed through the intended analyzers and produce their frozen expected outcomes;
+- replay is deterministic;
+- the confirmatory namespace remains inaccessible.
 
-For P, the full 4,096-independent-acquisition DEV/QUAL resource audit completed with 98,304 maximum acquisition candidate checks. The observed generation time on the GitHub runner was 0.669627 seconds; this runtime is a property of the finite qualification generator, not a claim about a future heavier acquisition implementation.
+It does **not** by itself establish:
 
-## Statistical implementation qualification
+- that A's full information-matched Bayesian control is implemented end to end;
+- that B genuinely recovers protected structure across independently generated grammars — the current DEV generator still contains mechanics placeholders for recovered order and posterior/bisimulation control outcomes;
+- that G's joint within-world label exchange is design-level exchangeable under the intended null;
+- that A/P candidate episodes are independent at their earliest shared stochastic ancestor;
+- that P's complete ordinary-control and deletion/reacquisition path is qualified end to end;
+- that the A/P reported power numbers equal the power of the complete multi-control plus hard-gate PASS events.
 
-The scientific statistics were cross-checked against independent finite references rather than self-tested against the same implementation:
+## Review-candidate inferential units and power calculations
+
+These counts remain `REVIEW_PENDING`. The figures below are calculations under the current candidate models, not frozen sample-size decisions and not uniformly complete-arm PASS power.
+
+| Arm | Candidate unit / dependence handling | Candidate n | Effect floor | Reported calculation | Correct interpretation |
+|---|---|---:|---:|---:|---|
+| A | proposed independent acquisition → separately seeded sealed-future episode | 4,096 | 0.05 | 0.8252540787 | Paired-test power across the declared discordance envelope; **not** yet complete-arm PASS power. Earliest-shared-ancestor independence still requires audit. |
+| B | ordered acquisition→transfer world pair; 4 interventions nested; 12 directions × 3 controls = 36 IUT components | 1,015/direction = 12,180 | 0.15/component | 0.8005982642 | Dependence-agnostic lower bound for simultaneous rejection across the 36 IUT components. Recompute the complete PASS event after real recovery/control paths and all gates are in place. |
+| G | independent world; one joint relevance-label exchange across all nonzero doses | 421 | 0.15 max-dose gap | 0.8012420003 | Conservative max-dose-only power under the proposed world-blocked paired model. Numerical reference checks pass; exchangeability justification remains open. |
+| P | proposed independent acquisition → serialize → hard restart → fixed four-probe future episode; probes collapse to one binary outcome | 4,096 | 0.05 | 0.8252540787 | Paired-test power across the declared discordance envelope; **not** yet complete-arm PASS power. Earliest-shared-ancestor independence and complete control path still require audit. |
+
+`α=.0125` is used as a conservative component threshold derived from the four-arm familywise procedure. It is **not** an extra multiplicity correction across B's 36 intersection–union components.
+
+## Statistical reference qualification
+
+The numerical implementations were cross-checked against independent finite references:
 
 - exact McNemar/binomial reference cases: **45**
 - Holm reference-grid cases: **625**
@@ -69,23 +77,22 @@ The scientific statistics were cross-checked against independent finite referenc
 - world-blocked G exhaustive-sign cases: **346**
 - maximum absolute scientific/reference discrepancy: `2.7755575615628914e-17`
 
-The world-blocked G reference enumerates one sign per world, so all dose contributions within a world change sign together. This independently checks the repeated-measures exchangeability implementation used by the hardened G analysis.
+For G this establishes **calculation agreement only**. Freeze still requires a design-level argument that, under H0, the entire within-world outcome vector is invariant to the joint relevance-label exchange, including any generation, selection, or stopping steps.
 
-## What `QUALIFIED` means
+## Outstanding pre-freeze requirements
 
-`QUALIFIED` means the frozen DEV/QUAL challenge suite showed that the experimental machinery is internally capable of the distinctions the preregistration asks it to make:
-
-- planted-positive worlds pass through the same scientific analyzers;
-- named ordinary explanations such as fixed-language Bayesian carry-forward, target-side bisimulation, posterior-only persistence, sham structure, and global corruption do not falsely satisfy the stronger claims;
-- deliberate protocol defects are classified `INVALID` rather than being misreported as scientific negatives;
-- exact statistical implementations agree with independent references;
-- the current review-candidate counts satisfy the pre-freeze power rule over the declared nuisance envelopes;
-- replay is deterministic and the confirmatory namespace remains inaccessible.
-
-It does **not** mean A, B, G, or P is true in the confirmatory experiment. The strongest scientific interpretation remains unavailable until a separately reviewed final lock is frozen and the one-shot confirmatory namespace is explicitly authorized.
+1. **A/P earliest shared stochastic ancestor.** Trace each candidate inferential unit through all upstream sampled worlds, grammars, acquisition pools, constructors, and other random objects. Distinct future seeds or hard restarts alone are insufficient.
+2. **A information-matched Bayesian baseline.** Verify end to end that the Bayesian-optimal baseline can condition on exactly the same permitted constructor-visible observations/messages as the verifier condition, with no hidden information advantage.
+3. **B real recovery and ordinary-explanation controls.** Replace mechanics placeholders with actual cross-grammar recovery and posterior/bisimulation-control execution, preserving the agreed 12-direction structural-intervention design.
+4. **B complete PASS power.** Once item 3 is real, recompute power for the complete declared B PASS event, including protected-order agreement, effect floors, and all hard gates.
+5. **G exchangeability.** Supply and audit the joint within-world exchangeability argument under H0.
+6. **P restart/deletion boundary.** Audit the retained object as the sole cross-restart state, label-free applicability, zero source/search/verifier/reconstruction pathways, deletion back to within 2 pp of cold, and reacquisition through the preregistered acquisition procedure.
+7. **A/P complete PASS power.** Recompute power for the actual multi-control plus hard-gate decision rules after the final implementation is fixed.
 
 ## Current lock boundary
 
-The design manifest and analysis plan remain `REVIEW_PENDING`, and `confirmatory_execution_enabled=false`. The review-lock builder cannot freeze or unlock confirmation. Any eventual frozen lock must bind, among other fields, the successful qualification status/digest, inferential-unit audit hashes, ordinary-explanation oracle hashes, bisimulation canonicalizer hashes, scientific-code hashes, resource budgets, and the confirmatory namespace identifier.
+The design manifest and analysis plan remain `REVIEW_PENDING`, and `confirmatory_execution_enabled=false`. No result in this record authorizes a scientific freeze or confirmatory execution.
 
-Any post-unlock change to thresholds, counts, inferential units, dependence structure, grammar independence, intervention classes, corruption schedule, information boundaries, source-distinctness, statistical tests, verdict semantics, or scientific code requires a new preregistration version and a new confirmatory namespace.
+Do not mark the study `FROZEN` until every agreed requirement maps to a concrete implementation path and auditable evidence, the remaining methodological assumptions are justified, and power is recomputed for the actual complete PASS rules.
+
+Any change to hypotheses, effect floors, source-distinctness, inferential units, or PASS criteria must return to joint scientific review rather than being treated as an implementation clarification. Any eventual post-freeze scientific change requires a new preregistration version and fresh confirmatory namespace.
