@@ -9,6 +9,7 @@ from realitygraph.abgp.analysis import (
     analyze_p,
     exact_mcnemar_one_sided,
     g_exact_randomization_pvalue,
+    g_world_blocked_randomization_pvalue,
     holm_bonferroni,
 )
 
@@ -49,6 +50,46 @@ class ABGPAnalysisTests(unittest.TestCase):
             stat = sum(w * s for w, s in zip(weights, signs))
             brute += stat >= observed
         self.assertAlmostEqual(exact, brute / total)
+
+    def test_g_world_blocked_dp_matches_bruteforce(self):
+        world_scores = [37, 13, -9, 4]
+        observed = sum(world_scores)
+        exact = g_world_blocked_randomization_pvalue(world_scores, observed)
+        brute = 0
+        total = 0
+        magnitudes = [abs(score) for score in world_scores]
+        for signs in itertools.product((-1, 1), repeat=len(magnitudes)):
+            total += 1
+            stat = sum(magnitude * sign for magnitude, sign in zip(magnitudes, signs))
+            brute += stat >= observed
+        self.assertAlmostEqual(exact, brute / total)
+
+    def test_g_world_blocked_analyzer_uses_one_score_per_world(self):
+        pairs = []
+        for world_id, signs in ((0, (1, 1, 1, 1)), (1, (1, 0, 1, 0)), (2, (0, 1, 0, 1))):
+            for weight, relevant in zip((2, 5, 10, 20), signs):
+                pairs.append(
+                    {
+                        "world_id": world_id,
+                        "weight": weight,
+                        "relevant": relevant,
+                        "irrelevant": 0,
+                    }
+                )
+        result = analyze_g(
+            {
+                "pairs": pairs,
+                "max_dose_relevant": [1, 0, 1],
+                "max_dose_irrelevant": [0, 0, 0],
+                "hard_gates": {"preclassified": True, "matched_corruption": True},
+            }
+        )
+        self.assertEqual(result["analysis_mode"], "WORLD_BLOCKED_REPEATED_MEASURES")
+        self.assertEqual(result["world_count"], 3)
+        self.assertEqual(len(result["world_scores"]), 3)
+        self.assertEqual(result["world_scores"]["0"], 37)
+        self.assertEqual(result["world_scores"]["1"], 12)
+        self.assertEqual(result["world_scores"]["2"], 25)
 
     @staticmethod
     def _pass_raw():
