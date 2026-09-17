@@ -21,10 +21,6 @@ def _mean_binary(values: Sequence[int | bool]) -> float:
     return sum(bool(v) for v in values) / len(values)
 
 
-def _all_gates(gates: Mapping[str, Any] | None) -> bool:
-    return bool(gates) and all(value is True for value in gates.values())
-
-
 def _binomial_upper_tail(successes: int, trials: int) -> float:
     if trials <= 0:
         return 1.0
@@ -145,14 +141,55 @@ def _validity_fields(arm: str, raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _paired_control_summary(
+    treatment: Sequence[int | bool],
+    controls: Mapping[str, Sequence[int | bool]],
+) -> tuple[dict[str, float], dict[str, float], dict[str, tuple[float, float]]]:
+    pvalues: dict[str, float] = {}
+    effects: dict[str, float] = {}
+    intervals: dict[str, tuple[float, float]] = {}
+    for name in sorted(controls):
+        control = list(controls[name])
+        if len(control) != len(treatment):
+            raise ValueError("control vectors must be paired with treatment outcomes")
+        pvalues[name] = exact_mcnemar_one_sided(zip(control, treatment))
+        effects[name] = _paired_effect(control, treatment)
+        intervals[name] = _paired_effect_interval(control, treatment)
+    return pvalues, effects, intervals
+
+
 def analyze_a(raw: Mapping[str, Any]) -> dict[str, Any]:
+    validity = _validity_fields("A", raw)
+    if "baselines" in raw:
+        treatment = list(raw.get("treatment", ()))
+        baselines = raw.get("baselines")
+        expected = {"fixed_language_bayes", "sham_expansion", "equal_compute_recheck"}
+        if not treatment or not isinstance(baselines, Mapping) or set(baselines) != expected:
+            raise ValueError("strengthened A requires treatment and three frozen primary controls")
+        pvalues, effects, intervals = _paired_control_summary(treatment, baselines)
+        growth_gate = bool(raw.get("representation_growth_gate", False))
+        effect = min(effects.values())
+        return {
+            "raw_pvalue": max(pvalues.values()),
+            "component_pvalues": pvalues,
+            "control_effects": effects,
+            "effect_intervals": intervals,
+            "effect": effect,
+            "effect_floor_pass": effect >= 0.05,
+            "representation_growth_gate": growth_gate,
+            "hard_gates_pass": validity["validity_pass"] and growth_gate,
+            "scientific_hard_gates_pass": growth_gate,
+            "effect_direction_positive": effect > 0.0,
+            "analysis_mode": "STRENGTHENED_REPRESENTATION_GROWTH",
+            **validity,
+        }
+
     pairs = [tuple(pair) for pair in raw.get("pairs", ())]
     if not pairs:
         raise ValueError("A requires paired outcomes")
     control = [pair[0] for pair in pairs]
     treatment = [pair[1] for pair in pairs]
     effect = _paired_effect(control, treatment)
-    validity = _validity_fields("A", raw)
     return {
         "raw_pvalue": exact_mcnemar_one_sided(pairs),
         "effect": effect,
@@ -161,6 +198,7 @@ def analyze_a(raw: Mapping[str, Any]) -> dict[str, Any]:
         "hard_gates_pass": validity["validity_pass"],
         "scientific_hard_gates_pass": True,
         "effect_direction_positive": effect > 0.0,
+        "analysis_mode": "LEGACY_DEV_CHANNEL",
         **validity,
     }
 
@@ -171,12 +209,15 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
     shuffled = list(raw.get("shuffled_coupling", ()))
     if not treatment or not (len(treatment) == len(wrong) == len(shuffled)):
         raise ValueError("B requires equal non-empty treatment and control vectors")
-    controls = {"wrong_class": wrong, "shuffled_coupling": shuffled}
-    pvalues = {
-        name: exact_mcnemar_one_sided(zip(control, treatment))
-        for name, control in controls.items()
+    controls: dict[str, Sequence[int | bool]] = {
+        "wrong_class": wrong,
+        "shuffled_coupling": shuffled,
     }
-    effects = {name: _paired_effect(control, treatment) for name, control in controls.items()}
+    if "acquisition_posterior_target_bisimulation_bayes" in raw:
+        controls["acquisition_posterior_target_bisimulation_bayes"] = list(
+            raw["acquisition_posterior_target_bisimulation_bayes"]
+        )
+    pvalues, effects, intervals = _paired_control_summary(treatment, controls)
     intervention = list(raw.get("intervention_agreement", ()))
     if not intervention:
         raise ValueError("B requires pooled intervention-agreement records")
@@ -187,6 +228,7 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
         "raw_pvalue": max(pvalues.values()),
         "component_pvalues": pvalues,
         "control_effects": effects,
+        "effect_intervals": intervals,
         "effect": min(effects.values()),
         "effect_floor_pass": min(effects.values()) >= 0.15,
         "pooled_intervention_agreement": pooled,
@@ -194,6 +236,11 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
         "hard_gates_pass": validity["validity_pass"] and scientific_hard,
         "scientific_hard_gates_pass": scientific_hard,
         "effect_direction_positive": min(effects.values()) > 0.0,
+        "analysis_mode": (
+            "STRENGTHENED_POSTERIOR_BISIMULATION"
+            if len(controls) == 3
+            else "LEGACY_DEV_GRAMMAR"
+        ),
         **validity,
     }
 
@@ -237,30 +284,64 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
     baselines = raw.get("baselines")
     if not retained or not isinstance(baselines, Mapping) or not baselines:
         raise ValueError("P requires retained and baseline paired outcomes")
-    expected = {
+
+    legacy = {
         "cold",
         "equal_compute_recheck",
         "verbal_rule_negative",
         "size_matched_sham",
         "wrong_class_object",
     }
-    if set(baselines) != expected:
-        raise ValueError("P baseline set does not match preregistration")
-    component_pvalues: dict[str, float] = {}
-    effects: dict[str, float] = {}
-    intervals: dict[str, tuple[float, float]] = {}
-    for name in sorted(baselines):
-        control = list(baselines[name])
-        if len(control) != len(retained):
-            raise ValueError("P baseline vectors must be paired with retained outcomes")
-        component_pvalues[name] = exact_mcnemar_one_sided(zip(control, retained))
-        effects[name] = _paired_effect(control, retained)
-        intervals[name] = _paired_effect_interval(control, retained)
-    strongest_name = max(baselines, key=lambda name: _mean_binary(list(baselines[name])))
-    cold_accuracy = float(raw.get("cold_accuracy", _mean_binary(list(baselines["cold"]))))
+    strengthened = legacy | {
+        "target_only_bisimulation_bayes",
+        "posterior_only_retained_bayes",
+    }
+    if set(baselines) not in (legacy, strengthened):
+        raise ValueError("P baseline set does not match a registered analysis mode")
+
+    if set(baselines) == strengthened:
+        primary_names = (
+            "cold",
+            "equal_compute_recheck",
+            "size_matched_sham",
+            "wrong_class_object",
+            "target_only_bisimulation_bayes",
+            "posterior_only_retained_bayes",
+        )
+        mode = "STRENGTHENED_POSTERIOR_BISIMULATION"
+    else:
+        primary_names = (
+            "cold",
+            "equal_compute_recheck",
+            "size_matched_sham",
+            "wrong_class_object",
+        )
+        mode = "LEGACY_DEV_PERSISTENCE"
+
+    primary = {name: list(baselines[name]) for name in primary_names}
+    component_pvalues, effects, intervals = _paired_control_summary(retained, primary)
+    verbal = list(baselines["verbal_rule_negative"])
+    verbal_pvalue = exact_mcnemar_one_sided(zip(verbal, retained))
+    verbal_effect = _paired_effect(verbal, retained)
+
+    strongest_name = max(primary_names, key=lambda name: _mean_binary(primary[name]))
+    cold_accuracy = float(raw.get("cold_accuracy", _mean_binary(primary["cold"])))
     deletion_accuracy = float(raw.get("post_deletion_accuracy", 0.0))
     reacquisition = int(raw.get("reacquisition_search_count", 0))
-    deletion_gate = abs(deletion_accuracy - cold_accuracy) <= 0.02 and reacquisition > 0
+    treatment_accuracy = _mean_binary(retained)
+
+    if mode == "STRENGTHENED_POSTERIOR_BISIMULATION":
+        ordinary_max = max(_mean_binary(primary[name]) for name in primary_names)
+        deletion_gate = (
+            deletion_accuracy <= ordinary_max + 0.02
+            and treatment_accuracy - deletion_accuracy >= 0.05
+            and reacquisition > 0
+            and bool(raw.get("reacquisition_restored", False))
+        )
+    else:
+        ordinary_max = max(_mean_binary(primary[name]) for name in primary_names)
+        deletion_gate = abs(deletion_accuracy - cold_accuracy) <= 0.02 and reacquisition > 0
+
     validity = _validity_fields("P", raw)
     effect = min(effects.values())
     return {
@@ -268,13 +349,17 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
         "component_pvalues": component_pvalues,
         "control_effects": effects,
         "effect_intervals": intervals,
+        "secondary_verbal_rule_pvalue": verbal_pvalue,
+        "secondary_verbal_rule_effect": verbal_effect,
         "strongest_baseline": strongest_name,
+        "ordinary_control_max_accuracy": ordinary_max,
         "effect": effect,
         "effect_floor_pass": effect >= 0.05,
         "targeted_deletion_gate": deletion_gate,
         "hard_gates_pass": validity["validity_pass"] and deletion_gate,
         "scientific_hard_gates_pass": deletion_gate,
         "effect_direction_positive": effect > 0.0,
+        "analysis_mode": mode,
         **validity,
     }
 
