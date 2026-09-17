@@ -51,6 +51,15 @@ class ABGPFreezeBlockerTests(unittest.TestCase):
         self.assertFalse(audit["complete_pass_power_qualified"])
         for arm in ("A", "B", "P"):
             self.assertIn("complete_pass_power_status", audit["arms"][arm])
+            self.assertIn("complete_component_power_at_declared_true_effect_floor", audit["arms"][arm])
+            self.assertLess(
+                audit["arms"][arm]["complete_component_power_at_declared_true_effect_floor"],
+                0.55,
+            )
+        self.assertEqual(
+            audit["resolution_required"],
+            "jointly_freeze_a_planning_alternative_strictly_above_each_observed_pass_floor",
+        )
         self.assertNotEqual(audit["arms"]["B"]["complete_pass_power_status"], "QUALIFIED")
 
     def test_g_exchangeability_contract_is_design_level_and_fail_closed(self):
