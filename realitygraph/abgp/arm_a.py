@@ -18,12 +18,18 @@ class ARecord:
     one_shot_correct: int
     equal_recheck_correct: int
     verifier_correct: int
+    information_matched_bayes_correct: int
     message: VerifierMessage
     compatible_optimal_action_count: int
     verifier_message_count: int
     repair_round_count: int
     equal_compute_units: int
     verifier_compute_units: int
+    bayes_compute_units: int
+    bayes_received_same_message: bool
+    bayes_received_same_constructor_observation: bool
+    bayes_hidden_verifier_state_reads: int
+    bayes_protected_answer_reads: int
 
 
 def _action_index(world: DevWorld, action_id: str) -> int:
@@ -46,8 +52,14 @@ def _record_for_world(world: DevWorld) -> ARecord:
         compatible_optimal_action_ids=compatible,
     )
 
+    # Treatment and Bayes control receive the same constructor-visible state and
+    # the exact same admitted non-identifying message. The Bayes control has no
+    # access to verifier-private state or the protected answer; under the frozen
+    # uniform prior over the two still-compatible actions it uses a fixed
+    # lowest-index tie-break. This is an information ceiling, not a weaker prompt.
     within_group = (h >> 28) % 2
     verifier_index = group_start + within_group
+    bayes_index = group_start
 
     return ARecord(
         world_index=world.world_index,
@@ -55,12 +67,18 @@ def _record_for_world(world: DevWorld) -> ARecord:
         one_shot_correct=int(one_shot_index == optimal_index),
         equal_recheck_correct=int(recheck_index == optimal_index),
         verifier_correct=int(verifier_index == optimal_index),
+        information_matched_bayes_correct=int(bayes_index == optimal_index),
         message=message,
         compatible_optimal_action_count=len(compatible),
         verifier_message_count=1,
         repair_round_count=1,
         equal_compute_units=2,
         verifier_compute_units=2,
+        bayes_compute_units=2,
+        bayes_received_same_message=True,
+        bayes_received_same_constructor_observation=True,
+        bayes_hidden_verifier_state_reads=0,
+        bayes_protected_answer_reads=0,
     )
 
 
