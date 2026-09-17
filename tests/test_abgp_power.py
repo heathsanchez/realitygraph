@@ -4,6 +4,7 @@ import unittest
 
 from realitygraph.abgp.manifest import load_analysis_plan
 from realitygraph.abgp.power import (
+    b_direction_iut_union_bound_power,
     g_world_blocked_conservative_power,
     paired_exact_power,
     qualification_power_audit,
@@ -47,6 +48,29 @@ class ABGPPowerTests(unittest.TestCase):
         actual = g_world_blocked_conservative_power(n, q, delta, alpha)
         self.assertAlmostEqual(actual, expected)
 
+    def test_b_iut_power_uses_dependence_agnostic_union_bound(self):
+        n = 1000
+        q = Fraction(1, 2)
+        delta = Fraction(3, 20)
+        alpha = Fraction(1, 80)
+        result = b_direction_iut_union_bound_power(
+            n,
+            q,
+            delta,
+            alpha,
+            component_count=36,
+        )
+        component = paired_exact_power(
+            n,
+            (q + delta) / 2,
+            (q - delta) / 2,
+            alpha,
+        )
+        expected_lower = max(0.0, 1.0 - 36.0 * (1.0 - component))
+        self.assertAlmostEqual(result["minimum_component_power"], component)
+        self.assertAlmostEqual(result["arm_power_lower_bound"], expected_lower)
+        self.assertEqual(result["component_count"], 36)
+
     def test_analysis_plan_registers_pre_freeze_power_rule(self):
         plan = load_analysis_plan(_PLAN)
         self.assertEqual(plan.status, "REVIEW_PENDING")
@@ -61,6 +85,8 @@ class ABGPPowerTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(set(first["arms"]), {"A", "B", "G", "P"})
         self.assertEqual(first["minimum_required_power"], 0.80)
+        self.assertEqual(first["arms"]["B"]["power_model"], "direction_iut_union_bound_36_components")
+        self.assertEqual(first["arms"]["B"]["component_count"], 36)
         self.assertEqual(first["arms"]["G"]["power_model"], "world_blocked_max_dose_only_worst_case")
         for arm in ("A", "B", "G", "P"):
             self.assertIn("minimum_observed_power", first["arms"][arm])
