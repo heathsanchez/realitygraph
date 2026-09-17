@@ -17,6 +17,24 @@ _ROOT = Path(__file__).resolve().parents[2]
 _DESIGN_PATH = _ROOT / "preregistration" / "abgp-design-manifest-v1.json"
 _ANALYSIS_PATH = _ROOT / "preregistration" / "abgp-analysis-plan-v1.json"
 _QUALIFICATION_SCHEMA = "realitygraph.abgp.qualification.v1"
+_SCIENTIFIC_PATHS = (
+    "realitygraph/abgp/analysis.py",
+    "realitygraph/abgp/arm_a.py",
+    "realitygraph/abgp/arm_b.py",
+    "realitygraph/abgp/arm_g.py",
+    "realitygraph/abgp/arm_p.py",
+    "realitygraph/abgp/b_iut.py",
+    "realitygraph/abgp/power.py",
+    "realitygraph/abgp/qualification_fixtures.py",
+    "realitygraph/abgp/statistical_reference.py",
+    "realitygraph/abgp/validity.py",
+)
+_EXPECTED_ANALYSIS_MODES = {
+    "A": "STRENGTHENED_REPRESENTATION_GROWTH",
+    "B": "DIRECTION_STRATIFIED_IUT",
+    "G": "WORLD_BLOCKED_REPEATED_MEASURES",
+    "P": "INDEPENDENT_EPISODE_POSTERIOR_BISIMULATION",
+}
 
 
 def _canonical_json(value: Any) -> str:
@@ -25,6 +43,14 @@ def _canonical_json(value: Any) -> str:
 
 def _digest(value: Any) -> str:
     return sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _file_digest(relative_path: str) -> str:
+    return sha256((_ROOT / relative_path).read_bytes()).hexdigest()
+
+
+def _scientific_code_hashes() -> dict[str, str]:
+    return {path: _file_digest(path) for path in _SCIENTIFIC_PATHS}
 
 
 def _fixture_row(fixture: Any, base_matrix: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -59,13 +85,70 @@ def _fixture_row(fixture: Any, base_matrix: dict[str, dict[str, Any]]) -> dict[s
     }
 
 
-def run_qualification() -> dict[str, Any]:
-    """Run deterministic DEV/QUAL-only methodological qualification.
+def _analysis_path_audit(base_matrix: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    result = analyze_matrix(deepcopy(base_matrix))
+    observed = {
+        arm: result["arms"][arm].get("analysis_mode") for arm in ("A", "B", "G", "P")
+    }
+    matches = {
+        arm: observed[arm] == _EXPECTED_ANALYSIS_MODES[arm] for arm in _EXPECTED_ANALYSIS_MODES
+    }
+    return {
+        "expected_modes": dict(_EXPECTED_ANALYSIS_MODES),
+        "observed_modes": observed,
+        "all_hardened_paths_active": all(matches.values()),
+        "mode_matches": matches,
+    }
 
-    This function never derives, inspects, or executes the confirmatory namespace.
-    It exercises frozen qualification fixtures through the same scientific analysis
-    path, then requires independent statistical-reference and power audits to pass.
-    """
+
+def _power_table(power_audit: dict[str, Any], design: Any, analysis: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    rows.append({
+        "arm": "A",
+        "inferential_unit": design.arms["A"]["inferential_unit"],
+        "dependence_structure": "independent episodes; acquisition and sealed-future seed material disjoint",
+        "n": int(analysis.arms["A"]["n"]),
+        "effect_floor": float(analysis.arms["A"]["effect_floor"]),
+        "component_alpha": float(power_audit["component_alpha"]),
+        "nuisance_envelope": list(analysis.raw["qualification"]["paired_nuisance_envelope"]["A"]["discordance_rates"]),
+        "minimum_power": float(power_audit["arms"]["A"]["minimum_observed_power"]),
+    })
+    rows.append({
+        "arm": "B",
+        "inferential_unit": design.arms["B"]["name"] + ": ordered-direction world unit",
+        "dependence_structure": "12 direction strata; 4 interventions nested per world; 36-component IUT with dependence-agnostic union-bound power lower bound",
+        "n": int(power_audit["arms"]["B"]["n"]),
+        "worlds_per_direction": int(power_audit["arms"]["B"]["worlds_per_direction"]),
+        "effect_floor": float(analysis.arms["B"]["effect_floor_each_control"]),
+        "component_alpha": float(power_audit["component_alpha"]),
+        "nuisance_envelope": list(analysis.raw["qualification"]["paired_nuisance_envelope"]["B"]["discordance_rates"]),
+        "minimum_power": float(power_audit["arms"]["B"]["minimum_observed_power"]),
+    })
+    rows.append({
+        "arm": "G",
+        "inferential_unit": design.arms["G"]["inferential_unit"],
+        "dependence_structure": "one world-level relevant/irrelevant sign exchange jointly across all nonzero doses",
+        "n": int(analysis.arms["G"]["n_worlds"]),
+        "effect_floor": float(analysis.raw["qualification"]["g_nuisance_envelope"]["max_dose_effect_floor"]),
+        "component_alpha": float(power_audit["component_alpha"]),
+        "nuisance_envelope": list(analysis.raw["qualification"]["g_nuisance_envelope"]["max_dose_discordance_rates"]),
+        "minimum_power": float(power_audit["arms"]["G"]["minimum_observed_power"]),
+    })
+    rows.append({
+        "arm": "P",
+        "inferential_unit": design.arms["P"]["inferential_unit"],
+        "dependence_structure": "one acquisition/restart episode; exactly four fixed nested futures collapsed to one binary episode outcome",
+        "n": int(analysis.arms["P"]["n"]),
+        "effect_floor": float(analysis.arms["P"]["effect_floor"]),
+        "component_alpha": float(power_audit["component_alpha"]),
+        "nuisance_envelope": list(analysis.raw["qualification"]["paired_nuisance_envelope"]["P"]["discordance_rates"]),
+        "minimum_power": float(power_audit["arms"]["P"]["minimum_observed_power"]),
+    })
+    return rows
+
+
+def run_qualification() -> dict[str, Any]:
+    """Run deterministic DEV/QUAL-only methodological qualification."""
 
     design = load_design_manifest(_DESIGN_PATH)
     analysis = load_analysis_plan(_ANALYSIS_PATH)
@@ -73,6 +156,7 @@ def run_qualification() -> dict[str, Any]:
         raise ValueError("qualification requires the non-executable REVIEW_PENDING design")
 
     base_matrix = passing_qualification_matrix()
+    path_audit = _analysis_path_audit(base_matrix)
     rows = [_fixture_row(fixture, base_matrix) for fixture in qualification_fixtures()]
     reference_audit = run_statistical_reference_audit()
     power_audit = qualification_power_audit(analysis)
@@ -86,6 +170,7 @@ def run_qualification() -> dict[str, Any]:
     qualified = (
         fixtures_match
         and namespaces_safe
+        and path_audit["all_hardened_paths_active"]
         and reference_audit.get("status") == "PASS"
         and bool(power_audit.get("qualified"))
     )
@@ -103,15 +188,19 @@ def run_qualification() -> dict[str, Any]:
         "confirmatory_execution_enabled": design.confirmatory_execution_enabled,
         "design_manifest_digest": design.digest,
         "analysis_plan_digest": analysis.digest,
+        "scientific_code_hashes": _scientific_code_hashes(),
+        "analysis_path_audit": path_audit,
         "fixture_count": len(rows),
         "fixture_class_counts": dict(sorted(class_counts.items())),
         "fixtures": rows,
         "statistical_reference_audit": reference_audit,
         "power_audit": power_audit,
+        "power_inferential_unit_table": _power_table(power_audit, design, analysis),
         "safety": {
             "qualification_namespaces_only": namespaces_safe,
             "confirmatory_namespace_accessed": False,
             "all_fixture_expectations_matched": fixtures_match,
+            "all_hardened_analysis_paths_active": path_audit["all_hardened_paths_active"],
         },
         "scientific_interpretation": "METHODOLOGICAL_QUALIFICATION_ONLY_NOT_CONFIRMATORY_ABGP_EVIDENCE",
     }
