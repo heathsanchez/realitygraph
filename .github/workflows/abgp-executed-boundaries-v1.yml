@@ -1,0 +1,42 @@
+name: abgp-executed-boundaries-v1
+
+on:
+  push:
+    branches: [abgp-preregistration-freeze-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: abgp-executed-boundaries-v1
+  cancel-in-progress: true
+
+jobs:
+  boundary-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Export tracked source only for reproducible local execution
+        run: |
+          git archive --format=tar.gz --output=abgp-source.tar.gz HEAD
+          git rev-parse HEAD > abgp-source-commit.txt
+          sha256sum abgp-source.tar.gz > abgp-source.sha256
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: abgp-executed-boundaries-source
+          path: |
+            abgp-source.tar.gz
+            abgp-source-commit.txt
+            abgp-source.sha256
+          retention-days: 7
+          if-no-files-found: error
+      - name: Full DEV regression, never confirmation
+        run: python -m unittest discover -s tests -v
