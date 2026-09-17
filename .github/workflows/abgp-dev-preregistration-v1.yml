@@ -26,6 +26,21 @@ jobs:
       - name: Frozen statistical analysis tests
         run: python -m unittest tests.test_abgp_analysis -v
 
+      - name: Explicit validity semantics tests
+        run: python -m unittest tests.test_abgp_validity -v
+
+      - name: Independent exact statistical-reference tests
+        run: python -m unittest tests.test_abgp_statistical_reference -v
+
+      - name: Frozen qualification fixture tests
+        run: python -m unittest tests.test_abgp_qualification_fixtures -v
+
+      - name: Pre-freeze power qualification tests
+        run: python -m unittest tests.test_abgp_power -v
+
+      - name: Deterministic qualification runner tests
+        run: python -m unittest tests.test_abgp_qualification -v
+
       - name: DEV verifier and corruption tests
         run: python -m unittest tests.test_abgp_arm_a_g -v
 
@@ -52,12 +67,18 @@ jobs:
       - name: Full regression suite
         run: python -m unittest discover -s tests -v
 
+      - name: Run explicit ABGP methodological qualification
+        run: |
+          python abgp_qualify.py | tee abgp-qualification.log
+          grep -Fx 'ABGP_QUALIFIED' abgp-qualification.log
+          sha256sum abgp-qualification-summary.json | tee abgp-qualification-summary.sha256
+
       - name: Run DEV-only ABGP matrix
         run: |
           python abgp_dev_matrix.py | tee abgp-dev-matrix.log
           grep -Fx 'ABGP_DEV_MATRIX_OK' abgp-dev-matrix.log
 
-      - name: Assert DEV-only scientific safety boundary
+      - name: Assert DEV/QUAL scientific safety boundary
         run: |
           python - <<'PY'
           import json
@@ -66,6 +87,7 @@ jobs:
           design = load_design_manifest('preregistration/abgp-design-manifest-v1.json')
           summary = json.load(open('abgp-dev-matrix-summary.json', encoding='utf-8'))
           p_budget = json.load(open('abgp-p-episode-budget.json', encoding='utf-8'))
+          qualification = json.load(open('abgp-qualification-summary.json', encoding='utf-8'))
 
           assert design.status == 'REVIEW_PENDING'
           assert design.confirmatory_execution_enabled is False
@@ -80,14 +102,25 @@ jobs:
           assert p_budget['confirmatory_namespace_used'] is False
           assert p_budget['independence_audit']['primary_n'] == 4096
           assert p_budget['independence_audit']['future_tasks_per_episode'] == 4
-          print('ABGP_DEV_SAFETY_BOUNDARY_OK')
+          assert qualification['schema'] == 'realitygraph.abgp.qualification.v1'
+          assert qualification['mode'] == 'QUALIFICATION_ONLY'
+          assert qualification['verdict'] == 'QUALIFIED'
+          assert qualification['confirmatory_namespace_used'] is False
+          assert qualification['safety']['confirmatory_namespace_accessed'] is False
+          assert qualification['safety']['all_fixture_expectations_matched'] is True
+          assert qualification['statistical_reference_audit']['status'] == 'PASS'
+          assert qualification['power_audit']['qualified'] is True
+          print('ABGP_DEV_QUAL_SAFETY_BOUNDARY_OK')
           PY
 
-      - name: Upload DEV-only qualification evidence
+      - name: Upload DEV/QUAL qualification evidence
         uses: actions/upload-artifact@v4
         with:
-          name: abgp-dev-harness-v1-evidence
+          name: abgp-dev-qual-v1-evidence
           path: |
+            abgp-qualification-summary.json
+            abgp-qualification-summary.sha256
+            abgp-qualification.log
             abgp-dev-matrix-summary.json
             abgp-dev-matrix.log
             abgp-p-episode-budget.json
