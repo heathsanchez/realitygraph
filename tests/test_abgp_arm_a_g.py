@@ -27,7 +27,9 @@ class ABGPArmAGTests(unittest.TestCase):
     def test_a_growth_episode_has_exact_old_language_collision_and_sealed_future(self):
         episodes = generate_a_growth_episodes(64)
         self.assertEqual(len(episodes), 64)
+        self.assertEqual(len({episode.future_seed_digest for episode in episodes}), 64)
         for episode in episodes:
+            self.assertNotEqual(episode.acquisition_seed_digest, episode.future_seed_digest)
             self.assertEqual(episode.posterior_action_support, 2)
             self.assertEqual(episode.verifier_message_count, 1)
             self.assertEqual(episode.construction_round_count, 1)
@@ -52,6 +54,7 @@ class ABGPArmAGTests(unittest.TestCase):
         self.assertEqual(audit["delta_h_bits"], 1.0)
         self.assertTrue(audit["exact_old_language_completeness"])
         self.assertTrue(audit["old_information_collision_witness"])
+        self.assertTrue(audit["fresh_future_seed_separation"])
 
     def test_a_growth_payload_uses_prospective_future_and_three_primary_controls(self):
         raw = a_growth_analysis_input(generate_a_growth_episodes(256))
