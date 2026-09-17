@@ -6,6 +6,7 @@ from math import comb, sqrt
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from .b_iut import analyze_direction_iut
 from .manifest import load_analysis_plan
 
 
@@ -32,11 +33,7 @@ def _binomial_upper_tail(successes: int, trials: int) -> float:
 
 
 def exact_mcnemar_one_sided(pairs: Iterable[Sequence[int | bool]]) -> float:
-    """Exact one-sided McNemar p-value for treatment > control.
-
-    Each pair is ``(control_correct, treatment_correct)``. Ties are ignored;
-    under the sharp null, treatment wins among discordant pairs are Binomial(n, .5).
-    """
+    """Exact one-sided McNemar p-value for treatment > control."""
 
     wins = 0
     losses = 0
@@ -83,12 +80,7 @@ def holm_bonferroni(raw_pvalues: Mapping[str, float], alpha: float) -> dict[str,
 def g_exact_randomization_pvalue(
     discordant_weight_counts: Mapping[int, int], observed_statistic: int
 ) -> float:
-    """Exact one-sided sign-randomization p-value for G's weighted statistic.
-
-    Under the preregistered null, each discordant matched pair independently
-    exchanges relevance labels, so its signed contribution is +weight or -weight
-    with equal probability. Dynamic programming computes the full exact null.
-    """
+    """Legacy exact sign-randomization over independent world-by-dose pairs."""
 
     distribution: dict[int, int] = {0: 1}
     n = 0
@@ -107,6 +99,31 @@ def g_exact_randomization_pvalue(
         return 1.0
     favorable = sum(ways for statistic, ways in distribution.items() if statistic >= observed_statistic)
     return favorable / (2**n)
+
+
+def g_world_blocked_randomization_pvalue(
+    world_scores: Sequence[int], observed_statistic: int
+) -> float:
+    """Exact one-sided randomization with one joint relevance-label swap per world.
+
+    Each world's four nonzero dose measurements are repeated observations inside
+    one inferential unit. Under the sharp null the relevance labels are swapped
+    jointly for the whole world, flipping the sign of the world's aggregated
+    dose-weighted score while preserving its magnitude.
+    """
+
+    magnitudes = [abs(int(score)) for score in world_scores if int(score) != 0]
+    if not magnitudes:
+        return 1.0
+    distribution: dict[int, int] = {0: 1}
+    for magnitude in magnitudes:
+        nxt: dict[int, int] = defaultdict(int)
+        for statistic, ways in distribution.items():
+            nxt[statistic + magnitude] += ways
+            nxt[statistic - magnitude] += ways
+        distribution = dict(nxt)
+    favorable = sum(ways for statistic, ways in distribution.items() if statistic >= observed_statistic)
+    return favorable / (2 ** len(magnitudes))
 
 
 def _paired_effect(control: Sequence[int | bool], treatment: Sequence[int | bool]) -> float:
@@ -129,13 +146,6 @@ def _wilson_interval(successes: int, n: int, z: float = 1.959963984540054) -> tu
 def _paired_effect_interval(
     control: Sequence[int | bool], treatment: Sequence[int | bool]
 ) -> tuple[float, float]:
-    """Score-envelope interval for a paired absolute-rate difference.
-
-    This interval is descriptive only; all primary decisions use the exact paired
-    tests and frozen effect floors. It combines Wilson marginal score intervals
-    without using observed significance to choose an interval method.
-    """
-
     n = len(control)
     if n != len(treatment) or n == 0:
         raise ValueError("paired interval requires equal non-empty vectors")
@@ -149,7 +159,51 @@ def _paired_effect_interval(
     return (max(-1.0, lower), min(1.0, upper))
 
 
+def _paired_control_summary(
+    treatment: Sequence[int | bool], controls: Mapping[str, Sequence[int | bool]]
+) -> tuple[dict[str, float], dict[str, float], dict[str, tuple[float, float]]]:
+    pvalues: dict[str, float] = {}
+    effects: dict[str, float] = {}
+    intervals: dict[str, tuple[float, float]] = {}
+    for name in sorted(controls):
+        control = list(controls[name])
+        if len(control) != len(treatment):
+            raise ValueError("control vectors must be paired with treatment outcomes")
+        pvalues[name] = exact_mcnemar_one_sided(zip(control, treatment))
+        effects[name] = _paired_effect(control, treatment)
+        intervals[name] = _paired_effect_interval(control, treatment)
+    return pvalues, effects, intervals
+
+
 def analyze_a(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Analyze A with paired tasks as the inferential unit.
+
+    Final-lock inputs contain two primary controls: equal-compute recheck and an
+    exact information-budget-matched Bayes policy. Legacy DEV inputs remain
+    replayable so the clarification does not invalidate historical mechanics.
+    """
+
+    if "baselines" in raw:
+        treatment = list(raw.get("treatment", ()))
+        baselines = raw.get("baselines")
+        expected = {"equal_compute_recheck", "information_matched_bayes"}
+        if not treatment or not isinstance(baselines, Mapping) or set(baselines) != expected:
+            raise ValueError("A final-lock input requires treatment and both primary controls")
+        pvalues, effects, intervals = _paired_control_summary(treatment, baselines)
+        effect = min(effects.values())
+        return {
+            "raw_pvalue": max(pvalues.values()),
+            "component_pvalues": pvalues,
+            "control_effects": effects,
+            "effect_intervals": intervals,
+            "effect": effect,
+            "effect_floor_pass": effect >= 0.05,
+            "hard_gates_pass": _all_gates(raw.get("hard_gates")),
+            "effect_direction_positive": effect > 0.0,
+            "inferential_unit": "paired_task",
+            "analysis_mode": "INFORMATION_AND_COMPUTE_MATCHED_CONTROLS",
+        }
+
     pairs = [tuple(pair) for pair in raw.get("pairs", ())]
     if not pairs:
         raise ValueError("A requires paired outcomes")
@@ -163,6 +217,8 @@ def analyze_a(raw: Mapping[str, Any]) -> dict[str, Any]:
         "effect_floor_pass": effect >= 0.05,
         "hard_gates_pass": _all_gates(raw.get("hard_gates")),
         "effect_direction_positive": effect > 0.0,
+        "inferential_unit": "paired_task",
+        "analysis_mode": "LEGACY_DEV_EQUAL_COMPUTE_ONLY",
     }
 
 
@@ -173,25 +229,64 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
     if not treatment or not (len(treatment) == len(wrong) == len(shuffled)):
         raise ValueError("B requires equal non-empty treatment and control vectors")
     controls = {"wrong_class": wrong, "shuffled_coupling": shuffled}
-    pvalues = {
-        name: exact_mcnemar_one_sided(zip(control, treatment))
-        for name, control in controls.items()
-    }
-    effects = {name: _paired_effect(control, treatment) for name, control in controls.items()}
     intervention = list(raw.get("intervention_agreement", ()))
     if not intervention:
-        raise ValueError("B requires pooled intervention-agreement records")
+        raise ValueError("B requires intervention-agreement records")
     pooled = _mean_binary(intervention)
+    separator = list(raw.get("bisimulation_separator_agreement", ()))
+    separator_gate = True if not separator else _mean_binary(separator) >= 0.90
+    scientific_hard = pooled >= 0.90 and separator_gate
+
+    if "direction_labels" in raw:
+        iut = analyze_direction_iut(
+            treatment,
+            controls,
+            list(raw["direction_labels"]),
+            intervention,
+            pvalue_fn=exact_mcnemar_one_sided,
+            effect_fn=_paired_effect,
+            interval_fn=_paired_effect_interval,
+        )
+        effect = float(iut["minimum_component_effect"])
+        return {
+            "raw_pvalue": iut["raw_pvalue"],
+            "component_pvalues": iut["component_pvalues"],
+            "control_effects": iut["component_effects"],
+            "effect_intervals": iut["component_effect_intervals"],
+            "effect": effect,
+            "effect_floor_pass": effect >= 0.15,
+            "pooled_intervention_agreement": pooled,
+            "pooled_agreement_gate": pooled >= 0.90,
+            "bisimulation_separator_agreement": _mean_binary(separator) if separator else None,
+            "bisimulation_separator_gate": separator_gate,
+            "hard_gates_pass": _all_gates(raw.get("hard_gates")) and scientific_hard,
+            "effect_direction_positive": effect > 0.0,
+            "analysis_mode": "DIRECTION_STRATIFIED_IUT",
+            "inferential_unit": iut["inferential_unit"],
+            "direction_count": iut["direction_count"],
+            "unit_count": iut["unit_count"],
+            "unit_counts_by_direction": iut["unit_counts_by_direction"],
+            "interventions_per_unit": iut["interventions_per_unit"],
+            "intervention_evaluations": iut["intervention_evaluations"],
+            "iut_rule": iut["iut_rule"],
+        }
+
+    pvalues, effects, intervals = _paired_control_summary(treatment, controls)
     return {
         "raw_pvalue": max(pvalues.values()),
         "component_pvalues": pvalues,
         "control_effects": effects,
+        "effect_intervals": intervals,
         "effect": min(effects.values()),
         "effect_floor_pass": min(effects.values()) >= 0.15,
         "pooled_intervention_agreement": pooled,
         "pooled_agreement_gate": pooled >= 0.90,
-        "hard_gates_pass": _all_gates(raw.get("hard_gates")) and pooled >= 0.90,
+        "bisimulation_separator_agreement": _mean_binary(separator) if separator else None,
+        "bisimulation_separator_gate": separator_gate,
+        "hard_gates_pass": _all_gates(raw.get("hard_gates")) and scientific_hard,
         "effect_direction_positive": min(effects.values()) > 0.0,
+        "analysis_mode": "LEGACY_POOLED_DEV",
+        "inferential_unit": "ordered_direction_world_pair",
     }
 
 
@@ -199,31 +294,72 @@ def analyze_g(raw: Mapping[str, Any]) -> dict[str, Any]:
     pairs = list(raw.get("pairs", ()))
     if not pairs:
         raise ValueError("G requires matched relevance pairs")
+
+    has_world = ["world_id" in record for record in pairs]
+    if any(has_world) and not all(has_world):
+        raise ValueError("G world-blocked analysis requires world_id on every pair")
+
     counts: dict[int, int] = defaultdict(int)
+    world_scores: dict[int, int] = {}
     observed = 0
-    for record in pairs:
-        weight = int(record["weight"])
-        relevant = int(bool(record["relevant"]))
-        irrelevant = int(bool(record["irrelevant"]))
-        delta = relevant - irrelevant
-        observed += weight * delta
-        if delta:
-            counts[weight] += 1
+    if all(has_world):
+        grouped: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
+        for record in pairs:
+            grouped[int(record["world_id"])].append(record)
+        for world_id in sorted(grouped):
+            records = grouped[world_id]
+            if sorted(int(record["weight"]) for record in records) != [2, 5, 10, 20]:
+                raise ValueError("each G world must contribute exactly four frozen nonzero doses")
+            score = 0
+            for record in records:
+                relevant = int(bool(record["relevant"]))
+                irrelevant = int(bool(record["irrelevant"]))
+                score += int(record["weight"]) * (relevant - irrelevant)
+            world_scores[world_id] = score
+        observed = sum(world_scores.values())
+        pvalue = g_world_blocked_randomization_pvalue(list(world_scores.values()), observed)
+        mode = "WORLD_BLOCKED_REPEATED_MEASURES"
+        randomization_unit = "world"
+        inferential_unit = "world"
+    else:
+        for record in pairs:
+            weight = int(record["weight"])
+            relevant = int(bool(record["relevant"]))
+            irrelevant = int(bool(record["irrelevant"]))
+            delta = relevant - irrelevant
+            observed += weight * delta
+            if delta:
+                counts[weight] += 1
+        pvalue = g_exact_randomization_pvalue(counts, observed)
+        mode = "LEGACY_WORLD_BY_DOSE"
+        randomization_unit = "world_by_dose_pair"
+        inferential_unit = "world_by_dose_pair"
+
     relevant_max = list(raw.get("max_dose_relevant", ()))
     irrelevant_max = list(raw.get("max_dose_irrelevant", ()))
     if not relevant_max or len(relevant_max) != len(irrelevant_max):
         raise ValueError("G requires paired maximum-dose flip vectors")
+    if world_scores and len(relevant_max) != len(world_scores):
+        raise ValueError("G maximum-dose vectors must have one entry per world")
     max_gap = _mean_binary(relevant_max) - _mean_binary(irrelevant_max)
-    return {
-        "raw_pvalue": g_exact_randomization_pvalue(counts, observed),
+    result = {
+        "raw_pvalue": pvalue,
         "observed_statistic": observed,
-        "discordant_weight_counts": dict(sorted(counts.items())),
         "max_dose_flip_gap": max_gap,
         "effect": max_gap,
         "effect_floor_pass": max_gap >= 0.15,
         "hard_gates_pass": _all_gates(raw.get("hard_gates")),
         "effect_direction_positive": observed > 0 and max_gap > 0.0,
+        "analysis_mode": mode,
+        "inferential_unit": inferential_unit,
+        "randomization_unit": randomization_unit,
     }
+    if world_scores:
+        result["world_scores"] = {str(k): world_scores[k] for k in sorted(world_scores)}
+        result["world_count"] = len(world_scores)
+    else:
+        result["discordant_weight_counts"] = dict(sorted(counts.items()))
+    return result
 
 
 def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -231,15 +367,17 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
     baselines = raw.get("baselines")
     if not retained or not isinstance(baselines, Mapping) or not baselines:
         raise ValueError("P requires retained and baseline paired outcomes")
-    expected = {
+    legacy = {
         "cold",
         "equal_compute_recheck",
         "verbal_rule_negative",
         "size_matched_sham",
         "wrong_class_object",
     }
-    if set(baselines) != expected:
+    strengthened = legacy | {"target_only_bisimulation"}
+    if set(baselines) not in (legacy, strengthened):
         raise ValueError("P baseline set does not match preregistration")
+
     component_pvalues: dict[str, float] = {}
     effects: dict[str, float] = {}
     intervals: dict[str, tuple[float, float]] = {}
@@ -250,13 +388,19 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
         component_pvalues[name] = exact_mcnemar_one_sided(zip(control, retained))
         effects[name] = _paired_effect(control, retained)
         intervals[name] = _paired_effect_interval(control, retained)
+
     strongest_name = max(baselines, key=lambda name: _mean_binary(list(baselines[name])))
     cold_accuracy = float(raw.get("cold_accuracy", _mean_binary(list(baselines["cold"]))))
     deletion_accuracy = float(raw.get("post_deletion_accuracy", 0.0))
     reacquisition = int(raw.get("reacquisition_search_count", 0))
+    procedure_entries = int(raw.get("reacquisition_procedure_entries", reacquisition > 0))
+    untracked = int(raw.get("untracked_regeneration_count", 0))
     deletion_gate = abs(deletion_accuracy - cold_accuracy) <= 0.02 and reacquisition > 0
+    reacquisition_gate = reacquisition > 0 and procedure_entries > 0 and untracked == 0
+
     supplied_gates = dict(raw.get("hard_gates", {}))
     supplied_gates["computed_targeted_deletion"] = deletion_gate
+    supplied_gates["computed_reacquisition_tracking"] = reacquisition_gate
     effect = min(effects.values())
     return {
         "raw_pvalue": max(component_pvalues.values()),
@@ -267,8 +411,15 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
         "effect": effect,
         "effect_floor_pass": effect >= 0.05,
         "targeted_deletion_gate": deletion_gate,
+        "reacquisition_gate": reacquisition_gate,
         "hard_gates_pass": _all_gates(supplied_gates),
         "effect_direction_positive": effect > 0.0,
+        "inferential_unit": "source_distinct_future_task",
+        "analysis_mode": (
+            "BISIMULATION_CONTROLLED_HARD_RESTART"
+            if set(baselines) == strengthened
+            else "LEGACY_HARD_RESTART"
+        ),
     }
 
 
@@ -287,11 +438,6 @@ def _finalize_verdict(analysis: dict[str, Any], adjusted_pvalue: float, alpha: f
 
 
 def _canonical_json_value(value: Any) -> Any:
-    """Normalize analysis output to the exact JSON data model used by artifacts.
-
-    This makes the live analysis object byte-replayable after JSON serialization:
-    tuples become lists and non-string mapping keys become their JSON string form.
-    """
     return json.loads(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
 
 
@@ -309,13 +455,15 @@ def analyze_matrix(raw_matrix: Mapping[str, Any]) -> dict[str, Any]:
     holm = holm_bonferroni(raw_pvalues, plan.familywise_alpha)
     finalized = {
         arm: _finalize_verdict(
-            analyses[arm],
-            holm["adjusted_pvalues"][arm],
-            plan.familywise_alpha,
+            analyses[arm], holm["adjusted_pvalues"][arm], plan.familywise_alpha
         )
         for arm in _ARM_ORDER
     }
-    combined = "PASS" if all(finalized[arm]["verdict"] == "PASS" for arm in _ARM_ORDER) else "NOT_FULL_PASS"
+    combined = (
+        "PASS"
+        if all(finalized[arm]["verdict"] == "PASS" for arm in _ARM_ORDER)
+        else "NOT_FULL_PASS"
+    )
     return _canonical_json_value(
         {
             "analysis_plan_digest": plan.digest,
