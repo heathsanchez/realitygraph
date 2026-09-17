@@ -52,7 +52,8 @@ class ABGPArmPTests(unittest.TestCase):
             self.assertEqual(episode.future_verifier_calls, 0)
             self.assertEqual(episode.future_reconstruction_search_count, 0)
             self.assertTrue(episode.restart_byte_exact)
-            self.assertTrue(episode.reacquisition_restored)
+            self.assertEqual(episode.reacquired_episode_success, episode.retained_episode_success)
+            self.assertEqual(episode.reacquired_episode_success, 1)
 
     def test_independence_audit_counts_only_acquisitions_as_n(self):
         episodes = generate_p_independent_episodes(64)
