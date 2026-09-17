@@ -7,10 +7,35 @@
   "binary_rate_interval": "Wilson score 95% interval",
   "paired_binary_difference_interval": "Newcombe score 95% interval for paired proportions",
   "zero_discordance_rule": "If a paired binary comparison has no discordant pairs, its one-sided primary p-value is 1.0.",
+  "qualification": {
+    "minimum_power": 0.80,
+    "holm_component_alpha_floor": 0.0125,
+    "power_scope": "pre-freeze methodological qualification only; no ABGP-CONFIRM-* seed, instance, or outcome may be used",
+    "paired_nuisance_envelope": {
+      "A": {
+        "discordance_rates": [0.05, 0.10, 0.25, 0.50, 0.75, 1.00],
+        "rationale": "full feasible discordance range from the 0.05 effect floor through complete pair discordance"
+      },
+      "B": {
+        "discordance_rates": [0.15, 0.30, 0.50, 0.75, 1.00],
+        "rationale": "full feasible discordance range from the 0.15 effect floor through complete pair discordance"
+      },
+      "P": {
+        "discordance_rates": [0.05, 0.10, 0.25, 0.50, 0.75, 1.00],
+        "rationale": "full feasible discordance range from the 0.05 effect floor through complete pair discordance"
+      }
+    },
+    "g_nuisance_envelope": {
+      "max_dose_effect_floor": 0.15,
+      "max_dose_discordance_rates": [0.15, 0.30, 0.50, 0.75, 1.00],
+      "rationale": "full feasible discordance range from the 0.15 maximum-dose gap through complete matched-pair discordance"
+    },
+    "sample_size_rule": "Each locked arm count must provide at least 0.80 power at its minimum meaningful effect throughout the full preregistered nuisance envelope at component alpha 0.0125. Counts may change while REVIEW_PENDING but not after freeze."
+  },
   "arms": {
     "A": {
       "experimental_unit": "task",
-      "n": 256,
+      "n": 4096,
       "primary_outcome": "exact protected-action correctness",
       "primary_comparison": "verifier-assisted minus equal-compute recheck",
       "test": "one-sided exact McNemar test, implemented as an exact binomial test on discordant paired outcomes with alternative verifier-assisted > recheck",
@@ -25,9 +50,9 @@
     },
     "B": {
       "experimental_unit": "ordered acquisition-to-transfer latent-world pair",
-      "n_units": 384,
+      "n_units": 480,
       "ordered_directions": 12,
-      "worlds_per_direction": 32,
+      "worlds_per_direction": 40,
       "interventions_per_unit": 4,
       "unit_success_definition": "exact protected-action ordering agrees for all four frozen structural interventions",
       "pooled_hard_gate": "at least 0.90 exact protected-order agreement across all individual intervention evaluations",
@@ -46,7 +71,7 @@
     },
     "G": {
       "experimental_unit": "world-by-dose matched relevance pair",
-      "n_worlds": 256,
+      "n_worlds": 320,
       "nonzero_doses": [0.1, 0.25, 0.5, 1.0],
       "integer_dose_weights": [2, 5, 10, 20],
       "primary_binary_outcome": "whether protected action ordering flips after corruption",
@@ -65,7 +90,7 @@
     },
     "P": {
       "experimental_unit": "source-distinct held-out task",
-      "n": 256,
+      "n": 4096,
       "primary_outcome": "exact protected-action correctness",
       "treatment": "hard-restarted retained non-verbal structural object",
       "primary_baselines": [
@@ -96,9 +121,10 @@
     "report": "raw p-value, Holm-adjusted p-value, effect estimate, effect interval, and hard-gate vector for every arm"
   },
   "verdict_rule": {
-    "FAIL": "any fatal design gate fails, or the primary effect direction is non-positive",
-    "PASS": "all fatal/hard gates pass, the preregistered effect floor passes, and the Holm-adjusted arm primary test passes",
-    "PARTIAL": "all fatal design gates pass and the primary effect direction is positive, but one or both of the effect-floor and Holm-adjusted-significance requirements fail"
+    "INVALID": "one or more protocol-validity gates required to interpret the arm fail; INVALID is not evidence for or against the scientific hypothesis and has precedence over all scientific verdicts",
+    "FAIL": "all protocol-validity gates pass, but the valid experiment falsifies the arm-level claim under the frozen directional/effect rule",
+    "PASS": "all protocol-validity and scientific hard gates pass, the preregistered effect floor passes, and the Holm-adjusted arm primary test passes",
+    "PARTIAL": "all protocol-validity gates pass and the primary effect direction is positive, but one or both of the effect-floor and Holm-adjusted-significance requirements fail"
   },
-  "combined_result": "The strongest combined interpretation is licensed only when A, B, G, and P are all PASS. No cross-arm compensation is allowed."
+  "combined_result": "The strongest combined interpretation is licensed only when A, B, G, and P are all PASS. No cross-arm compensation is allowed, and any INVALID arm makes the combined result methodologically invalid rather than scientifically negative."
 }
