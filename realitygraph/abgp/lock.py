@@ -33,13 +33,23 @@ def _lock_digest(lock_without_digest: Mapping[str, Any]) -> str:
     return sha256(_canonical_json(lock_without_digest).encode("utf-8")).hexdigest()
 
 
+def _is_hex_digest(value: Any) -> bool:
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return True
+
+
 def build_review_lock(
     repo_file_map: Mapping[str, str | bytes],
     runtime_metadata: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Construct a review-only lock candidate.
 
-    This function deliberately cannot freeze or enable confirmation.  A future,
+    This function deliberately cannot freeze or enable confirmation. A future,
     separately reviewed step must create any FROZEN lock from the reviewed candidate.
     """
 
@@ -90,7 +100,6 @@ def build_review_lock(
     for field in sorted(required_runtime):
         lock[field] = runtime_metadata[field]
 
-    # Make the builder's safety property explicit in the serialized object itself.
     lock["review_only"] = True
     lock["builder_can_freeze"] = False
     lock["lock_digest"] = _lock_digest(lock)
@@ -103,11 +112,12 @@ def validate_final_lock(
     analysis: ABGPAnalysisPlan,
     *,
     expected_tree_hash: str | None = None,
+    qualification_artifact: Mapping[str, Any] | None = None,
 ) -> None:
     """Validate a separately produced frozen lock.
 
-    Validation is intentionally separate from construction: this module can inspect a
-    future FROZEN lock but build_review_lock itself never creates one.
+    Validation is intentionally separate from construction. A successful DEV/QUAL
+    artifact is a prerequisite but never itself authorizes confirmatory execution.
     """
 
     if lock.get("status") != "FROZEN":
@@ -122,6 +132,25 @@ def validate_final_lock(
     for field in design.raw["final_lock_requirements"]:
         if field not in lock or lock[field] in (None, "", {}, []):
             raise ValueError(f"final lock missing required field: {field}")
+
+    if lock.get("qualification_status") != "QUALIFIED":
+        raise ValueError("final lock is not bound to QUALIFIED test mechanics")
+    qualification_digest = lock.get("qualification_evidence_digest")
+    if not _is_hex_digest(qualification_digest):
+        raise ValueError("final lock qualification evidence digest is malformed")
+
+    if qualification_artifact is None:
+        raise ValueError("final lock validation requires the bound qualification artifact")
+    if qualification_artifact.get("schema") != "realitygraph.abgp.qualification.v1":
+        raise ValueError("qualification artifact schema mismatch")
+    if qualification_artifact.get("verdict") != "QUALIFIED":
+        raise ValueError("qualification artifact is not QUALIFIED")
+    if qualification_artifact.get("qualification_digest") != qualification_digest:
+        raise ValueError("qualification artifact digest does not match final lock")
+    if qualification_artifact.get("design_manifest_digest") != design.digest:
+        raise ValueError("qualification artifact design-manifest digest mismatch")
+    if qualification_artifact.get("analysis_plan_digest") != analysis.digest:
+        raise ValueError("qualification artifact analysis-plan digest mismatch")
 
     if expected_tree_hash is not None and lock.get("repository_tree_hash") != expected_tree_hash:
         raise ValueError("final lock repository tree mismatch")
@@ -138,12 +167,20 @@ def validate_final_lock(
     ):
         raise ValueError("final lock analysis hash is not bound to scientific code map")
 
+    qualified_scientific = qualification_artifact.get("scientific_code_hashes")
+    if qualified_scientific is not None:
+        if not isinstance(qualified_scientific, Mapping):
+            raise ValueError("qualification scientific-code hash map is malformed")
+        for path, digest in qualified_scientific.items():
+            if path in scientific and scientific[path] != digest:
+                raise ValueError("final lock scientific code differs from qualified code")
+
     namespace = lock.get("confirmatory_namespace_identifier")
     if namespace != design.confirmatory_namespace:
         raise ValueError("final lock confirmatory namespace mismatch")
 
     supplied_digest = lock.get("lock_digest")
-    if not isinstance(supplied_digest, str) or len(supplied_digest) != 64:
+    if not _is_hex_digest(supplied_digest):
         raise ValueError("final lock digest is missing or malformed")
     material = dict(lock)
     del material["lock_digest"]
