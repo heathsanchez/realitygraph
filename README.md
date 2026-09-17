@@ -378,3 +378,19 @@ A green DEV qualification emits:
 Those DEV outcomes are **not A/B/G/P confirmatory evidence** and must not be used as estimates of confirmatory effect size or truth. The manifest remains `REVIEW_PENDING` with `confirmatory_execution_enabled=false`. The review-lock builder and committed lock template cannot freeze or unlock confirmation; a separate future review is required before any confirmatory seed can be exposed.
 
 The exact DEV qualification record and claim boundary are in `docs/research/abgp-dev-harness-v1.md`.
+
+## A/B/G/P pre-freeze methodological qualification
+
+Run:
+
+    python abgp_qualify.py
+
+The hardened preregistration branch now contains a separate **test-the-test** qualification layer. It challenges the same A/B/G/P scientific analyzers with planted-positive worlds, named ordinary-explanation worlds, and deliberately broken protocol worlds; cross-checks the exact statistics against independent finite references; audits the corrected inferential units and dependence structure; and requires at least 0.80 power across the preregistered nuisance envelopes at the minimum meaningful effects.
+
+A successful run emits:
+
+    ABGP_QUALIFIED
+
+`QUALIFIED` means the experimental machinery passed its pre-freeze methodological qualification. It is **not** evidence that A, B, G, or P is true. Confirmation remains disabled and `ABGP-CONFIRM-v1` remains inaccessible on this branch.
+
+The exact qualification evidence, current review-candidate counts, power table, artifact hashes, and claim boundary are in `docs/research/abgp-test-qualification-v1.md`.
