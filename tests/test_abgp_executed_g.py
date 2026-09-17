@@ -48,6 +48,46 @@ class ExecutedGTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             api.evaluate_corruption(world, api.legacy_world_order, {'nonexistent': 1})
 
+    def test_structural_world_derives_relevance_from_actual_evaluator(self):
+        api = self.api()
+        world = api.make_structural_g_world(3, assignment=0)
+        audit = api.audit_structural_relevance(world)
+        self.assertEqual(len(audit['actual_relevant_cell_ids']), 10)
+        self.assertEqual(set(audit['actual_relevant_cell_ids']), set(audit['declared_relevant_cell_ids']))
+        self.assertTrue(audit['declared_relevance_matches'])
+        self.assertTrue(audit['eligible_matched_corruption_design'])
+
+    def test_structural_dose_outcomes_are_recomputed_not_planted(self):
+        api = self.api()
+        result = api.run_structural_g_world(4)
+        self.assertEqual(result['evaluator_mode'], 'cell_causal')
+        self.assertTrue(all(row['matched_count'] for row in result['dose_records']))
+        self.assertTrue(all(row['relevant']['evaluator_calls'] == 2 for row in result['dose_records']))
+        self.assertTrue(all(row['irrelevant']['evaluator_calls'] == 2 for row in result['dose_records']))
+        self.assertEqual(result['max_dose_relevant_flip'], 1)
+        self.assertEqual(result['max_dose_irrelevant_flip'], 0)
+
+    def test_world_label_assignment_is_fair_and_selection_is_label_blind(self):
+        api = self.api()
+        audit = api.audit_g_randomization_design(6)
+        self.assertEqual(audit['assignment_probabilities'], ['1/2', '1/2'])
+        self.assertTrue(audit['same_base_world_under_both_assignments'])
+        self.assertTrue(audit['pair_selection_identical_under_label_swap'])
+        self.assertTrue(audit['fixed_complete_dose_schedule'])
+        self.assertTrue(audit['no_adaptive_stopping'])
+        self.assertTrue(audit['null_law_exchangeable'])
+        self.assertTrue(audit['randomization_valid_under_registered_sharp_null'])
+
+    def test_structural_batch_has_one_joint_block_per_world(self):
+        api = self.api()
+        batch = api.run_structural_g_batch(8)
+        self.assertEqual(len(batch['worlds']), 8)
+        self.assertEqual(len(batch['analysis_input']['max_dose_relevant']), 8)
+        self.assertEqual(len(batch['analysis_input']['pairs']), 8 * 4)
+        self.assertEqual({row['world_id'] for row in batch['analysis_input']['pairs']}, set(range(8)))
+        self.assertTrue(batch['analysis_input']['hard_gates']['world_exchangeability_contract'])
+        self.assertTrue(batch['analysis_input']['hard_gates']['same_evaluator'])
+
 
 if __name__ == '__main__':
     unittest.main()
