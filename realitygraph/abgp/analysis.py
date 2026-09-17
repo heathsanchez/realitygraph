@@ -296,10 +296,24 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
         "target_only_bisimulation_bayes",
         "posterior_only_retained_bayes",
     }
-    if set(baselines) not in (legacy, strengthened):
+    independent_episode = strengthened | {"targeted_deletion"}
+    baseline_set = set(baselines)
+    if baseline_set not in (legacy, strengthened, independent_episode):
         raise ValueError("P baseline set does not match a registered analysis mode")
 
-    if set(baselines) == strengthened:
+    if baseline_set == independent_episode:
+        primary_names = (
+            "cold",
+            "equal_compute_recheck",
+            "size_matched_sham",
+            "wrong_class_object",
+            "target_only_bisimulation_bayes",
+            "posterior_only_retained_bayes",
+            "targeted_deletion",
+        )
+        ordinary_names = tuple(name for name in primary_names if name != "targeted_deletion")
+        mode = "INDEPENDENT_EPISODE_POSTERIOR_BISIMULATION"
+    elif baseline_set == strengthened:
         primary_names = (
             "cold",
             "equal_compute_recheck",
@@ -308,6 +322,7 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
             "target_only_bisimulation_bayes",
             "posterior_only_retained_bayes",
         )
+        ordinary_names = primary_names
         mode = "STRENGTHENED_POSTERIOR_BISIMULATION"
     else:
         primary_names = (
@@ -316,6 +331,7 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
             "size_matched_sham",
             "wrong_class_object",
         )
+        ordinary_names = primary_names
         mode = "LEGACY_DEV_PERSISTENCE"
 
     primary = {name: list(baselines[name]) for name in primary_names}
@@ -326,12 +342,23 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
 
     strongest_name = max(primary_names, key=lambda name: _mean_binary(primary[name]))
     cold_accuracy = float(raw.get("cold_accuracy", _mean_binary(primary["cold"])))
-    deletion_accuracy = float(raw.get("post_deletion_accuracy", 0.0))
     reacquisition = int(raw.get("reacquisition_search_count", 0))
     treatment_accuracy = _mean_binary(retained)
+    ordinary_max = max(_mean_binary(primary[name]) for name in ordinary_names)
 
-    if mode == "STRENGTHENED_POSTERIOR_BISIMULATION":
-        ordinary_max = max(_mean_binary(primary[name]) for name in primary_names)
+    if mode == "INDEPENDENT_EPISODE_POSTERIOR_BISIMULATION":
+        deletion_accuracy = _mean_binary(primary["targeted_deletion"])
+        reported_deletion = float(raw.get("post_deletion_accuracy", deletion_accuracy))
+        if abs(reported_deletion - deletion_accuracy) > 1e-12:
+            raise ValueError("paired targeted-deletion vector disagrees with reported deletion accuracy")
+        deletion_gate = (
+            deletion_accuracy <= ordinary_max + 0.02
+            and treatment_accuracy - deletion_accuracy >= 0.05
+            and reacquisition > 0
+            and bool(raw.get("reacquisition_restored", False))
+        )
+    elif mode == "STRENGTHENED_POSTERIOR_BISIMULATION":
+        deletion_accuracy = float(raw.get("post_deletion_accuracy", 0.0))
         deletion_gate = (
             deletion_accuracy <= ordinary_max + 0.02
             and treatment_accuracy - deletion_accuracy >= 0.05
@@ -339,7 +366,7 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
             and bool(raw.get("reacquisition_restored", False))
         )
     else:
-        ordinary_max = max(_mean_binary(primary[name]) for name in primary_names)
+        deletion_accuracy = float(raw.get("post_deletion_accuracy", 0.0))
         deletion_gate = abs(deletion_accuracy - cold_accuracy) <= 0.02 and reacquisition > 0
 
     validity = _validity_fields("P", raw)
@@ -355,6 +382,7 @@ def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
         "ordinary_control_max_accuracy": ordinary_max,
         "effect": effect,
         "effect_floor_pass": effect >= 0.05,
+        "targeted_deletion_accuracy": deletion_accuracy,
         "targeted_deletion_gate": deletion_gate,
         "hard_gates_pass": validity["validity_pass"] and deletion_gate,
         "scientific_hard_gates_pass": deletion_gate,
