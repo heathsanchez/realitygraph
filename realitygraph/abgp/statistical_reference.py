@@ -19,18 +19,13 @@ def reference_mcnemar(wins: int, losses: int) -> Fraction:
     return Fraction(sum(comb(n, k) for k in range(wins, n + 1)), 2**n)
 
 
-def reference_holm(
-    raw_pvalues: Mapping[str, Fraction], alpha: Fraction
-) -> dict[str, Any]:
+def reference_holm(raw_pvalues: Mapping[str, Fraction], alpha: Fraction) -> dict[str, Any]:
     if set(raw_pvalues) != set(_ARM_ORDER):
         raise ValueError("Holm family must contain exactly A, B, G, P")
     if not (Fraction(0, 1) < alpha < Fraction(1, 1)):
         raise ValueError("alpha must be between zero and one")
     order_index = {arm: i for i, arm in enumerate(_ARM_ORDER)}
-    ordered = sorted(
-        _ARM_ORDER,
-        key=lambda arm: (raw_pvalues[arm], order_index[arm]),
-    )
+    ordered = sorted(_ARM_ORDER, key=lambda arm: (raw_pvalues[arm], order_index[arm]))
     adjusted: dict[str, Fraction] = {}
     rejected: dict[str, bool] = {arm: False for arm in _ARM_ORDER}
     running = Fraction(0, 1)
@@ -68,10 +63,24 @@ def reference_g_randomization(weights: Sequence[int], observed: int) -> Fraction
     return Fraction(favorable, total)
 
 
+def reference_g_world_blocked(world_scores: Sequence[int], observed: int) -> Fraction:
+    """Independent brute-force reference: one sign flip per complete world block."""
+    if not world_scores:
+        return Fraction(1, 1)
+    favorable = 0
+    total = 0
+    for signs in product((-1, 1), repeat=len(world_scores)):
+        total += 1
+        statistic = sum(int(score) * sign for score, sign in zip(world_scores, signs))
+        favorable += statistic >= observed
+    return Fraction(favorable, total)
+
+
 def run_statistical_reference_audit() -> dict[str, Any]:
     from .analysis import (
         exact_mcnemar_one_sided,
         g_exact_randomization_pvalue,
+        g_world_blocked_randomization_pvalue,
         holm_bonferroni,
     )
 
@@ -96,10 +105,7 @@ def run_statistical_reference_audit() -> dict[str, Any]:
     for values in product(holm_grid, repeat=4):
         raw = dict(zip(_ARM_ORDER, values))
         expected = reference_holm(raw, Fraction(1, 20))
-        actual = holm_bonferroni(
-            {arm: float(value) for arm, value in raw.items()},
-            0.05,
-        )
+        actual = holm_bonferroni({arm: float(value) for arm, value in raw.items()}, 0.05)
         if actual["order"] != expected["order"]:
             return {
                 "status": "FAIL",
@@ -107,15 +113,13 @@ def run_statistical_reference_audit() -> dict[str, Any]:
                 "mcnemar_cases": mcnemar_cases,
                 "holm_cases": holm_cases,
                 "g_cases": 0,
+                "g_world_blocked_cases": 0,
                 "max_abs_error": max_abs_error,
             }
         for arm in _ARM_ORDER:
             max_abs_error = max(
                 max_abs_error,
-                abs(
-                    actual["adjusted_pvalues"][arm]
-                    - float(expected["adjusted_pvalues"][arm])
-                ),
+                abs(actual["adjusted_pvalues"][arm] - float(expected["adjusted_pvalues"][arm])),
             )
             if actual["rejected"][arm] != expected["rejected"][arm]:
                 return {
@@ -124,6 +128,7 @@ def run_statistical_reference_audit() -> dict[str, Any]:
                     "mcnemar_cases": mcnemar_cases,
                     "holm_cases": holm_cases,
                     "g_cases": 0,
+                    "g_world_blocked_cases": 0,
                     "max_abs_error": max_abs_error,
                 }
         holm_cases += 1
@@ -137,10 +142,20 @@ def run_statistical_reference_audit() -> dict[str, Any]:
             max_abs_error = max(max_abs_error, abs(actual - expected))
             g_cases += 1
 
+    g_world_blocked_cases = 0
+    for scores in ((2,), (2, 5), (7, -3, 4), (37, 37, 37, 37)):
+        bound = sum(abs(int(score)) for score in scores)
+        for observed in range(-bound, bound + 1):
+            actual = g_world_blocked_randomization_pvalue(scores, observed)
+            expected = float(reference_g_world_blocked(scores, observed))
+            max_abs_error = max(max_abs_error, abs(actual - expected))
+            g_world_blocked_cases += 1
+
     return {
         "status": "PASS" if max_abs_error <= 1e-15 else "FAIL",
         "mcnemar_cases": mcnemar_cases,
         "holm_cases": holm_cases,
         "g_cases": g_cases,
+        "g_world_blocked_cases": g_world_blocked_cases,
         "max_abs_error": max_abs_error,
     }
