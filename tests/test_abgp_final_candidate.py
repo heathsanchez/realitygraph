@@ -48,6 +48,7 @@ class FinalCandidateTests(unittest.TestCase):
             'realitygraph/abgp/executed_matrix.py',
             'realitygraph/abgp/implementation_qualification.py',
             'realitygraph/abgp/planning_review.py',
+            'realitygraph/abgp/final_candidate.py',
         }
         self.assertTrue(required <= set(hashes))
         self.assertTrue(all(len(value) == 64 for value in hashes.values()))
