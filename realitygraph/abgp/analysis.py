@@ -6,6 +6,7 @@ from math import comb, sqrt
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from .b_iut import analyze_direction_iut
 from .manifest import load_analysis_plan
 from .validity import validate_arm_input
 
@@ -100,11 +101,7 @@ def g_exact_randomization_pvalue(
 def g_world_blocked_randomization_pvalue(
     world_scores: Sequence[int], observed_statistic: int
 ) -> float:
-    """Exact one-sided randomization under one joint relevance swap per world.
-
-    A world's entire dose vector is exchanged as a block, so its signed aggregate
-    score S_i becomes -S_i. Zero-score worlds contribute no randomization bit.
-    """
+    """Exact one-sided randomization under one joint relevance swap per world."""
 
     magnitudes = [abs(int(score)) for score in world_scores if int(score) != 0]
     if not magnitudes:
@@ -240,13 +237,48 @@ def analyze_b(raw: Mapping[str, Any]) -> dict[str, Any]:
         controls["acquisition_posterior_target_bisimulation_bayes"] = list(
             raw["acquisition_posterior_target_bisimulation_bayes"]
         )
-    pvalues, effects, intervals = _paired_control_summary(treatment, controls)
     intervention = list(raw.get("intervention_agreement", ()))
     if not intervention:
         raise ValueError("B requires pooled intervention-agreement records")
     pooled = _mean_binary(intervention)
     validity = _validity_fields("B", raw)
     scientific_hard = pooled >= 0.90
+
+    if "direction_labels" in raw:
+        iut = analyze_direction_iut(
+            treatment,
+            controls,
+            list(raw["direction_labels"]),
+            intervention,
+            pvalue_fn=exact_mcnemar_one_sided,
+            effect_fn=_paired_effect,
+            interval_fn=_paired_effect_interval,
+        )
+        effect = float(iut["minimum_component_effect"])
+        return {
+            "raw_pvalue": iut["raw_pvalue"],
+            "component_pvalues": iut["component_pvalues"],
+            "control_effects": iut["component_effects"],
+            "effect_intervals": iut["component_effect_intervals"],
+            "effect": effect,
+            "effect_floor_pass": effect >= 0.15,
+            "pooled_intervention_agreement": pooled,
+            "pooled_agreement_gate": scientific_hard,
+            "hard_gates_pass": validity["validity_pass"] and scientific_hard,
+            "scientific_hard_gates_pass": scientific_hard,
+            "effect_direction_positive": effect > 0.0,
+            "analysis_mode": "DIRECTION_STRATIFIED_IUT",
+            "inferential_unit": iut["inferential_unit"],
+            "direction_count": iut["direction_count"],
+            "unit_count": iut["unit_count"],
+            "unit_counts_by_direction": iut["unit_counts_by_direction"],
+            "interventions_per_unit": iut["interventions_per_unit"],
+            "intervention_evaluations": iut["intervention_evaluations"],
+            "iut_rule": iut["iut_rule"],
+            **validity,
+        }
+
+    pvalues, effects, intervals = _paired_control_summary(treatment, controls)
     return {
         "raw_pvalue": max(pvalues.values()),
         "component_pvalues": pvalues,
