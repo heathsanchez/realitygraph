@@ -78,6 +78,16 @@ class StructuralPersistenceTests(unittest.TestCase):
         self.assertTrue(batch['hard_gates']['source_distinct'])
         self.assertTrue(batch['hard_gates']['restart_clean'])
 
+    def test_batch_exposes_exact_registered_baseline_set(self):
+        api = self.api()
+        batch = api.run_structural_p_batch(4)
+        self.assertEqual(set(batch['analysis_input']['baselines']), {
+            'cold', 'equal_compute_recheck', 'verbal_rule_negative',
+            'size_matched_sham', 'wrong_class_object',
+            'target_only_bisimulation_bayes', 'posterior_only_retained_bayes',
+            'targeted_deletion',
+        })
+
     def test_other_namespaces_remain_inaccessible(self):
         api = self.api()
         with self.assertRaises(ValueError):
