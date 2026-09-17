@@ -13,7 +13,7 @@ class ABGPQualificationTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first["mode"], "QUALIFICATION_ONLY")
         self.assertFalse(first["confirmatory_namespace_used"])
-        self.assertEqual(first["verdict"], "QUALIFIED")
+        self.assertEqual(first["verdict"], "HARNESS_QUALIFIED")
         self.assertTrue(first["statistical_reference_audit"]["status"] == "PASS")
         self.assertTrue(first["power_audit"]["qualified"])
         self.assertTrue(all(row["matched_expectation"] for row in first["fixtures"]))

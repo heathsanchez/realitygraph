@@ -47,11 +47,9 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     )
     directions = [(r.acquisition_family, r.transfer_family) for r in records]
     hard = {
-        "grammar_independence": disjoint
-        and len({g.serialization_schema for g in families}) == 4
-        and len({g.inference_route for g in families}) == 4,
+        "grammar_independence": False,  # Fixed answer codecs are not independent grammar generation.
         "no_translation": all(g.translation_table is None for g in families),
-        "no_primitive_dictionary_by_construction": len({len(g.primitives) for g in families}) == 4,
+        "no_primitive_dictionary_by_construction": False,  # Not established by inventory counts.
         "no_shared_surface_serialization": disjoint,
         "all_12_ordered_directions": len(set(directions)) == 12,
         "all_interventions_present": all(len(r.intervention_results) == 4 for r in records),
@@ -82,7 +80,9 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "serialization_schema_count": len({g.serialization_schema for g in families}),
             "inference_route_count": len({g.inference_route for g in families}),
             "primary_control_count": 3,
-            "posterior_bisim_control_is_executable": True,
+            "posterior_bisim_control_is_executable": False,
+            "exact_source_history_posterior_is_executable": True,
+            "implementation_scope": "EXECUTED_CODEC_CONTROL_NOT_INDEPENDENT_GRAMMAR_LEARNING",
             "all_recovery_paths_verified": hard["recovery_path_verified"],
             "all_bisimulation_separators_present": hard["bisimulation_bound"],
             "direction_world_roots_unique": hard["direction_world_roots_unique"],
@@ -103,7 +103,7 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             for r in records
         ),
         "nonzero_dose_nonempty": all(r.relevant_corruption_count > 0 for r in nonzero),
-        "same_evaluator": True,
+        "same_evaluator": False,  # Legacy G flip bits are planted, not evaluator outputs.
         "world_exchangeability_contract": bool(
             exchangeability["joint_world_vector_exchangeability_under_null"]
         ),
@@ -172,11 +172,13 @@ def run_dev_matrix(
     p_records = generate_p_independent_episodes(p_count)
 
     a_input = a_growth_analysis_input(a_records)
+    a_input["hard_gates"]["executed_generation"] = False
     a_audit = audit_a_growth_episodes(a_records)
     a_audit["stochastic_ancestry"] = audit_a_stochastic_ancestry(a_records)
     b_input, b_audit = _b_inputs(b_records)
     g_input, g_audit = _g_inputs(g_records)
     p_input = p_independent_analysis_input(p_records)
+    p_input["hard_gates"]["executed_generation"] = False
     p_audit = _p_episode_audit(p_records)
 
     analysis_inputs = {"A": a_input, "B": b_input, "G": g_input, "P": p_input}

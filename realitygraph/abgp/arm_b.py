@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from itertools import permutations
+import json
 from typing import Any, Sequence
 
 from .dev_world import DevWorld, ProtectedAction
@@ -19,7 +20,20 @@ _INTERVENTIONS = (
 
 
 def _canonical_digest(value: Any) -> str:
-    return sha256(repr(value).encode("utf-8")).hexdigest()
+    def stable(x: Any) -> Any:
+        if x is None or type(x) in (str, int, bool, float):
+            return [type(x).__name__, x]
+        if isinstance(x, dict):
+            rows = [[stable(k), stable(v)] for k, v in x.items()]
+            return ["dict", sorted(rows, key=lambda row: json.dumps(row[0], sort_keys=True))]
+        if isinstance(x, (tuple, list, set, frozenset)):
+            rows = [stable(v) for v in x]
+            if isinstance(x, (set, frozenset)):
+                rows.sort(key=lambda row: json.dumps(row, sort_keys=True))
+            return [type(x).__name__, rows]
+        raise ValueError("unsupported B representation for canonical hashing")
+    payload = json.dumps(stable(value), sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _base_order_from_hidden(hidden: int) -> tuple[int, ...]:
@@ -263,18 +277,40 @@ class BRecord:
     representation_digests: tuple[str, str]
 
 
-def _bisimulation_control(world: DevWorld) -> tuple[CapabilityOrder, bool, str]:
-    hidden = _hidden_slot(world)
-    coarse_signature = hidden % 2
-    candidate_hiddens = tuple(i for i in range(4) if i % 2 == coarse_signature)
-    candidate_orders = tuple(_base_order_from_hidden(i) for i in candidate_hiddens)
-    chosen = CapabilityOrder(candidate_orders[0])
-    separation = any(
-        len({_apply_intervention(order, intervention) for order in candidate_orders}) > 1
-        for intervention in _INTERVENTIONS
-    )
-    digest = _canonical_digest(("target-bisimulation-v1", coarse_signature, candidate_orders))
-    return chosen, separation, digest
+def source_history_posterior(
+    grammar: GrammarAdapter, observation: Any
+) -> tuple[CapabilityOrder, ...]:
+    """Exact uniform finite prior conditioned on the ACTUAL source observation.
+
+    No hidden-world argument is accepted. These codecs reveal the full order;
+    hence this ordinary control must match them rather than being blinded to an
+    invented parity bit. This is not a greatest-bisimulation implementation.
+    """
+    compatible = []
+    for hidden in range(4):
+        candidate_order = _base_order_from_hidden(hidden)
+        if grammar.encode_order(candidate_order, _BASELINE) == observation:
+            compatible.append(CapabilityOrder(candidate_order))
+    if not compatible:
+        raise ValueError("source history has zero probability under the declared prior")
+    return tuple(compatible)
+
+
+def _source_history_control(
+    grammar: GrammarAdapter, observation: Any
+) -> tuple[CapabilityOrder, bool, str]:
+    candidates = source_history_posterior(grammar, observation)
+    # Every candidate induces a joint four-intervention policy. Uniform prior
+    # and exact all-four loss: choose the most probable policy, ties lexical.
+    counts: dict[tuple[tuple[int, ...], ...], int] = {}
+    for candidate in candidates:
+        vector = tuple(candidate.predict(i) for i in _INTERVENTIONS)
+        counts[vector] = counts.get(vector, 0) + 1
+    best = min(counts, key=lambda vector: (-counts[vector], vector))
+    chosen = next(c for c in candidates if tuple(c.predict(i) for i in _INTERVENTIONS) == best)
+    separation = len(counts) > 1
+    evidence_digest = _canonical_digest(("exact-source-history-posterior-v1", tuple(c.base_order for c in candidates)))
+    return chosen, separation, evidence_digest
 
 
 def _wrong_class(capability: CapabilityOrder) -> CapabilityOrder:
@@ -323,7 +359,7 @@ def _record(acquisition: GrammarAdapter, transfer: GrammarAdapter, world_index: 
         )
     )
 
-    bisim, bisim_separation, bisim_digest = _bisimulation_control(world)
+    bisim, bisim_separation, bisim_digest = _source_history_control(acquisition, acquisition_representation)
     bisim_success = int(
         all(
             bisim.predict(intervention) == target

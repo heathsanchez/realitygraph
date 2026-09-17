@@ -414,13 +414,15 @@ def p_independent_analysis_input(
     }
 
 
-def p_episode_resource_audit(episode_count: int) -> dict[str, int]:
+def p_episode_resource_audit(episode_count: int) -> dict[str, int | bool]:
     if episode_count <= 0:
         raise ValueError("P resource audit episode count must be positive")
     return {
         "independent_acquisition_episodes": episode_count,
         "future_tasks_per_episode": _P_FUTURES_PER_EPISODE,
-        "hard_restarts": episode_count,
+        "hard_restarts": 0,
+        "serialization_roundtrips": episode_count,
+        "executed_isolation": False,
         "future_invocations": episode_count * _P_FUTURES_PER_EPISODE,
         "maximum_policy_candidates_per_acquisition": len(_P_POLICIES),
         "maximum_acquisition_candidate_checks": episode_count * len(_P_POLICIES),

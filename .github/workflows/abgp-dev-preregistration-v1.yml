@@ -70,7 +70,7 @@ jobs:
       - name: Run explicit ABGP methodological qualification
         run: |
           python abgp_qualify.py | tee abgp-qualification.log
-          grep -Fx 'ABGP_QUALIFIED' abgp-qualification.log
+          grep -Fx 'ABGP_HARNESS_QUALIFIED' abgp-qualification.log
           sha256sum abgp-qualification-summary.json | tee abgp-qualification-summary.sha256
 
       - name: Run DEV-only ABGP matrix
@@ -104,9 +104,11 @@ jobs:
           assert p_budget['independence_audit']['future_tasks_per_episode'] == 4
           assert qualification['schema'] == 'realitygraph.abgp.qualification.v1'
           assert qualification['mode'] == 'QUALIFICATION_ONLY'
-          assert qualification['verdict'] == 'QUALIFIED'
+          assert qualification['verdict'] == 'HARNESS_QUALIFIED'
           assert qualification['confirmatory_namespace_used'] is False
           assert qualification['safety']['confirmatory_namespace_accessed'] is False
+          assert qualification['implementation_qualified'] is False
+          assert qualification['complete_pass_power_qualified'] is False
           assert qualification['safety']['all_fixture_expectations_matched'] is True
           assert qualification['statistical_reference_audit']['status'] == 'PASS'
           assert qualification['power_audit']['qualified'] is True

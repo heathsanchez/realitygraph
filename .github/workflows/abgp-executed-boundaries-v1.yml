@@ -40,3 +40,19 @@ jobs:
           if-no-files-found: error
       - name: Full DEV regression, never confirmation
         run: python -m unittest discover -s tests -v
+      - name: Execute isolated restart deletion and ordinary controls
+        run: |
+          set -euo pipefail
+          python abgp_executed_boundaries.py | tee abgp-executed-boundaries.log
+          grep -Fx 'ABGP_EXECUTED_BOUNDARIES_OK' abgp-executed-boundaries.log
+          sha256sum abgp-executed-boundaries.json > abgp-executed-boundaries.sha256
+      - name: Upload executed mechanism receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: abgp-executed-boundaries-evidence
+          path: |
+            abgp-executed-boundaries.json
+            abgp-executed-boundaries.log
+            abgp-executed-boundaries.sha256
+          retention-days: 30
+          if-no-files-found: error

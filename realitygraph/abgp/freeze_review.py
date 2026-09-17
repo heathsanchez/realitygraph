@@ -50,7 +50,9 @@ def audit_a_stochastic_ancestry(episodes: Sequence[AGrowthEpisode]) -> dict[str,
         ],
         "sampled_objects_per_episode": ["acquisition seed material", "sealed-future seed material"],
         "shared_stochastic_ancestor_count": shared,
-        "no_cross_episode_shared_stochastic_ancestor": shared == 0,
+        "no_cross_episode_shared_stochastic_ancestor": False,
+        "listed_seed_fields_disjoint": shared == 0,
+        "complete_ancestry_status": "UNTRACED_LEGACY_FIXTURE",
         "episode_ancestor_digests": [list(group) for group in groups],
     }
 
@@ -85,25 +87,15 @@ def audit_p_stochastic_ancestry(episodes: Sequence[PIndependentEpisode]) -> dict
             "four future seed materials",
         ],
         "shared_stochastic_ancestor_count": shared,
-        "no_cross_episode_shared_stochastic_ancestor": shared == 0,
+        "no_cross_episode_shared_stochastic_ancestor": False,
+        "listed_seed_fields_disjoint": shared == 0,
+        "complete_ancestry_status": "UNTRACED_LEGACY_FIXTURE",
         "episode_ancestor_digests": [list(group) for group in groups],
     }
 
 
 def _canonical_pair(pair: tuple[str, str]) -> tuple[str, str]:
     return tuple(sorted((str(pair[0]), str(pair[1]))))  # type: ignore[return-value]
-
-
-def _label_blind_null_flip(record: GRecord) -> int:
-    pairs = tuple(_canonical_pair(pair) for pair in record.matched_corruption_pairs)
-    payload = (
-        record.seed_digest,
-        record.dose,
-        record.relevant_corruption_count,
-        record.relevant_corruption_magnitude,
-        pairs,
-    )
-    return int(sha256(repr(payload).encode("utf-8")).hexdigest(), 16) & 1
 
 
 def audit_g_exchangeability_design(records: Sequence[GRecord]) -> dict[str, Any]:
@@ -138,20 +130,19 @@ def audit_g_exchangeability_design(records: Sequence[GRecord]) -> dict[str, Any]
         for record in records
     )
 
-    null_swap_checks: list[bool] = []
-    for world_records in by_world.values():
-        nonzero = sorted((r for r in world_records if r.dose > 0), key=lambda r: r.dose)
-        original = tuple((r.dose, _label_blind_null_flip(r), _label_blind_null_flip(r)) for r in nonzero)
-        swapped = tuple((dose, irrelevant, relevant) for dose, relevant, irrelevant in original)
-        null_swap_checks.append(original == swapped)
-    sharp_null_swap_invariance = bool(null_swap_checks) and all(null_swap_checks)
-
-    selection_fixed = complete_schedule and preclassified and matched_pairs and pair_selection_swap_invariant
-    generation_label_symmetric_under_null = sharp_null_swap_invariance
-    no_adaptive_stopping = complete_schedule and contiguous_worlds
-    joint_exchangeable = selection_fixed and generation_label_symmetric_under_null and no_adaptive_stopping
+    # A complete matched schedule is necessary bookkeeping, not evidence of
+    # sampling/stopping invariance or the actual joint outcome law. The previous
+    # f(x),f(x) construction proved only a tautology about an invented null.
+    selection_fixed = False
+    generation_label_symmetric_under_null = False
+    no_adaptive_stopping = False
+    joint_exchangeable = False
+    sharp_null_swap_invariance = False
     return {
-        "null_model": "paired_label_blind_sharp_null",
+        "null_model": "UNBOUND",
+        "design_argument_status": "ACTUAL_OUTCOME_LAW_NOT_ESTABLISHED",
+        "observed_schedule_complete": complete_schedule and contiguous_worlds,
+        "bookkeeping_checks_pass": matched_pairs and preclassified and complete_schedule,
         "null_hypothesis": (
             "conditional on the fixed matched-pair construction and all non-label inputs, "
             "the complete within-world outcome vector is unchanged by one joint exchange "
@@ -169,8 +160,8 @@ def audit_g_exchangeability_design(records: Sequence[GRecord]) -> dict[str, Any]
         "world_count": len(by_world),
         "complete_fixed_dose_schedule": complete_schedule,
         "scope_note": (
-            "This is an explicit design/model contract for exact randomization under the stated sharp null; "
-            "it is not a theorem that arbitrary natural-domain relevance classes are exchangeable."
+            "Record checks do not establish generation, selection, stopping, or outcome-law exchangeability. "
+            "A code-bound design argument is still required; no duplicated synthetic null is accepted."
         ),
     }
 

@@ -14,13 +14,15 @@ def main() -> None:
     print("REALITYGRAPH / ABGP TEST QUALIFICATION V1")
     print("---------------------------------------")
     print("verdict", artifact["verdict"])
+    print("implementation_qualified", int(artifact["implementation_qualified"]))
+    print("complete_pass_power_qualified", int(artifact["complete_pass_power_qualified"]))
     print("fixtures", artifact["fixture_count"])
     print("statistical_reference", artifact["statistical_reference_audit"]["status"])
-    print("power_qualified", int(bool(artifact["power_audit"]["qualified"])))
+    print("historical_component_power_qualified", int(bool(artifact["power_audit"]["qualified"])))
     print("confirmatory_namespace_used", int(artifact["confirmatory_namespace_used"]))
     print("qualification_digest", artifact["qualification_digest"])
-    if artifact["verdict"] == "QUALIFIED":
-        print("ABGP_QUALIFIED")
+    if artifact["verdict"] == "HARNESS_QUALIFIED":
+        print("ABGP_HARNESS_QUALIFIED")
         return
     print("ABGP_NOT_QUALIFIED")
     raise SystemExit(1)

@@ -106,7 +106,7 @@ def _power_table(power_audit: dict[str, Any], design: Any, analysis: Any) -> lis
     rows.append({
         "arm": "A",
         "inferential_unit": design.arms["A"]["inferential_unit"],
-        "dependence_structure": "independent episodes; acquisition and sealed-future seed material disjoint",
+        "dependence_structure": "proposed independent episodes; full sampling-model audit pending",
         "n": int(analysis.arms["A"]["n"]),
         "effect_floor": float(analysis.arms["A"]["effect_floor"]),
         "component_alpha": float(power_audit["component_alpha"]),
@@ -144,6 +144,8 @@ def _power_table(power_audit: dict[str, Any], design: Any, analysis: Any) -> lis
         "nuisance_envelope": list(analysis.raw["qualification"]["paired_nuisance_envelope"]["P"]["discordance_rates"]),
         "minimum_power": float(power_audit["arms"]["P"]["minimum_observed_power"]),
     })
+    for row in rows:
+        row["power_scope"] = "HISTORICAL_COMPONENT_SIGNIFICANCE_ONLY_NOT_COMPLETE_PASS"
     return rows
 
 
@@ -182,7 +184,11 @@ def run_qualification() -> dict[str, Any]:
     artifact: dict[str, Any] = {
         "schema": _QUALIFICATION_SCHEMA,
         "mode": "QUALIFICATION_ONLY",
-        "verdict": "QUALIFIED" if qualified else "NOT_QUALIFIED",
+        "verdict": "HARNESS_QUALIFIED" if qualified else "HARNESS_NOT_QUALIFIED",
+        "qualification_scope": "STATISTICAL_AND_SYNTHETIC_FIXTURE_HARNESS_ONLY",
+        "implementation_qualified": False,
+        "complete_pass_power_qualified": False,
+        "freeze_authorized": False,
         "confirmatory_namespace_used": False,
         "design_status": design.status,
         "confirmatory_execution_enabled": design.confirmatory_execution_enabled,
@@ -202,7 +208,7 @@ def run_qualification() -> dict[str, Any]:
             "all_fixture_expectations_matched": fixtures_match,
             "all_hardened_analysis_paths_active": path_audit["all_hardened_paths_active"],
         },
-        "scientific_interpretation": "METHODOLOGICAL_QUALIFICATION_ONLY_NOT_CONFIRMATORY_ABGP_EVIDENCE",
+        "scientific_interpretation": "SYNTHETIC_FIXTURE_HARNESS_ONLY_NO_END_TO_END_IMPLEMENTATION_CLAIM",
     }
     artifact["qualification_digest"] = _digest(artifact)
     return json.loads(_canonical_json(artifact))

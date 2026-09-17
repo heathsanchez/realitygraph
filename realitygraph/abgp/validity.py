@@ -12,6 +12,7 @@ class ValidityIssue:
 
 _FATAL_CODES: dict[str, dict[str, str]] = {
     "A": {
+        "executed_generation": "A_UNEXECUTED_GENERATION",
         "message_nonidentifying": "A_DIRECT_ACTION_IDENTIFYING_MESSAGE",
         "single_message": "A_MESSAGE_BUDGET_VIOLATION",
         "single_repair_round": "A_REPAIR_BUDGET_VIOLATION",
@@ -31,12 +32,14 @@ _FATAL_CODES: dict[str, dict[str, str]] = {
         "bisimulation_bound": "B_BISIMULATION_SPEC_UNBOUND",
     },
     "G": {
+        "world_exchangeability_contract": "G_EXCHANGEABILITY_UNESTABLISHED",
         "preclassified": "G_POSTHOC_RELEVANCE_LABEL",
         "matched_corruption": "G_CORRUPTION_MISMATCH",
         "nonzero_dose_nonempty": "G_EMPTY_NONZERO_DOSE",
         "same_evaluator": "G_EVALUATOR_MISMATCH",
     },
     "P": {
+        "executed_generation": "P_UNEXECUTED_GENERATION",
         "zero_verifier": "P_FUTURE_VERIFIER_ACCESS",
         "zero_search": "P_FUTURE_RECONSTRUCTION_SEARCH",
         "label_free": "P_TARGET_LABEL_APPLICABILITY",
