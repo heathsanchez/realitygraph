@@ -57,6 +57,7 @@ class ExecutedBTests(unittest.TestCase):
         self.assertEqual(len({(r['acquisition_family'], r['transfer_family']) for r in records}), 12)
         self.assertEqual(len({r['source_grammar_digest'] for r in records}), 36)
         self.assertEqual(len({r['target_grammar_digest'] for r in records}), 36)
+        self.assertEqual(len({r['latent_world_digest'] for r in records}), 36)
         self.assertTrue(all(r['grammar_independence'] for r in records))
         self.assertTrue(all(r['bisimulation_separation_witness'] for r in records))
 
