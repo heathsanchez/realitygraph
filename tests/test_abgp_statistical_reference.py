@@ -6,10 +6,12 @@ import unittest
 from realitygraph.abgp.analysis import (
     exact_mcnemar_one_sided,
     g_exact_randomization_pvalue,
+    g_world_blocked_randomization_pvalue,
     holm_bonferroni,
 )
 from realitygraph.abgp.statistical_reference import (
     reference_g_randomization,
+    reference_g_world_blocked,
     reference_holm,
     reference_mcnemar,
     run_statistical_reference_audit,
@@ -32,10 +34,21 @@ class ABGPStatisticalReferenceTests(unittest.TestCase):
                 scientific = Fraction(
                     g_exact_randomization_pvalue(counts, observed)
                 ).limit_denominator()
-                self.assertEqual(
-                    scientific,
-                    reference_g_randomization(weights, observed),
-                )
+                self.assertEqual(scientific, reference_g_randomization(weights, observed))
+
+    def test_g_world_blocked_dp_matches_exhaustive_world_sign_reference(self):
+        score_sets = ((2,), (2, 5), (7, -3, 4), (37, 37, 37, 37))
+        for scores in score_sets:
+            total = sum(scores)
+            for observed in range(-sum(abs(x) for x in scores), sum(abs(x) for x in scores) + 1):
+                scientific = Fraction(
+                    g_world_blocked_randomization_pvalue(scores, observed)
+                ).limit_denominator()
+                self.assertEqual(scientific, reference_g_world_blocked(scores, observed))
+            self.assertEqual(
+                Fraction(g_world_blocked_randomization_pvalue(scores, total)).limit_denominator(),
+                reference_g_world_blocked(scores, total),
+            )
 
     def test_holm_matches_fraction_reference_on_small_grid(self):
         grid = (
@@ -59,11 +72,7 @@ class ABGPStatisticalReferenceTests(unittest.TestCase):
             )
             self.assertEqual(actual["order"], expected["order"])
             for arm in ("A", "B", "G", "P"):
-                self.assertAlmostEqual(
-                    actual["adjusted_pvalues"][arm],
-                    float(expected["adjusted_pvalues"][arm]),
-                    places=15,
-                )
+                self.assertAlmostEqual(actual["adjusted_pvalues"][arm], float(expected["adjusted_pvalues"][arm]), places=15)
                 self.assertEqual(actual["rejected"][arm], expected["rejected"][arm])
 
     def test_reference_audit_is_complete_and_green(self):
@@ -72,6 +81,7 @@ class ABGPStatisticalReferenceTests(unittest.TestCase):
         self.assertGreater(audit["mcnemar_cases"], 0)
         self.assertGreater(audit["holm_cases"], 0)
         self.assertGreater(audit["g_cases"], 0)
+        self.assertGreater(audit["g_world_blocked_cases"], 0)
         self.assertLessEqual(audit["max_abs_error"], 1e-15)
 
 
