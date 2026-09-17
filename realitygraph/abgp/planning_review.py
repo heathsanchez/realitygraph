@@ -84,26 +84,26 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
     g_env = qualification["g_nuisance_envelope"]["max_dose_discordance_rates"]
 
     a = _component_review(
-        proposed_n=1600,
+        proposed_n=int(plan.arms["A"]["n"]),
         planning_effect=0.10,
         observed_floor=float(plan.arms["A"]["effect_floor"]),
         registered_envelope=paired["A"]["discordance_rates"],
         component_count=3,
     )
     a.update({
-        "proposed_n": 1600,
+        "proposed_n": int(plan.arms["A"]["n"]),
         "current_review_n": int(plan.arms["A"]["n"]),
         "conservative_complete_pass_lower_bound": a["dependence_agnostic_component_union_lower_bound"],
     })
 
     b = _component_review(
-        proposed_n=700,
+        proposed_n=int(plan.arms["B"]["worlds_per_direction"]),
         planning_effect=0.25,
         observed_floor=float(plan.arms["B"]["effect_floor_each_control"]),
         registered_envelope=paired["B"]["discordance_rates"],
         component_count=36,
     )
-    total_worlds = 12 * 700
+    total_worlds = 12 * int(plan.arms["B"]["worlds_per_direction"])
     agreement_threshold = ceil(0.90 * total_worlds)
     agreement_power = float(_binomial_upper_tail(total_worlds, agreement_threshold, 0.95))
     b_combined = max(
@@ -113,7 +113,7 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
         - (1.0 - agreement_power),
     )
     b.update({
-        "proposed_worlds_per_direction": 700,
+        "proposed_worlds_per_direction": int(plan.arms["B"]["worlds_per_direction"]),
         "proposed_total_worlds": total_worlds,
         "current_review_worlds_per_direction": int(plan.arms["B"]["worlds_per_direction"]),
         "independent_unit_count_for_agreement_planning": total_worlds,
@@ -130,14 +130,14 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
     })
 
     g = _component_review(
-        proposed_n=200,
+        proposed_n=int(plan.arms["G"]["n_worlds"]),
         planning_effect=0.25,
         observed_floor=float(qualification["g_nuisance_envelope"]["max_dose_effect_floor"]),
         registered_envelope=g_env,
         component_count=1,
     )
     g.update({
-        "proposed_n": 200,
+        "proposed_n": int(plan.arms["G"]["n_worlds"]),
         "current_review_n": int(plan.arms["G"]["n_worlds"]),
         "conservative_complete_pass_lower_bound": g["minimum_complete_component_power"],
         "power_model": (
@@ -146,14 +146,14 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
     })
 
     p = _component_review(
-        proposed_n=1900,
+        proposed_n=int(plan.arms["P"]["n"]),
         planning_effect=0.10,
         observed_floor=float(plan.arms["P"]["effect_floor"]),
         registered_envelope=paired["P"]["discordance_rates"],
         component_count=7,
     )
     p.update({
-        "proposed_n": 1900,
+        "proposed_n": int(plan.arms["P"]["n"]),
         "current_review_n": int(plan.arms["P"]["n"]),
         "conservative_complete_pass_lower_bound": p["dependence_agnostic_component_union_lower_bound"],
         "deletion_closeness_planning": "MECHANICALLY_IDENTICAL_TO_COLD_POTENTIAL_OUTCOME",
@@ -189,11 +189,12 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
         "arms": arms,
         "joint_decisions_requested": [
             "approve or revise the planning effects A=.10, B=.25, G=.25, P=.10",
-            "approve or revise the rounded counts A=1600, B=700/direction, G=200, P=1900",
+            "confirm the already-reviewed counts remain A=4096, B=1015/direction, G=421, P=4096",
             "approve B planning all-four world agreement=.95 for the >=.90 pooled observed gate",
             "approve P deletion-to-cold equality as a mechanically enforced gate rather than a separate power target",
         ],
         "normative_update_required_after_approval": True,
+        "count_change_requested": False,
         "confirmatory_namespace_used": False,
         "freeze_authorized": False,
     }
