@@ -54,6 +54,7 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         for i in range(len(alphabets))
         for j in range(i + 1, len(alphabets))
     )
+    directions = [(r.acquisition_family, r.transfer_family) for r in records]
     hard = {
         "grammar_independence": disjoint
         and len({g.serialization_schema for g in families}) == 4
@@ -61,7 +62,7 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         "no_translation": all(g.translation_table is None for g in families),
         "no_primitive_dictionary_by_construction": len({len(g.primitives) for g in families}) == 4,
         "no_shared_surface_serialization": disjoint,
-        "all_12_ordered_directions": len({(r.acquisition_family, r.transfer_family) for r in records}) == 12,
+        "all_12_ordered_directions": len(set(directions)) == 12,
     }
     intervention_bits = [bit for record in records for _, bit in record.intervention_results]
     return (
@@ -69,12 +70,15 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "treatment": [r.treatment_success for r in records],
             "wrong_class": [r.wrong_class_success for r in records],
             "shuffled_coupling": [r.shuffled_coupling_success for r in records],
+            "direction_labels": [f"{a}->{b}" for a, b in directions],
             "intervention_agreement": intervention_bits,
             "hard_gates": hard,
         },
         {
             "record_count": len(records),
-            "ordered_directions": len({(r.acquisition_family, r.transfer_family) for r in records}),
+            "inferential_unit": "ordered_direction_world_pair",
+            "ordered_directions": len(set(directions)),
+            "interventions_per_unit": 4,
             "intervention_evaluations": len(intervention_bits),
             "surface_alphabets_pairwise_disjoint": disjoint,
             "serialization_schema_count": len({g.serialization_schema for g in families}),
