@@ -373,6 +373,7 @@ def p_independent_analysis_input(
 
     retained = [episode.retained_episode_success for episode in episodes]
     cold = [episode.cold_episode_success for episode in episodes]
+    deletion = [episode.post_deletion_episode_success for episode in episodes]
     baselines = {
         "cold": cold,
         "equal_compute_recheck": [episode.equal_recheck_episode_success for episode in episodes],
@@ -385,8 +386,8 @@ def p_independent_analysis_input(
         "posterior_only_retained_bayes": [
             episode.posterior_only_retained_bayes_episode_success for episode in episodes
         ],
+        "targeted_deletion": deletion,
     }
-    deletion = [episode.post_deletion_episode_success for episode in episodes]
     reacquired = [episode.reacquired_episode_success for episode in episodes]
     return {
         "inferential_unit": "independent_acquisition_episode",
