@@ -27,6 +27,7 @@ jobs:
         run: |
           git archive --format=tar.gz --output=abgp-source.tar.gz HEAD
           git rev-parse HEAD > abgp-source-commit.txt
+          git rev-parse HEAD^{tree} > abgp-source-tree.txt
           sha256sum abgp-source.tar.gz > abgp-source.sha256
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
@@ -35,6 +36,7 @@ jobs:
           path: |
             abgp-source.tar.gz
             abgp-source-commit.txt
+            abgp-source-tree.txt
             abgp-source.sha256
           retention-days: 7
           if-no-files-found: error
@@ -46,13 +48,34 @@ jobs:
           python abgp_executed_boundaries.py | tee abgp-executed-boundaries.log
           grep -Fx 'ABGP_EXECUTED_BOUNDARIES_OK' abgp-executed-boundaries.log
           sha256sum abgp-executed-boundaries.json > abgp-executed-boundaries.sha256
-      - name: Upload executed mechanism receipts
+      - name: Build executed implementation final-lock review candidate
+        run: |
+          set -euo pipefail
+          python abgp_final_candidate.py             --a-count 12             --b-worlds-per-direction 3             --g-worlds 6             --p-count 4             --output abgp-final-lock-candidate.json             | tee abgp-final-lock-candidate.log
+          grep -Fx 'ABGP_FINAL_LOCK_CANDIDATE_REVIEW_PENDING' abgp-final-lock-candidate.log
+          sha256sum abgp-final-lock-candidate.json > abgp-final-lock-candidate.sha256
+          python - <<'PY'
+          import json
+          candidate = json.load(open('abgp-final-lock-candidate.json', encoding='utf-8'))
+          assert candidate['status'] == 'REVIEW_PENDING'
+          assert candidate['implementation_qualification']['implementation_qualified'] is True
+          assert candidate['planning_proposal']['approved_by_collaborators'] is False
+          assert candidate['planning_proposal']['complete_pass_power_qualified'] is False
+          assert candidate['freeze_authorized'] is False
+          assert candidate['confirmatory_execution_enabled'] is False
+          assert candidate['confirmatory_namespace_used'] is False
+          print('ABGP_FINAL_CANDIDATE_SAFETY_BOUNDARY_OK')
+          PY
+      - name: Upload executed mechanism and final-candidate receipts
         uses: actions/upload-artifact@v4
         with:
-          name: abgp-executed-boundaries-evidence
+          name: abgp-executed-prefreeze-review-evidence
           path: |
             abgp-executed-boundaries.json
             abgp-executed-boundaries.log
             abgp-executed-boundaries.sha256
+            abgp-final-lock-candidate.json
+            abgp-final-lock-candidate.log
+            abgp-final-lock-candidate.sha256
           retention-days: 30
           if-no-files-found: error
