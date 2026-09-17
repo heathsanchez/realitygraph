@@ -33,6 +33,11 @@ class ABGPLockTests(unittest.TestCase):
             "wrong_class_construction_hash": "wrong-abc",
             "corruption_implementation_hash": "corrupt-abc",
             "ablation_implementation_hash": "ablate-abc",
+            "ordinary_explanation_oracle_hashes": {"A": "oracle-a", "B": "oracle-b", "P": "oracle-p"},
+            "bisimulation_canonicalizer_hashes": {"B": "bisim-b", "P": "bisim-p"},
+            "inferential_unit_audit_hashes": {"A": "unit-a", "B": "unit-b", "G": "unit-g", "P": "unit-p"},
+            "qualification_status": "QUALIFIED",
+            "qualification_evidence_digest": "a" * 64,
             "model_and_runtime_versions": {"python": "3.12"},
             "dependency_environment_hash": "env-abc",
             "resource_budgets": {"cpu_seconds": 10},
@@ -47,6 +52,8 @@ class ABGPLockTests(unittest.TestCase):
         self.assertEqual(lock["design_manifest_digest"], self.design.digest)
         self.assertEqual(lock["analysis_implementation_hash"], lock["scientific_code_hashes"]["realitygraph/abgp/analysis.py"])
         self.assertEqual(set(lock["arm_generator_code_hashes"]), {"A", "B", "G", "P"})
+        self.assertEqual(lock["qualification_status"], "QUALIFIED")
+        self.assertEqual(len(lock["qualification_evidence_digest"]), 64)
         for field in self.design.raw["final_lock_requirements"]:
             self.assertIn(field, lock)
 
@@ -81,6 +88,16 @@ class ABGPLockTests(unittest.TestCase):
         self.assertNotIn("freeze", lock)
         self.assertNotIn("unlock", lock)
         self.assertNotEqual(lock["status"], "FROZEN")
+
+    def test_review_lock_rejects_nonqualified_metadata(self):
+        runtime = dict(self.runtime)
+        runtime["qualification_status"] = "NOT_QUALIFIED"
+        lock = build_review_lock(self.files, runtime)
+        frozen = copy.deepcopy(lock)
+        frozen["status"] = "FROZEN"
+        frozen["confirmatory_execution_enabled"] = True
+        with self.assertRaises(ValueError):
+            validate_final_lock(frozen, self.design, self.analysis)
 
     def test_committed_lock_template_is_review_only_and_complete(self):
         template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
