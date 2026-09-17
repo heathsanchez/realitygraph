@@ -1,5 +1,6 @@
 import unittest
 
+from realitygraph.abgp.analysis import analyze_p
 from realitygraph.abgp.arm_p import (
     RetainedStructure,
     acquire_dev_structure,
@@ -74,8 +75,16 @@ class ABGPArmPTests(unittest.TestCase):
         self.assertEqual(len(raw["retained"]), 48)
         self.assertTrue(all(len(values) == 48 for values in raw["baselines"].values()))
         self.assertEqual(raw["primary_episode_rule"], "all_four_context_probes_correct")
+        self.assertIn("targeted_deletion", raw["baselines"])
         self.assertGreater(raw["reacquisition_search_count"], 0)
         self.assertTrue(raw["reacquisition_restored"])
+
+        analysis = analyze_p(raw)
+        self.assertEqual(analysis["analysis_mode"], "INDEPENDENT_EPISODE_POSTERIOR_BISIMULATION")
+        self.assertEqual(len(analysis["component_pvalues"]), 7)
+        self.assertIn("targeted_deletion", analysis["component_pvalues"])
+        self.assertTrue(analysis["targeted_deletion_gate"])
+        self.assertGreaterEqual(analysis["effect"], 0.05)
 
     def test_episode_resource_audit_is_deterministic_and_scales_by_acquisition(self):
         audit = p_episode_resource_audit(4096)
