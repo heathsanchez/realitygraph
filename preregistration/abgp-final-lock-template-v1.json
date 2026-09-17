@@ -17,11 +17,16 @@
     "wrong_class_construction_hash",
     "corruption_implementation_hash",
     "ablation_implementation_hash",
+    "ordinary_explanation_oracle_hashes",
+    "bisimulation_canonicalizer_hashes",
+    "inferential_unit_audit_hashes",
+    "qualification_status",
+    "qualification_evidence_digest",
     "model_and_runtime_versions",
     "dependency_environment_hash",
     "resource_budgets",
     "confirmatory_namespace_identifier",
     "one_shot_execution_marker_policy"
   ],
-  "note": "Review template only. REVIEW_PENDING lock candidates are non-executable. Any FROZEN confirmatory lock requires a separate explicit reviewed change outside the DEV-only implementation plan."
+  "note": "Review template only. REVIEW_PENDING lock candidates are non-executable. Any FROZEN confirmatory lock requires a separate explicit reviewed change outside the DEV/QUAL implementation plan."
 }
