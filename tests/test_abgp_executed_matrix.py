@@ -31,6 +31,17 @@ class ExecutedMatrixTests(unittest.TestCase):
         self.assertFalse(result['complete_pass_power_qualified'])
         self.assertEqual(result['scientific_interpretation'], 'DEV_MECHANICS_AND_TEXT_IMPLEMENTATION_ONLY_NOT_CONFIRMATORY_EVIDENCE')
 
+    def test_matrix_audits_earliest_generated_ancestors_without_overclaiming_independence(self):
+        result = self.api()(a_count=8, b_worlds_per_direction=2, g_worlds=4, p_count=3)
+        audits = result['inferential_ancestry_audit']
+        self.assertEqual(set(audits), {'A', 'B', 'G', 'P'})
+        for arm in 'ABGP':
+            self.assertTrue(audits[arm]['no_shared_generated_ancestor_across_scored_units'])
+            self.assertFalse(audits[arm]['statistical_independence_proved_by_this_audit'])
+            self.assertTrue(audits[arm]['fixed_protocol_objects'])
+        self.assertEqual(audits['B']['scored_unit_count'], 24)
+        self.assertEqual(audits['B']['unique_latent_world_roots'], 24)
+
     def test_confirmation_namespace_is_rejected(self):
         with self.assertRaises(ValueError):
             self.api()(a_count=4, b_worlds_per_direction=1, g_worlds=2, p_count=1,
