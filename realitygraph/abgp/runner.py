@@ -18,6 +18,11 @@ from .arm_p import (
     generate_p_independent_episodes,
     p_independent_analysis_input,
 )
+from .freeze_review import (
+    audit_a_stochastic_ancestry,
+    audit_g_exchangeability_design,
+    audit_p_stochastic_ancestry,
+)
 from .manifest import (
     ConfirmatoryLockedError,
     load_analysis_plan,
@@ -50,20 +55,19 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         "no_shared_surface_serialization": disjoint,
         "all_12_ordered_directions": len(set(directions)) == 12,
         "all_interventions_present": all(len(r.intervention_results) == 4 for r in records),
-        "bisimulation_bound": True,
+        "direction_world_roots_unique": len({r.seed_digest for r in records}) == len(records),
+        "recovery_path_verified": all(r.recovery_path_verified for r in records),
+        "bisimulation_bound": all(r.bisimulation_separation_witness for r in records),
     }
     intervention_bits = [bit for record in records for _, bit in record.intervention_results]
-
-    # DEV-only placeholder for the strengthened ordinary-explanation path.  The
-    # qualification fixtures separately test the target-bisimulation/posterior
-    # semantics; this routine exists to exercise the 36-component IUT plumbing.
-    posterior_bisim = [int(((int(r.seed_digest, 16) >> 27) & 0b111) == 0) for r in records]
     return (
         {
             "treatment": [r.treatment_success for r in records],
             "wrong_class": [r.wrong_class_success for r in records],
             "shuffled_coupling": [r.shuffled_coupling_success for r in records],
-            "acquisition_posterior_target_bisimulation_bayes": posterior_bisim,
+            "acquisition_posterior_target_bisimulation_bayes": [
+                r.bisimulation_bayes_success for r in records
+            ],
             "direction_labels": [f"{a}->{b}" for a, b in directions],
             "intervention_agreement": intervention_bits,
             "hard_gates": hard,
@@ -78,7 +82,10 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "serialization_schema_count": len({g.serialization_schema for g in families}),
             "inference_route_count": len({g.inference_route for g in families}),
             "primary_control_count": 3,
-            "dev_posterior_bisim_control_is_mechanics_only": True,
+            "posterior_bisim_control_is_executable": True,
+            "all_recovery_paths_verified": hard["recovery_path_verified"],
+            "all_bisimulation_separators_present": hard["bisimulation_bound"],
+            "direction_world_roots_unique": hard["direction_world_roots_unique"],
         },
     )
 
@@ -87,6 +94,7 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     weights = {0.1: 2, 0.25: 5, 0.5: 10, 1.0: 20}
     nonzero = [r for r in records if r.dose > 0]
     maxdose = [r for r in records if r.dose == 1.0]
+    exchangeability = audit_g_exchangeability_design(records)
     hard = {
         "preclassified": all(r.relevance_computed_before_corruption for r in records),
         "matched_corruption": all(
@@ -96,6 +104,9 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         ),
         "nonzero_dose_nonempty": all(r.relevant_corruption_count > 0 for r in nonzero),
         "same_evaluator": True,
+        "world_exchangeability_contract": bool(
+            exchangeability["joint_world_vector_exchangeability_under_null"]
+        ),
     }
     return (
         {
@@ -118,12 +129,14 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "randomization_unit": "world",
             "relevance_computed_before_corruption": hard["preclassified"],
             "matched_count_and_magnitude": hard["matched_corruption"],
+            "exchangeability_contract": exchangeability,
         },
     )
 
 
 def _p_episode_audit(episodes: list[Any]) -> dict[str, Any]:
     audit = dict(audit_p_episode_independence(episodes))
+    audit["stochastic_ancestry"] = audit_p_stochastic_ancestry(episodes)
     audit.update(
         {
             "future_verifier_calls": sum(e.future_verifier_calls for e in episodes),
@@ -160,6 +173,7 @@ def run_dev_matrix(
 
     a_input = a_growth_analysis_input(a_records)
     a_audit = audit_a_growth_episodes(a_records)
+    a_audit["stochastic_ancestry"] = audit_a_stochastic_ancestry(a_records)
     b_input, b_audit = _b_inputs(b_records)
     g_input, g_audit = _g_inputs(g_records)
     p_input = p_independent_analysis_input(p_records)
