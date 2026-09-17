@@ -30,13 +30,6 @@ def _binomial_probability(n: int, k: int, p: float) -> float:
 
 
 def _beta_continued_fraction(a: float, b: float, x: float) -> float:
-    """Continued fraction for the regularized incomplete beta function.
-
-    This is the standard Lentz/Numerical-Recipes recurrence.  It keeps the
-    qualification calculation dependency-free while remaining stable at the
-    large preregistered sample sizes used by the pre-freeze power audit.
-    """
-
     max_iterations = 300
     epsilon = 3.0e-14
     fp_min = 1.0e-300
@@ -96,8 +89,6 @@ def _regularized_beta(x: float, a: float, b: float) -> float:
 
 
 def _binomial_upper_tail_probability(n: int, minimum: int, p: float) -> float:
-    """P[X >= minimum] for X~Binomial(n,p), stable for n in the thousands."""
-
     if minimum <= 0:
         return 1.0
     if minimum > n:
@@ -111,8 +102,6 @@ def _binomial_upper_tail_probability(n: int, minimum: int, p: float) -> float:
 
 @lru_cache(maxsize=None)
 def _null_critical_wins(discordant: int, alpha: float) -> int | None:
-    """Smallest treatment-win count whose exact one-sided null tail <= alpha."""
-
     if discordant <= 0:
         return None
     if _binomial_upper_tail_probability(discordant, discordant, 0.5) > alpha:
@@ -138,13 +127,7 @@ def paired_exact_power(
     p01: Fraction,
     alpha: Fraction,
 ) -> float:
-    """Exact-test unconditional power of one-sided paired McNemar/binomial.
-
-    ``p10`` is P(control=0,treatment=1); ``p01`` is the reverse discordance.
-    The rejection region is the exact conditional Binomial(d,.5) McNemar region.
-    Power averages over the exact Binomial(n,p10+p01) discordance law, with the
-    probabilities evaluated by stable incomplete-beta/log-gamma arithmetic.
-    """
+    """Exact-test unconditional power of one-sided paired McNemar/binomial."""
 
     if n <= 0:
         raise ValueError("n must be positive")
@@ -173,6 +156,30 @@ def paired_exact_power(
         )
         power += probability_discordant * conditional_rejection
     return min(1.0, max(0.0, power))
+
+
+def g_world_blocked_conservative_power(
+    n_worlds: int,
+    max_dose_discordance_rate: Fraction,
+    max_dose_effect: Fraction,
+    alpha: Fraction,
+) -> float:
+    """Worst-case power for the world-blocked G test.
+
+    The preregistered floor constrains only the maximum dose. For qualification we
+    therefore give every lower dose zero signal. A world's aggregate score is then
+    just the maximum-dose signed contribution, and the exact world-level sign test
+    reduces to the paired exact test on independent worlds. This is conservative:
+    any aligned lower-dose signal can only add information relative to this model.
+    """
+
+    q = Fraction(max_dose_discordance_rate)
+    delta = Fraction(max_dose_effect)
+    if q <= 0 or q > 1 or delta <= 0 or delta > q:
+        raise ValueError("require 0 < effect <= discordance rate <= 1")
+    p10 = (q + delta) / 2
+    p01 = (q - delta) / 2
+    return paired_exact_power(n_worlds, p10, p01, alpha)
 
 
 def _signed_null_distribution(counts: Mapping[int, int]) -> dict[int, int]:
@@ -219,7 +226,7 @@ def g_conditional_power(
     max_dose_effect: float,
     alpha: float,
 ) -> float:
-    """Conditional exact power for G under a frozen discordance nuisance law."""
+    """Legacy conditional power for the old world-by-dose randomization."""
 
     if n_worlds <= 0:
         raise ValueError("n_worlds must be positive")
@@ -326,17 +333,18 @@ def qualification_power_audit(plan: ABGPAnalysisPlan) -> dict[str, Any]:
 
     g_points: list[dict[str, float]] = []
     for q in g_spec["max_dose_discordance_rates"]:
-        power = g_conditional_power(
+        power = g_world_blocked_conservative_power(
             int(plan.arms["G"]["n_worlds"]),
-            float(q),
-            float(g_spec["max_dose_effect_floor"]),
-            alpha,
+            Fraction(str(q)),
+            Fraction(str(g_spec["max_dose_effect_floor"])),
+            Fraction(str(alpha)),
         )
         g_points.append({"max_dose_discordance_rate": float(q), "power": power})
     g_min = min(point["power"] for point in g_points)
     g = {
         "n": int(plan.arms["G"]["n_worlds"]),
         "effect_floor": float(g_spec["max_dose_effect_floor"]),
+        "power_model": "world_blocked_max_dose_only_worst_case",
         "points": g_points,
         "minimum_observed_power": g_min,
         "qualified": g_min >= minimum_power,
