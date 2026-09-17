@@ -165,7 +165,7 @@ class ReachabilityGrammar(GrammarAdapter):
 
     def infer_order(self, representation: Any) -> tuple[int, ...]:
         nodes = tuple(str(x) for x in representation["nodes"])
-        edges = tuple((str(a), str(b), *_rest) for a, b, *_rest in representation["edges"])
+        edges = tuple((str(row[0]), str(row[1])) for row in representation["edges"])
         incoming = {node: 0 for node in nodes}
         outgoing: dict[str, str] = {}
         for left, right in edges:
