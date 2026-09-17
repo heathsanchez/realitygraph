@@ -61,6 +61,9 @@ class ABGPFreezeBlockerTests(unittest.TestCase):
         self.assertTrue(audit["generation_label_symmetric_under_null"])
         self.assertTrue(audit["no_adaptive_stopping"])
         self.assertTrue(audit["matched_pair_construction"])
+        self.assertTrue(audit["matched_pair_selection_label_swap_invariant"])
+        self.assertTrue(audit["sharp_null_vector_swap_invariance"])
+        self.assertEqual(audit["null_model"], "paired_label_blind_sharp_null")
 
         broken = list(records)
         target = next(i for i, record in enumerate(broken) if record.dose > 0)
