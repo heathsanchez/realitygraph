@@ -100,6 +100,7 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         {
             "pairs": [
                 {
+                    "world_id": r.world_index,
                     "weight": weights[r.dose],
                     "relevant": r.relevant_flip,
                     "irrelevant": r.irrelevant_flip,
@@ -113,6 +114,7 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         {
             "world_count": len({r.world_index for r in records}),
             "record_count": len(records),
+            "randomization_unit": "world",
             "relevance_computed_before_corruption": hard["preclassified"],
             "matched_count_and_magnitude": hard["matched_corruption"],
         },
