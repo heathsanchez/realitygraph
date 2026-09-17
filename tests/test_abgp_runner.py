@@ -20,6 +20,21 @@ class ABGPRunnerTests(unittest.TestCase):
         replay = analyze_matrix(summary["analysis_inputs"])
         self.assertEqual(replay, summary["analysis"])
 
+    def test_dev_matrix_uses_hardened_a_and_p_inferential_units(self):
+        summary = run_dev_matrix(a_count=48, b_worlds_per_direction=2, g_worlds=8, p_count=48)
+        a = summary["analysis"]["arms"]["A"]
+        self.assertEqual(a["analysis_mode"], "STRENGTHENED_REPRESENTATION_GROWTH")
+        self.assertTrue(summary["audits"]["A"]["fresh_future_seed_separation"])
+        self.assertEqual(summary["audits"]["A"]["future_verifier_calls"], 0)
+
+        p_audit = summary["audits"]["P"]
+        self.assertEqual(p_audit["inferential_unit"], "independent_acquisition_episode")
+        self.assertEqual(p_audit["primary_n"], 48)
+        self.assertEqual(p_audit["future_tasks_per_episode"], 4)
+        self.assertTrue(p_audit["nested_tasks_not_counted_as_n"])
+        self.assertTrue(p_audit["only_retained_object_crosses_restart"])
+        self.assertEqual(summary["analysis"]["arms"]["P"]["analysis_mode"], "STRENGTHENED_POSTERIOR_BISIMULATION_DELETION_IUT")
+
     def test_dev_matrix_records_zero_search_and_verifier_persistence_audit(self):
         summary = run_dev_matrix(a_count=16, b_worlds_per_direction=2, g_worlds=8, p_count=16)
         audit = summary["audits"]["P"]
