@@ -29,9 +29,17 @@ def run_worker(request: dict[str, Any], *, seccomp_library: str = 'libseccomp.so
     if worker_kind is None:
         worker_kind = ('acquisition' if request.get('operation') in ('acquire', 'posterior')
                        else 'posterior' if request.get('operation') == 'posterior_invoke' else 'invocation')
-    if worker_kind not in ('acquisition', 'invocation', 'posterior'):
+    images = {
+        'acquisition': 'p_acquisition_worker.py',
+        'invocation': 'p_worker.py',
+        'posterior': 'p_posterior_worker.py',
+        'structural_acquisition': 'p_structural_acquisition_worker.py',
+        'structural_invocation': 'p_structural_invocation_worker.py',
+        'structural_posterior': 'p_structural_posterior_worker.py',
+    }
+    if worker_kind not in images:
         raise WorkerProtocolError('unknown worker image')
-    image = {'acquisition': 'p_acquisition_worker.py', 'invocation': 'p_worker.py', 'posterior': 'p_posterior_worker.py'}[worker_kind]
+    image = images[worker_kind]
     code = Path(__file__).with_name(image).read_bytes()
     bootstrap = Path(__file__).with_name('sandbox_runtime.py').read_bytes()
     expected_code = hashlib.sha256(code).hexdigest()
