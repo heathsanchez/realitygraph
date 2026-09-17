@@ -33,7 +33,7 @@ class ABGPRunnerTests(unittest.TestCase):
         self.assertEqual(p_audit["future_tasks_per_episode"], 4)
         self.assertTrue(p_audit["nested_tasks_not_counted_as_n"])
         self.assertTrue(p_audit["only_retained_object_crosses_restart"])
-        self.assertEqual(summary["analysis"]["arms"]["P"]["analysis_mode"], "STRENGTHENED_POSTERIOR_BISIMULATION_DELETION_IUT")
+        self.assertEqual(summary["analysis"]["arms"]["P"]["analysis_mode"], "INDEPENDENT_EPISODE_POSTERIOR_BISIMULATION")
 
     def test_dev_matrix_records_zero_search_and_verifier_persistence_audit(self):
         summary = run_dev_matrix(a_count=16, b_worlds_per_direction=2, g_worlds=8, p_count=16)
