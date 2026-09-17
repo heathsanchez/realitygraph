@@ -3,18 +3,68 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from itertools import permutations
-from typing import Any
+from typing import Any, Sequence
 
-from .dev_world import DevWorld, make_dev_world
+from .dev_world import DevWorld, ProtectedAction
 from .manifest import derive_dev_seed
 
 
+_BASELINE = "baseline"
 _INTERVENTIONS = (
     "edge_or_relation_deletion",
     "protected_order_reversal_perturbation",
     "scope_change",
     "constraint_change",
 )
+
+
+def _canonical_digest(value: Any) -> str:
+    return sha256(repr(value).encode("utf-8")).hexdigest()
+
+
+def _base_order_from_hidden(hidden: int) -> tuple[int, ...]:
+    slots = (0, 1, 2, 3)
+    return slots[hidden:] + slots[:hidden]
+
+
+def _apply_intervention(order: Sequence[int], intervention: str) -> tuple[int, ...]:
+    base = tuple(int(x) for x in order)
+    if intervention == _BASELINE:
+        return base
+    if intervention == "edge_or_relation_deletion":
+        return base[:3]
+    if intervention == "protected_order_reversal_perturbation":
+        return tuple(reversed(base))
+    if intervention == "scope_change":
+        return tuple(base[::2] + base[1::2])
+    if intervention == "constraint_change":
+        return tuple(base[1:] + base[:1])
+    raise ValueError(f"unknown B intervention: {intervention}")
+
+
+def _hidden_slot(world: DevWorld) -> int:
+    for index, action in enumerate(world.actions):
+        if action.action_id == world.optimal_action_id:
+            return index
+    raise ValueError("B world optimal action missing from action carrier")
+
+
+def _protected_order_slots(world: DevWorld, intervention: str) -> tuple[int, ...]:
+    return _apply_intervention(_base_order_from_hidden(_hidden_slot(world)), intervention)
+
+
+def _make_b_world(cell: str, world_index: int, *, channel: str = "primary") -> DevWorld:
+    seed = derive_dev_seed("B", f"{cell}|{channel}", world_index, "abgp-b-latent-v2")
+    actions = tuple(ProtectedAction(f"B-a{i}") for i in range(4))
+    hidden = int(seed[:16], 16) % 4
+    return DevWorld(
+        arm="B",
+        world_index=world_index,
+        seed_digest=seed,
+        actions=actions,
+        optimal_action_id=actions[hidden].action_id,
+        comparative_cells=(),
+    )
 
 
 @dataclass(frozen=True)
@@ -25,9 +75,25 @@ class GrammarAdapter:
     primitive_arities: tuple[int, ...]
     serialization_schema: str
     inference_route: str
+    slot_tokens: tuple[str, ...]
     translation_table: None = None
 
+    def _surface_token(self, slot: int) -> str:
+        return self.slot_tokens[int(slot)]
+
+    def _slot_from_surface(self, token: str) -> int:
+        try:
+            return self.slot_tokens.index(token)
+        except ValueError as exc:
+            raise ValueError(f"token not in {self.family_id} surface carrier") from exc
+
     def represent(self, world: DevWorld, intervention: str) -> Any:
+        return self.encode_order(_protected_order_slots(world, intervention), intervention)
+
+    def encode_order(self, order: Sequence[int], intervention: str) -> Any:
+        raise NotImplementedError
+
+    def infer_order(self, representation: Any) -> tuple[int, ...]:
         raise NotImplementedError
 
 
@@ -38,15 +104,20 @@ class ExtensionalGrammar(GrammarAdapter):
             surface_alphabet=("ex_q", "ex_r", "ex_s"),
             primitives=("ex_observes", "ex_actions", "ex_consequence"),
             primitive_arities=(3,),
-            serialization_schema="extensional-row-v1",
-            inference_route="direct_tuple_lookup",
+            serialization_schema="extensional-row-v2",
+            inference_route="ranked_extensional_rows",
+            slot_tokens=("ex_s2", "ex_s0", "ex_s3", "ex_s1"),
         )
 
-    def represent(self, world: DevWorld, intervention: str) -> Any:
+    def encode_order(self, order: Sequence[int], intervention: str) -> Any:
         return tuple(
-            (f"ex_q{i}", action.action_id, intervention)
-            for i, action in enumerate(world.actions)
+            ("ex_consequence", rank, self._surface_token(slot), intervention)
+            for rank, slot in enumerate(order)
         )
+
+    def infer_order(self, representation: Any) -> tuple[int, ...]:
+        rows = sorted(tuple(representation), key=lambda row: int(row[1]))
+        return tuple(self._slot_from_surface(str(row[2])) for row in rows)
 
 
 class CompositionalGrammar(GrammarAdapter):
@@ -56,15 +127,23 @@ class CompositionalGrammar(GrammarAdapter):
             surface_alphabet=("co_u", "co_v", "co_w", "co_z"),
             primitives=("co_seed", "co_swap", "co_mask", "co_fold"),
             primitive_arities=(1, 2),
-            serialization_schema="compositional-prefix-v1",
-            inference_route="primitive_composition_then_reduce",
+            serialization_schema="compositional-prefix-v2",
+            inference_route="compose_rank_fragments_then_reduce",
+            slot_tokens=("co_z", "co_v", "co_u", "co_w"),
         )
 
-    def represent(self, world: DevWorld, intervention: str) -> Any:
-        return (
-            "co_fold",
-            tuple(("co_mask", i, intervention) for i, _ in enumerate(world.actions)),
+    def encode_order(self, order: Sequence[int], intervention: str) -> Any:
+        fragments = tuple(
+            ("co_mask", rank, ("co_seed", self._surface_token(slot)))
+            for rank, slot in enumerate(order)
         )
+        return ("co_fold", intervention, fragments)
+
+    def infer_order(self, representation: Any) -> tuple[int, ...]:
+        if not isinstance(representation, tuple) or representation[0] != "co_fold":
+            raise ValueError("invalid compositional representation")
+        fragments = sorted(tuple(representation[2]), key=lambda row: int(row[1]))
+        return tuple(self._slot_from_surface(str(row[2][1])) for row in fragments)
 
 
 class ReachabilityGrammar(GrammarAdapter):
@@ -74,14 +153,33 @@ class ReachabilityGrammar(GrammarAdapter):
             surface_alphabet=("gr_n", "gr_e", "gr_t", "gr_p", "gr_h"),
             primitives=("gr_node", "gr_edge", "gr_path", "gr_delete", "gr_reach"),
             primitive_arities=(2, 3),
-            serialization_schema="reachability-adjacency-v1",
-            inference_route="graph_closure_then_reachability",
+            serialization_schema="reachability-adjacency-v2",
+            inference_route="directed_chain_topological_recovery",
+            slot_tokens=("gr_h", "gr_n", "gr_t", "gr_p"),
         )
 
-    def represent(self, world: DevWorld, intervention: str) -> Any:
-        nodes = tuple(f"gr_n{i}" for i, _ in enumerate(world.actions))
-        edges = tuple((nodes[i], nodes[(i + 1) % len(nodes)], intervention) for i in range(len(nodes)))
-        return {"nodes": nodes, "edges": edges}
+    def encode_order(self, order: Sequence[int], intervention: str) -> Any:
+        nodes = tuple(self._surface_token(slot) for slot in order)
+        edges = tuple((nodes[i], nodes[i + 1], intervention) for i in range(len(nodes) - 1))
+        return {"nodes": nodes, "edges": edges, "intervention": intervention}
+
+    def infer_order(self, representation: Any) -> tuple[int, ...]:
+        nodes = tuple(str(x) for x in representation["nodes"])
+        edges = tuple((str(a), str(b), *_rest) for a, b, *_rest in representation["edges"])
+        incoming = {node: 0 for node in nodes}
+        outgoing: dict[str, str] = {}
+        for left, right in edges:
+            incoming[right] += 1
+            outgoing[left] = right
+        starts = [node for node in nodes if incoming[node] == 0]
+        if len(starts) != 1:
+            raise ValueError("reachability chain must have one source")
+        ordered = [starts[0]]
+        while ordered[-1] in outgoing:
+            ordered.append(outgoing[ordered[-1]])
+        if len(ordered) != len(nodes):
+            raise ValueError("reachability chain did not cover all nodes")
+        return tuple(self._slot_from_surface(token) for token in ordered)
 
 
 class ConstraintOrderGrammar(GrammarAdapter):
@@ -98,15 +196,31 @@ class ConstraintOrderGrammar(GrammarAdapter):
                 "or_project",
             ),
             primitive_arities=(1, 3, 4),
-            serialization_schema="constraint-pairs-v1",
-            inference_route="constraint_propagation_then_toposort",
+            serialization_schema="constraint-pairs-v2",
+            inference_route="pairwise_dominance_score_then_sort",
+            slot_tokens=("or_y", "or_k", "or_c", "or_x"),
         )
 
-    def represent(self, world: DevWorld, intervention: str) -> Any:
+    def encode_order(self, order: Sequence[int], intervention: str) -> Any:
+        tokens = tuple(self._surface_token(slot) for slot in order)
         return frozenset(
-            ("or_dom", left.action_id, right.action_id, intervention)
-            for left, right in zip(world.actions, world.actions[1:])
+            ("or_dom", tokens[i], tokens[j], intervention)
+            for i in range(len(tokens))
+            for j in range(i + 1, len(tokens))
         )
+
+    def infer_order(self, representation: Any) -> tuple[int, ...]:
+        wins: dict[str, int] = {}
+        losses: dict[str, int] = {}
+        for row in representation:
+            left = str(row[1])
+            right = str(row[2])
+            wins[left] = wins.get(left, 0) + 1
+            wins.setdefault(right, 0)
+            losses[right] = losses.get(right, 0) + 1
+            losses.setdefault(left, 0)
+        tokens = sorted(wins, key=lambda token: (-wins[token], losses[token], token))
+        return tuple(self._slot_from_surface(token) for token in tokens)
 
 
 def grammar_families() -> tuple[GrammarAdapter, ...]:
@@ -118,19 +232,16 @@ def grammar_families() -> tuple[GrammarAdapter, ...]:
     )
 
 
-def _protected_order(world: DevWorld, intervention: str) -> tuple[str, ...]:
-    ids = [action.action_id for action in world.actions]
-    hidden = ids.index(world.optimal_action_id)
-    base = ids[hidden:] + ids[:hidden]
-    if intervention == "edge_or_relation_deletion":
-        return tuple(base[:3])
-    if intervention == "protected_order_reversal_perturbation":
-        return tuple(reversed(base))
-    if intervention == "scope_change":
-        return tuple(base[::2] + base[1::2])
-    if intervention == "constraint_change":
-        return tuple(base[1:] + base[:1])
-    raise ValueError(f"unknown B intervention: {intervention}")
+@dataclass(frozen=True)
+class CapabilityOrder:
+    base_order: tuple[int, ...]
+
+    def predict(self, intervention: str) -> tuple[int, ...]:
+        return _apply_intervention(self.base_order, intervention)
+
+    @property
+    def digest(self) -> str:
+        return _canonical_digest(("capability-order-v1", self.base_order))
 
 
 @dataclass(frozen=True)
@@ -143,44 +254,105 @@ class BRecord:
     treatment_success: int
     wrong_class_success: int
     shuffled_coupling_success: int
+    bisimulation_bayes_success: int
+    bisimulation_separation_witness: bool
+    recovery_path_verified: bool
+    acquired_capability_digest: str
+    transfer_recovered_digest: str
+    bisimulation_control_digest: str
     representation_digests: tuple[str, str]
 
 
-def _repr_digest(value: Any) -> str:
-    return sha256(repr(value).encode("utf-8")).hexdigest()
+def _bisimulation_control(world: DevWorld) -> tuple[CapabilityOrder, bool, str]:
+    hidden = _hidden_slot(world)
+    coarse_signature = hidden % 2
+    candidate_hiddens = tuple(i for i in range(4) if i % 2 == coarse_signature)
+    candidate_orders = tuple(_base_order_from_hidden(i) for i in candidate_hiddens)
+    chosen = CapabilityOrder(candidate_orders[0])
+    separation = any(
+        len({_apply_intervention(order, intervention) for order in candidate_orders}) > 1
+        for intervention in _INTERVENTIONS
+    )
+    digest = _canonical_digest(("target-bisimulation-v1", coarse_signature, candidate_orders))
+    return chosen, separation, digest
+
+
+def _wrong_class(capability: CapabilityOrder) -> CapabilityOrder:
+    base = capability.base_order
+    return CapabilityOrder(tuple(base[1:] + base[:1]))
 
 
 def _record(acquisition: GrammarAdapter, transfer: GrammarAdapter, world_index: int) -> BRecord:
     cell = f"{acquisition.family_id}->{transfer.family_id}"
-    seed = derive_dev_seed("B", cell, world_index, "abgp-b-dev-v1")
-    world = make_dev_world("B", int(seed[:8], 16) % 1_000_000, "abgp-b-latent-v1")
-    h = int(seed, 16)
+    world = _make_b_world(cell, world_index)
+
+    acquisition_representation = acquisition.represent(world, _BASELINE)
+    acquired_base = acquisition.infer_order(acquisition_representation)
+    acquired = CapabilityOrder(acquired_base)
+    acquisition_verified = acquired_base == _protected_order_slots(world, _BASELINE)
 
     results: list[tuple[str, int]] = []
+    transfer_orders: list[tuple[int, ...]] = []
+    target_orders: list[tuple[int, ...]] = []
     for intervention in _INTERVENTIONS:
-        target_order = _protected_order(world, intervention)
-        acquisition.represent(world, intervention)
-        transfer.represent(world, intervention)
-        # DEV harness positive path scores only the shared protected behavioral
-        # object; literal cross-grammar representation identity is irrelevant.
-        recovered_order = target_order
-        results.append((intervention, int(recovered_order == target_order)))
+        transfer_representation = transfer.represent(world, intervention)
+        transfer_order = transfer.infer_order(transfer_representation)
+        predicted_order = acquired.predict(intervention)
+        target_order = _protected_order_slots(world, intervention)
+        transfer_orders.append(transfer_order)
+        target_orders.append(target_order)
+        results.append(
+            (
+                intervention,
+                int(predicted_order == transfer_order == target_order),
+            )
+        )
+
+    wrong = _wrong_class(acquired)
+    wrong_success = int(
+        all(wrong.predict(intervention) == target for intervention, target in zip(_INTERVENTIONS, target_orders))
+    )
+
+    shuffled_world = _make_b_world(cell, world_index, channel="shuffled-coupling")
+    shuffled_base = acquisition.infer_order(acquisition.represent(shuffled_world, _BASELINE))
+    shuffled = CapabilityOrder(shuffled_base)
+    shuffled_success = int(
+        all(
+            shuffled.predict(intervention) == target
+            for intervention, target in zip(_INTERVENTIONS, target_orders)
+        )
+    )
+
+    bisim, bisim_separation, bisim_digest = _bisimulation_control(world)
+    bisim_success = int(
+        all(
+            bisim.predict(intervention) == target
+            for intervention, target in zip(_INTERVENTIONS, target_orders)
+        )
+    )
 
     treatment = int(all(ok for _, ok in results))
-    wrong = int(((h >> 13) & 0b11) == 0)
-    shuffled = int(((h >> 19) & 0b111) == 0)
-    acquisition_repr = acquisition.represent(world, _INTERVENTIONS[0])
-    transfer_repr = transfer.represent(world, _INTERVENTIONS[0])
+    transfer_digest = _canonical_digest(tuple(transfer_orders))
+    recovery_verified = acquisition_verified and treatment == 1
     return BRecord(
         acquisition_family=acquisition.family_id,
         transfer_family=transfer.family_id,
         world_index=world_index,
-        seed_digest=seed,
+        seed_digest=world.seed_digest,
         intervention_results=tuple(results),
         treatment_success=treatment,
-        wrong_class_success=wrong,
-        shuffled_coupling_success=shuffled,
-        representation_digests=(_repr_digest(acquisition_repr), _repr_digest(transfer_repr)),
+        wrong_class_success=wrong_success,
+        shuffled_coupling_success=shuffled_success,
+        bisimulation_bayes_success=bisim_success,
+        bisimulation_separation_witness=bisim_separation,
+        recovery_path_verified=recovery_verified,
+        acquired_capability_digest=acquired.digest,
+        transfer_recovered_digest=transfer_digest,
+        bisimulation_control_digest=bisim_digest,
+        representation_digests=(
+            _canonical_digest(acquisition_representation),
+            _canonical_digest(transfer.represent(world, _INTERVENTIONS[0])),
+        ),
     )
 
 
@@ -192,4 +364,6 @@ def generate_b_dev_records(worlds_per_direction: int) -> list[BRecord]:
     for acquisition, transfer in permutations(families, 2):
         for world_index in range(worlds_per_direction):
             records.append(_record(acquisition, transfer, world_index))
+    if len({record.seed_digest for record in records}) != len(records):
+        raise ValueError("B ordered-direction world roots must be unique")
     return records
