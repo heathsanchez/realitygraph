@@ -76,7 +76,7 @@ def holm_bonferroni(raw_pvalues: Mapping[str, float], alpha: float) -> dict[str,
 def g_exact_randomization_pvalue(
     discordant_weight_counts: Mapping[int, int], observed_statistic: int
 ) -> float:
-    """Exact one-sided sign-randomization p-value for G's weighted statistic."""
+    """Legacy exact one-sided sign randomization over world-by-dose pairs."""
 
     distribution: dict[int, int] = {0: 1}
     n = 0
@@ -95,6 +95,29 @@ def g_exact_randomization_pvalue(
         return 1.0
     favorable = sum(ways for statistic, ways in distribution.items() if statistic >= observed_statistic)
     return favorable / (2**n)
+
+
+def g_world_blocked_randomization_pvalue(
+    world_scores: Sequence[int], observed_statistic: int
+) -> float:
+    """Exact one-sided randomization under one joint relevance swap per world.
+
+    A world's entire dose vector is exchanged as a block, so its signed aggregate
+    score S_i becomes -S_i. Zero-score worlds contribute no randomization bit.
+    """
+
+    magnitudes = [abs(int(score)) for score in world_scores if int(score) != 0]
+    if not magnitudes:
+        return 1.0
+    distribution: dict[int, int] = {0: 1}
+    for magnitude in magnitudes:
+        nxt: dict[int, int] = defaultdict(int)
+        for statistic, ways in distribution.items():
+            nxt[statistic + magnitude] += ways
+            nxt[statistic - magnitude] += ways
+        distribution = dict(nxt)
+    favorable = sum(ways for statistic, ways in distribution.items() if statistic >= observed_statistic)
+    return favorable / (2 ** len(magnitudes))
 
 
 def _paired_effect(control: Sequence[int | bool], treatment: Sequence[int | bool]) -> float:
@@ -249,34 +272,72 @@ def analyze_g(raw: Mapping[str, Any]) -> dict[str, Any]:
     pairs = list(raw.get("pairs", ()))
     if not pairs:
         raise ValueError("G requires matched relevance pairs")
-    counts: dict[int, int] = defaultdict(int)
+
+    has_world = ["world_id" in record for record in pairs]
+    if any(has_world) and not all(has_world):
+        raise ValueError("G world-blocked analysis requires world_id on every pair")
+
     observed = 0
-    for record in pairs:
-        weight = int(record["weight"])
-        relevant = int(bool(record["relevant"]))
-        irrelevant = int(bool(record["irrelevant"]))
-        delta = relevant - irrelevant
-        observed += weight * delta
-        if delta:
-            counts[weight] += 1
+    world_scores: dict[int, int] = {}
+    counts: dict[int, int] = defaultdict(int)
+    if all(has_world):
+        grouped: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
+        for record in pairs:
+            grouped[int(record["world_id"])].append(record)
+        for world_id in sorted(grouped):
+            records = grouped[world_id]
+            weights = [int(record["weight"]) for record in records]
+            if sorted(weights) != [2, 5, 10, 20]:
+                raise ValueError("each G world must contribute exactly the four frozen nonzero dose weights")
+            score = 0
+            for record in records:
+                relevant = int(bool(record["relevant"]))
+                irrelevant = int(bool(record["irrelevant"]))
+                score += int(record["weight"]) * (relevant - irrelevant)
+            world_scores[world_id] = score
+        observed = sum(world_scores.values())
+        pvalue = g_world_blocked_randomization_pvalue(list(world_scores.values()), observed)
+        mode = "WORLD_BLOCKED_REPEATED_MEASURES"
+    else:
+        for record in pairs:
+            weight = int(record["weight"])
+            relevant = int(bool(record["relevant"]))
+            irrelevant = int(bool(record["irrelevant"]))
+            delta = relevant - irrelevant
+            observed += weight * delta
+            if delta:
+                counts[weight] += 1
+        pvalue = g_exact_randomization_pvalue(counts, observed)
+        mode = "LEGACY_WORLD_BY_DOSE"
+
     relevant_max = list(raw.get("max_dose_relevant", ()))
     irrelevant_max = list(raw.get("max_dose_irrelevant", ()))
     if not relevant_max or len(relevant_max) != len(irrelevant_max):
         raise ValueError("G requires paired maximum-dose flip vectors")
+    if all(has_world) and len(relevant_max) != len(world_scores):
+        raise ValueError("G world-blocked maximum-dose vectors must have one entry per world")
     max_gap = _mean_binary(relevant_max) - _mean_binary(irrelevant_max)
     validity = _validity_fields("G", raw)
-    return {
-        "raw_pvalue": g_exact_randomization_pvalue(counts, observed),
+    result = {
+        "raw_pvalue": pvalue,
         "observed_statistic": observed,
-        "discordant_weight_counts": dict(sorted(counts.items())),
         "max_dose_flip_gap": max_gap,
         "effect": max_gap,
         "effect_floor_pass": max_gap >= 0.15,
         "hard_gates_pass": validity["validity_pass"],
         "scientific_hard_gates_pass": True,
         "effect_direction_positive": observed > 0 and max_gap > 0.0,
+        "analysis_mode": mode,
         **validity,
     }
+    if all(has_world):
+        result["world_count"] = len(world_scores)
+        result["world_scores"] = {str(k): world_scores[k] for k in sorted(world_scores)}
+        result["randomization_unit"] = "world"
+    else:
+        result["discordant_weight_counts"] = dict(sorted(counts.items()))
+        result["randomization_unit"] = "world_by_dose_pair"
+    return result
 
 
 def analyze_p(raw: Mapping[str, Any]) -> dict[str, Any]:
