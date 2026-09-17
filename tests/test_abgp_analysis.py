@@ -114,7 +114,7 @@ class ABGPAnalysisTests(unittest.TestCase):
         self.assertGreaterEqual(analyze_g(raw["G"])["max_dose_flip_gap"], 0.15)
         self.assertGreaterEqual(analyze_p(raw["P"])["effect"], 0.05)
 
-    def test_matrix_pass_partial_and_fail_are_mechanical(self):
+    def test_matrix_pass_partial_fail_and_invalid_are_mechanical(self):
         passing = analyze_matrix(self._pass_raw())
         self.assertEqual(
             {arm: passing["arms"][arm]["verdict"] for arm in ("A", "B", "G", "P")},
@@ -129,10 +129,20 @@ class ABGPAnalysisTests(unittest.TestCase):
         self.assertNotEqual(partial["combined_verdict"], "PASS")
 
         fail_raw = self._pass_raw()
-        fail_raw["P"]["hard_gates"]["zero_verifier"] = False
+        fail_raw["P"]["post_deletion_accuracy"] = 0.90
         failed = analyze_matrix(fail_raw)
         self.assertEqual(failed["arms"]["P"]["verdict"], "FAIL")
         self.assertNotEqual(failed["combined_verdict"], "PASS")
+
+        invalid_raw = self._pass_raw()
+        invalid_raw["P"]["hard_gates"]["zero_verifier"] = False
+        invalid = analyze_matrix(invalid_raw)
+        self.assertEqual(invalid["arms"]["P"]["verdict"], "INVALID")
+        self.assertIn(
+            "P_FUTURE_VERIFIER_ACCESS",
+            invalid["arms"]["P"]["validity_reason_codes"],
+        )
+        self.assertEqual(invalid["combined_verdict"], "INVALID")
 
 
 if __name__ == "__main__":
