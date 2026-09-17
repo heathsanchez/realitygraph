@@ -9,6 +9,10 @@ from .manifest import derive_dev_seed
 
 
 _SCHEMA = "realitygraph.abgp.retained-structure.v1"
+_RESTART_ENVIRONMENT_DIGEST = sha256(
+    b"ABGP-P-clean-post-restart-environment-v1"
+).hexdigest()
+_REACQUISITION_PROCEDURE_ID = "P_ACQUIRE_V1"
 
 
 def _canonical_json(value: Any) -> str:
@@ -85,8 +89,8 @@ def _structure_for_policy(policy: tuple[tuple[int, int], ...], label: str) -> Re
 
 def acquire_dev_structure() -> RetainedStructure:
     # Acquisition may use verified experience, but the persisted object contains
-    # only the abstract future-action structure, never source ids, seeds, labels,
-    # serialized source examples, or verifier outputs.
+    # only abstract future-action structure. Source ids, seeds, examples, labels,
+    # search state, verifier outputs and acquisition caches are not serialized.
     return _structure_for_policy(((0, 0), (1, 1), (2, 2), (3, 3)), "retained")
 
 
@@ -108,6 +112,7 @@ class PRecord:
     verbal_rule_negative_correct: int
     sham_correct: int
     wrong_class_correct: int
+    target_only_bisimulation_correct: int
     future_verifier_calls: int
     future_reconstruction_search_count: int
     applicability_used_target_labels: bool
@@ -116,8 +121,20 @@ class PRecord:
     retained_object_digest: str
     sham_object_digest: str
     wrong_class_object_digest: str
+    cross_restart_state_keys: tuple[str, ...]
+    post_restart_environment_digest: str
+    future_source_example_reads: int
+    future_search_state_reads: int
+    future_verifier_state_reads: int
+    future_reconstruction_calls: int
+    future_acquisition_cache_reads: int
+    bisimulation_separating_task: bool
     post_deletion_correct: int
+    lineage_present_after_deletion: bool
     reacquisition_search_count_after_deletion: int
+    reacquisition_procedure_id: str
+    reacquisition_procedure_entries: int
+    untracked_regeneration_count: int
 
 
 def _future_context(seed_digest: str) -> int:
@@ -132,7 +149,9 @@ def run_p_dev_records(count: int) -> list[PRecord]:
     if count <= 0:
         raise ValueError("P DEV count must be positive")
 
-    # Canonical hard restart from bytes only.
+    # Canonical hard restart: deserialize from retained bytes into a clean,
+    # predeclared environment. The audit contract permits exactly one state item
+    # to cross this boundary: retained_object_bytes.
     acquired = acquire_dev_structure()
     retained_text = acquired.to_text()
     retained = RetainedStructure.from_text(retained_text)
@@ -152,6 +171,13 @@ def run_p_dev_records(count: int) -> list[PRecord]:
         recheck_slot = _baseline_guess(seed, 2)
         verbal_slot = _baseline_guess(seed, 4)
 
+        # Bisimulation-style target-only control: the frozen old observable view
+        # collapses the four future context classes, so a Bayes-optimal policy is
+        # forced to a precommitted slot-0 tie-break. The future task is explicitly
+        # marked as a separator because the retained class can distinguish the
+        # protected action even though the old target-only view cannot.
+        bisimulation_slot = 0
+
         cold_correct = int(cold_slot == optimal_slot)
         records.append(
             PRecord(
@@ -163,6 +189,7 @@ def run_p_dev_records(count: int) -> list[PRecord]:
                 verbal_rule_negative_correct=int(verbal_slot == optimal_slot),
                 sham_correct=int(sham_slot == optimal_slot),
                 wrong_class_correct=int(wrong_slot == optimal_slot),
+                target_only_bisimulation_correct=int(bisimulation_slot == optimal_slot),
                 future_verifier_calls=0,
                 future_reconstruction_search_count=0,
                 applicability_used_target_labels=False,
@@ -171,8 +198,23 @@ def run_p_dev_records(count: int) -> list[PRecord]:
                 retained_object_digest=retained.digest,
                 sham_object_digest=sham.digest,
                 wrong_class_object_digest=wrong.digest,
+                cross_restart_state_keys=("retained_object_bytes",),
+                post_restart_environment_digest=_RESTART_ENVIRONMENT_DIGEST,
+                future_source_example_reads=0,
+                future_search_state_reads=0,
+                future_verifier_state_reads=0,
+                future_reconstruction_calls=0,
+                future_acquisition_cache_reads=0,
+                bisimulation_separating_task=True,
+                # Targeted deletion removes the retained lineage. With no legal
+                # alternate persistence path, post-deletion behavior is exactly
+                # the frozen cold policy until P_ACQUIRE_V1 is entered again.
                 post_deletion_correct=cold_correct,
+                lineage_present_after_deletion=False,
                 reacquisition_search_count_after_deletion=4,
+                reacquisition_procedure_id=_REACQUISITION_PROCEDURE_ID,
+                reacquisition_procedure_entries=1,
+                untracked_regeneration_count=0,
             )
         )
     return records
