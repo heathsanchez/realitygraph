@@ -9,8 +9,6 @@ from .manifest import ABGPAnalysisPlan
 
 
 def _binomial_probability(n: int, k: int, p: float) -> float:
-    """Numerically stable Binomial(n,p) point probability."""
-
     if k < 0 or k > n:
         return 0.0
     if p <= 0.0:
@@ -53,7 +51,6 @@ def _beta_continued_fraction(a: float, b: float, x: float) -> float:
             c = fp_min
         d = 1.0 / d
         h *= d * c
-
         aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
         d = 1.0 + aa * d
         if abs(d) < fp_min:
@@ -127,8 +124,6 @@ def paired_exact_power(
     p01: Fraction,
     alpha: Fraction,
 ) -> float:
-    """Exact-test unconditional power of one-sided paired McNemar/binomial."""
-
     if n <= 0:
         raise ValueError("n must be positive")
     if p10 < 0 or p01 < 0 or p10 + p01 > 1:
@@ -158,28 +153,62 @@ def paired_exact_power(
     return min(1.0, max(0.0, power))
 
 
+def b_direction_iut_union_bound_power(
+    worlds_per_direction: int,
+    discordance_rate: Fraction,
+    effect: Fraction,
+    alpha: Fraction,
+    *,
+    component_count: int = 36,
+) -> dict[str, float | int]:
+    """Dependence-agnostic lower bound for B's all-components IUT power.
+
+    The B claim requires every direction-by-control component to reject. We do
+    not assume independence among those components. If each has power p, the
+    union bound gives P(all reject) >= 1 - m(1-p), where m is the number of
+    required components (12 directions x 3 primary controls = 36).
+    """
+
+    if worlds_per_direction <= 0:
+        raise ValueError("worlds_per_direction must be positive")
+    if component_count <= 0:
+        raise ValueError("component_count must be positive")
+    q = Fraction(discordance_rate)
+    delta = Fraction(effect)
+    if q <= 0 or q > 1 or delta <= 0 or delta > q:
+        raise ValueError("require 0 < effect <= discordance rate <= 1")
+    component_power = paired_exact_power(
+        worlds_per_direction,
+        (q + delta) / 2,
+        (q - delta) / 2,
+        alpha,
+    )
+    lower = max(0.0, 1.0 - component_count * (1.0 - component_power))
+    return {
+        "component_count": component_count,
+        "minimum_component_power": component_power,
+        "arm_power_lower_bound": lower,
+    }
+
+
 def g_world_blocked_conservative_power(
     n_worlds: int,
     max_dose_discordance_rate: Fraction,
     max_dose_effect: Fraction,
     alpha: Fraction,
 ) -> float:
-    """Worst-case power for the world-blocked G test.
-
-    The preregistered floor constrains only the maximum dose. For qualification we
-    therefore give every lower dose zero signal. A world's aggregate score is then
-    just the maximum-dose signed contribution, and the exact world-level sign test
-    reduces to the paired exact test on independent worlds. This is conservative:
-    any aligned lower-dose signal can only add information relative to this model.
-    """
+    """Worst-case power for world-blocked G with lower doses given zero signal."""
 
     q = Fraction(max_dose_discordance_rate)
     delta = Fraction(max_dose_effect)
     if q <= 0 or q > 1 or delta <= 0 or delta > q:
         raise ValueError("require 0 < effect <= discordance rate <= 1")
-    p10 = (q + delta) / 2
-    p01 = (q - delta) / 2
-    return paired_exact_power(n_worlds, p10, p01, alpha)
+    return paired_exact_power(
+        n_worlds,
+        (q + delta) / 2,
+        (q - delta) / 2,
+        alpha,
+    )
 
 
 def _signed_null_distribution(counts: Mapping[int, int]) -> dict[int, int]:
@@ -208,14 +237,8 @@ def _signed_alternative_distribution(
         for _ in range(int(counts[weight])):
             nxt: dict[int, float] = {}
             for statistic, probability in distribution.items():
-                nxt[statistic + weight] = (
-                    nxt.get(statistic + weight, 0.0)
-                    + probability * plus_probability
-                )
-                nxt[statistic - weight] = (
-                    nxt.get(statistic - weight, 0.0)
-                    + probability * minus_probability
-                )
+                nxt[statistic + weight] = nxt.get(statistic + weight, 0.0) + probability * plus_probability
+                nxt[statistic - weight] = nxt.get(statistic - weight, 0.0) + probability * minus_probability
             distribution = nxt
     return distribution
 
@@ -244,7 +267,6 @@ def g_conditional_power(
         for dose, weight in zip(doses, weights)
     }
     plus_probability = (1.0 + delta / q) / 2.0
-
     null = _signed_null_distribution(counts)
     total_null = 2 ** sum(counts.values())
     running = 0
@@ -257,14 +279,10 @@ def g_conditional_power(
             break
     if critical is None:
         return 0.0
-
     alternative = _signed_alternative_distribution(counts, plus_probability)
     return min(
         1.0,
-        max(
-            0.0,
-            sum(probability for statistic, probability in alternative.items() if statistic >= critical),
-        ),
+        max(0.0, sum(probability for statistic, probability in alternative.items() if statistic >= critical)),
     )
 
 
@@ -316,13 +334,35 @@ def qualification_power_audit(plan: ABGPAnalysisPlan) -> dict[str, Any]:
         alpha,
         minimum_power,
     )
-    b = _paired_arm_audit(
-        int(plan.arms["B"]["n_units"]),
-        float(plan.arms["B"]["effect_floor_each_control"]),
-        [float(x) for x in paired["B"]["discordance_rates"]],
-        alpha,
-        minimum_power,
-    )
+
+    b_points: list[dict[str, float]] = []
+    for q in paired["B"]["discordance_rates"]:
+        result = b_direction_iut_union_bound_power(
+            int(plan.arms["B"]["worlds_per_direction"]),
+            Fraction(str(q)),
+            Fraction(str(plan.arms["B"]["effect_floor_each_control"])),
+            Fraction(str(alpha)),
+            component_count=36,
+        )
+        b_points.append(
+            {
+                "discordance_rate": float(q),
+                "minimum_component_power": float(result["minimum_component_power"]),
+                "arm_power_lower_bound": float(result["arm_power_lower_bound"]),
+            }
+        )
+    b_min = min(point["arm_power_lower_bound"] for point in b_points)
+    b = {
+        "n": int(plan.arms["B"]["worlds_per_direction"]) * 12,
+        "worlds_per_direction": int(plan.arms["B"]["worlds_per_direction"]),
+        "component_count": 36,
+        "effect_floor": float(plan.arms["B"]["effect_floor_each_control"]),
+        "power_model": "direction_iut_union_bound_36_components",
+        "points": b_points,
+        "minimum_observed_power": b_min,
+        "qualified": b_min >= minimum_power,
+    }
+
     p = _paired_arm_audit(
         int(plan.arms["P"]["n"]),
         float(plan.arms["P"]["effect_floor"]),
