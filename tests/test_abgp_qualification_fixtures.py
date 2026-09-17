@@ -55,11 +55,21 @@ class ABGPQualificationFixtureTests(unittest.TestCase):
             set(a["baselines"]),
             {"fixed_language_bayes", "sham_expansion", "equal_compute_recheck"},
         )
+
         b = fixtures["B_PLANTED_TRANSFER"].raw_input
         self.assertIn("acquisition_posterior_target_bisimulation_bayes", b)
+        self.assertEqual(len(set(b["direction_labels"])), 12)
+        self.assertEqual(len(b["intervention_agreement"]), len(b["treatment"]) * 4)
+
+        g = fixtures["G_PLANTED_DOSE_RESPONSE"].raw_input
+        self.assertTrue(all("world_id" in record for record in g["pairs"]))
+        self.assertEqual(len({record["world_id"] for record in g["pairs"]}), len(g["max_dose_relevant"]))
+
         p = fixtures["P_PLANTED_PERSISTENCE"].raw_input
         self.assertIn("target_only_bisimulation_bayes", p["baselines"])
         self.assertIn("posterior_only_retained_bayes", p["baselines"])
+        self.assertIn("targeted_deletion", p["baselines"])
+        self.assertEqual(len(p["baselines"]["targeted_deletion"]), len(p["retained"]))
 
     def test_planted_positive_witnesses_are_machine_checkable(self):
         fixtures = [f for f in qualification_fixtures() if f.fixture_class == "PLANTED_POSITIVE"]
