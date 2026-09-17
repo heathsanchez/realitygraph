@@ -3,18 +3,23 @@ import unittest
 from dataclasses import replace
 
 from realitygraph.abgp import arm_b
-from realitygraph.abgp.arm_a import audit_a_growth_episodes, generate_a_growth_episodes
+from realitygraph.abgp.arm_a import generate_a_growth_episodes
 from realitygraph.abgp.arm_b import generate_b_dev_records
-from realitygraph.abgp.arm_g import audit_g_exchangeability_design, generate_g_dev_records
-from realitygraph.abgp.arm_p import audit_p_episode_independence, generate_p_independent_episodes
-from realitygraph.abgp.power import qualification_power_audit
+from realitygraph.abgp.arm_g import generate_g_dev_records
+from realitygraph.abgp.arm_p import generate_p_independent_episodes
+from realitygraph.abgp.freeze_review import (
+    audit_a_stochastic_ancestry,
+    audit_g_exchangeability_design,
+    audit_p_stochastic_ancestry,
+    freeze_power_review,
+)
 from realitygraph.abgp.manifest import load_analysis_plan
 
 
 class ABGPFreezeBlockerTests(unittest.TestCase):
     def test_a_and_p_audit_earliest_shared_stochastic_ancestor(self):
-        a = audit_a_growth_episodes(generate_a_growth_episodes(64))
-        p = audit_p_episode_independence(generate_p_independent_episodes(64))
+        a = audit_a_stochastic_ancestry(generate_a_growth_episodes(64))
+        p = audit_p_stochastic_ancestry(generate_p_independent_episodes(64))
         self.assertTrue(a["no_cross_episode_shared_stochastic_ancestor"])
         self.assertTrue(p["no_cross_episode_shared_stochastic_ancestor"])
         self.assertEqual(a["shared_stochastic_ancestor_count"], 0)
@@ -38,11 +43,12 @@ class ABGPFreezeBlockerTests(unittest.TestCase):
 
     def test_power_audit_marks_alpha_provenance_and_complete_pass_scope(self):
         plan = load_analysis_plan("preregistration/abgp-analysis-plan-v1.json")
-        audit = qualification_power_audit(plan)
+        audit = freeze_power_review(plan)
         self.assertEqual(
             audit["alpha_provenance"],
             "four_arm_familywise_holm_worst_case_component_alpha_not_b_iut_multiplicity",
         )
+        self.assertFalse(audit["complete_pass_power_qualified"])
         for arm in ("A", "B", "P"):
             self.assertIn("complete_pass_power_status", audit["arms"][arm])
         self.assertNotEqual(audit["arms"]["B"]["complete_pass_power_status"], "QUALIFIED")
