@@ -389,7 +389,7 @@ def run_b_direction(acquisition_family: str, transfer_family: str, world_index: 
     if acquisition_family == transfer_family:
         raise ValueError("B requires an ordered cross-grammar direction")
     direction = f"{acquisition_family}->{transfer_family}"
-    world = make_world(world_index)
+    world = make_world(world_index, channel=f"primary|{direction}")
     source = make_grammar(acquisition_family, world_index, f"{direction}|source")
     target = make_grammar(transfer_family, world_index, f"{direction}|target")
     if not _grammar_independence(source, target):
