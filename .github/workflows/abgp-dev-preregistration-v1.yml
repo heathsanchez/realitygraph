@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - abgp-preregistration-freeze-v1
+      - abgp-final-lock-review-v1
   workflow_dispatch:
 
 concurrency:
-  group: abgp-dev-preregistration-v1
+  group: abgp-dev-preregistration-v1-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,6 +26,9 @@ jobs:
 
       - name: Frozen statistical analysis tests
         run: python -m unittest tests.test_abgp_analysis -v
+
+      - name: Final lock clarification tests
+        run: python -m unittest tests.test_abgp_final_lock_clarifications -v
 
       - name: DEV verifier and corruption tests
         run: python -m unittest tests.test_abgp_arm_a_g -v
