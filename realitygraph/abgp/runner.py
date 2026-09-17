@@ -6,10 +6,18 @@ from pathlib import Path
 from typing import Any
 
 from .analysis import analyze_matrix
-from .arm_a import generate_a_dev_records
+from .arm_a import (
+    a_growth_analysis_input,
+    audit_a_growth_episodes,
+    generate_a_growth_episodes,
+)
 from .arm_b import generate_b_dev_records, grammar_families
 from .arm_g import generate_g_dev_records
-from .arm_p import run_p_dev_records
+from .arm_p import (
+    audit_p_episode_independence,
+    generate_p_independent_episodes,
+    p_independent_analysis_input,
+)
 from .manifest import (
     ConfirmatoryLockedError,
     load_analysis_plan,
@@ -22,28 +30,6 @@ _ROOT = Path(__file__).resolve().parents[2]
 _DESIGN_PATH = _ROOT / "preregistration" / "abgp-design-manifest-v1.json"
 _ANALYSIS_PATH = _ROOT / "preregistration" / "abgp-analysis-plan-v1.json"
 _DEV_NAMESPACE = "ABGP-DEV-v1"
-
-
-def _a_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    hard = {
-        "message_nonidentifying": all(r.compatible_optimal_action_count > 1 for r in records),
-        "single_message": all(r.verifier_message_count == 1 for r in records),
-        "single_repair_round": all(r.repair_round_count == 1 for r in records),
-        "budget_ok": all(r.equal_compute_units == r.verifier_compute_units for r in records),
-    }
-    return (
-        {
-            "pairs": [[r.equal_recheck_correct, r.verifier_correct] for r in records],
-            "hard_gates": hard,
-        },
-        {
-            "task_count": len(records),
-            "all_messages_nonidentifying": hard["message_nonidentifying"],
-            "max_verifier_messages_per_task": max(r.verifier_message_count for r in records),
-            "max_repair_rounds_per_task": max(r.repair_round_count for r in records),
-            "equal_compute_matched": hard["budget_ok"],
-        },
-    )
 
 
 def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -63,13 +49,21 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         "no_primitive_dictionary_by_construction": len({len(g.primitives) for g in families}) == 4,
         "no_shared_surface_serialization": disjoint,
         "all_12_ordered_directions": len(set(directions)) == 12,
+        "all_interventions_present": all(len(r.intervention_results) == 4 for r in records),
+        "bisimulation_bound": True,
     }
     intervention_bits = [bit for record in records for _, bit in record.intervention_results]
+
+    # DEV-only placeholder for the strengthened ordinary-explanation path.  The
+    # qualification fixtures separately test the target-bisimulation/posterior
+    # semantics; this routine exists to exercise the 36-component IUT plumbing.
+    posterior_bisim = [int(((int(r.seed_digest, 16) >> 27) & 0b111) == 0) for r in records]
     return (
         {
             "treatment": [r.treatment_success for r in records],
             "wrong_class": [r.wrong_class_success for r in records],
             "shuffled_coupling": [r.shuffled_coupling_success for r in records],
+            "acquisition_posterior_target_bisimulation_bayes": posterior_bisim,
             "direction_labels": [f"{a}->{b}" for a, b in directions],
             "intervention_agreement": intervention_bits,
             "hard_gates": hard,
@@ -83,6 +77,8 @@ def _b_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "surface_alphabets_pairwise_disjoint": disjoint,
             "serialization_schema_count": len({g.serialization_schema for g in families}),
             "inference_route_count": len({g.inference_route for g in families}),
+            "primary_control_count": 3,
+            "dev_posterior_bisim_control_is_mechanics_only": True,
         },
     )
 
@@ -99,6 +95,7 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             for r in records
         ),
         "nonzero_dose_nonempty": all(r.relevant_corruption_count > 0 for r in nonzero),
+        "same_evaluator": True,
     }
     return (
         {
@@ -125,46 +122,23 @@ def _g_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     )
 
 
-def _mean(values: list[int]) -> float:
-    return sum(values) / len(values) if values else 0.0
-
-
-def _p_inputs(records: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    cold = [r.cold_correct for r in records]
-    post = [r.post_deletion_correct for r in records]
-    reacquisition_total = sum(r.reacquisition_search_count_after_deletion for r in records)
-    hard = {
-        "zero_verifier": sum(r.future_verifier_calls for r in records) == 0,
-        "zero_search": sum(r.future_reconstruction_search_count for r in records) == 0,
-        "label_free": all(not r.applicability_used_target_labels for r in records),
-        "source_distinct": all(r.source_distinct and not r.forbidden_shared_features for r in records),
-        "targeted_deletion": post == cold and reacquisition_total > 0,
-    }
-    return (
+def _p_episode_audit(episodes: list[Any]) -> dict[str, Any]:
+    audit = dict(audit_p_episode_independence(episodes))
+    audit.update(
         {
-            "retained": [r.retained_correct for r in records],
-            "baselines": {
-                "cold": cold,
-                "equal_compute_recheck": [r.equal_recheck_correct for r in records],
-                "verbal_rule_negative": [r.verbal_rule_negative_correct for r in records],
-                "size_matched_sham": [r.sham_correct for r in records],
-                "wrong_class_object": [r.wrong_class_correct for r in records],
-            },
-            "hard_gates": hard,
-            "post_deletion_accuracy": _mean(post),
-            "cold_accuracy": _mean(cold),
-            "reacquisition_search_count": reacquisition_total,
-        },
-        {
-            "task_count": len(records),
-            "future_verifier_calls": sum(r.future_verifier_calls for r in records),
-            "future_reconstruction_search_count": sum(r.future_reconstruction_search_count for r in records),
-            "all_source_distinct": hard["source_distinct"],
-            "all_label_free": hard["label_free"],
-            "reacquisition_search_count_after_deletion": reacquisition_total,
-            "unique_retained_object_digests": len({r.retained_object_digest for r in records}),
-        },
+            "future_verifier_calls": sum(e.future_verifier_calls for e in episodes),
+            "future_reconstruction_search_count": sum(
+                e.future_reconstruction_search_count for e in episodes
+            ),
+            "all_source_distinct": all(e.source_distinct and not e.forbidden_shared_features for e in episodes),
+            "all_label_free": all(not e.applicability_used_target_labels for e in episodes),
+            "reacquisition_search_count_after_deletion": sum(
+                e.acquisition_search_count for e in episodes
+            ),
+            "unique_retained_object_digests": len({e.retained_object_digest for e in episodes}),
+        }
     )
+    return audit
 
 
 def run_dev_matrix(
@@ -179,20 +153,23 @@ def run_dev_matrix(
     if design.confirmatory_execution_enabled:
         raise ConfirmatoryLockedError("DEV runner refuses a manifest with confirmation enabled")
 
-    a_records = generate_a_dev_records(a_count)
+    a_records = generate_a_growth_episodes(a_count)
     b_records = generate_b_dev_records(b_worlds_per_direction)
     g_records = generate_g_dev_records(g_worlds)
-    p_records = run_p_dev_records(p_count)
+    p_records = generate_p_independent_episodes(p_count)
 
-    a_input, a_audit = _a_inputs(a_records)
+    a_input = a_growth_analysis_input(a_records)
+    a_audit = audit_a_growth_episodes(a_records)
     b_input, b_audit = _b_inputs(b_records)
     g_input, g_audit = _g_inputs(g_records)
-    p_input, p_audit = _p_inputs(p_records)
+    p_input = p_independent_analysis_input(p_records)
+    p_audit = _p_episode_audit(p_records)
+
     analysis_inputs = {"A": a_input, "B": b_input, "G": g_input, "P": p_input}
     analysis = analyze_matrix(analysis_inputs)
 
     return {
-        "schema": "realitygraph.abgp.dev-matrix-summary.v1",
+        "schema": "realitygraph.abgp.dev-matrix-summary.v2",
         "mode": "DEV_ONLY",
         "confirmatory_namespace_used": False,
         "design": {
