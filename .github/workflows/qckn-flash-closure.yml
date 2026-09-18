@@ -1,0 +1,51 @@
+name: QCKN Flash Closure V1
+on:
+  push:
+    branches: [qckn-flash-closure-v1]
+    paths:
+      - 'realitygraph/flash.py'
+      - 'qckn_flash_closure_v1.py'
+      - 'tests/test_flash.py'
+      - 'tests/test_qckn_flash_closure_v1.py'
+      - '.github/workflows/qckn-flash-closure.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qckn-flash-closure-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile implementation
+        run: python -m py_compile realitygraph/flash.py qckn_flash_closure_v1.py
+      - name: Run Flash contracts
+        run: python -m unittest tests.test_flash tests.test_qckn_flash_closure_v1 -v
+      - name: Run full RealityGraph regression
+        run: python -m unittest discover -s tests -p 'test_*.py' -q
+      - name: Emit canonical Flash evidence
+        env:
+          QCKN_FLASH_RESULT_PATH: qckn-flash-evidence/result.json
+        run: |
+          mkdir -p qckn-flash-evidence
+          python -u qckn_flash_closure_v1.py | tee qckn-flash-evidence/stdout.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          path=Path('qckn-flash-evidence/result.json')
+          raw=path.read_bytes()
+          print('QCKN_FLASH_EVIDENCE_SHA256='+hashlib.sha256(raw).hexdigest())
+          print('QCKN_FLASH_EVIDENCE_BYTES='+str(len(raw)))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-flash-closure-v1-evidence
+          path: qckn-flash-evidence/
+          if-no-files-found: error
