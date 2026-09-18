@@ -193,3 +193,44 @@ PASS_FLASH_FUTURE_DEFINES_PRESENT
 PASS_FLASH_ABLATION_REOPENS
 PASS_QCKN_FLASH_KERNEL_V1
 ```
+
+
+## Observed qualification
+
+GitHub Actions run:
+https://github.com/heathsanchez/realitygraph/actions/runs/35404921798
+
+All five dedicated tests and all five qualification markers passed.
+
+Observed frozen metrics:
+
+- initial candidate search market: **96**
+- global informative-failure pruning: **12**
+- remaining search after obstruction: **84**
+- composed capability generated after cross-lens evidence: **h**
+- obligations discharged by the flash: **12 / 12**
+- flash radius: **12**
+- candidate search eliminated at the fixed point: **96 / 96**
+- open workers after closure: **0**
+- represented independent-pipeline total cost: **102**
+- Flash acquisition cost: **9**
+- represented reduction in the frozen fixture: **91.18%**
+- targeted ablation reopened: **12 / 12**
+- pending search restored after ablation: **84**
+
+The negative-capital event itself required two closure iterations and changed all
+12 compatible live obligations. The later `g` admission generated `h` by
+composition and recursively discharged the full live set.
+
+The present-state quotient also followed the protected-future control exactly:
+
+```text
+{a,b,c}
+→ {a,b} | {c}
+→ {a} | {b} | {c}
+→ revoke future-2
+→ {a,b} | {c}
+```
+
+The branch therefore qualifies the intended architectural mechanism, subject to
+the finite-fixture claim boundary above.
