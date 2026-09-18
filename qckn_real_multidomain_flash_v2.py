@@ -4,6 +4,9 @@ import argparse
 import hashlib
 import io
 import json
+import os
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -23,9 +26,45 @@ LEAN_RESTART_HEAD = "74fb78667a425f1fcee604a9b39c843632e2c682"
 
 
 def _artifact_bytes(repo: str, artifact_id: int) -> bytes:
-    return v1._request(
-        f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip"
+    """Download an Actions artifact without leaking GitHub auth to blob storage.
+
+    GitHub's artifact endpoint redirects to a signed storage URL. urllib's
+    default redirect handling can forward Authorization to the redirected host,
+    which the signed blob endpoint rejects. Resolve the redirect explicitly,
+    authenticate only the GitHub API request, then fetch the signed URL without
+    GitHub credentials.
+    """
+    url = f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip"
+    headers = {"User-Agent": v1.USER_AGENT}
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+            return None
+
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        response = opener.open(request, timeout=30)
+    except urllib.error.HTTPError as exc:
+        if exc.code not in (301, 302, 303, 307, 308):
+            raise
+        location = exc.headers.get("Location")
+        if not location:
+            raise AssertionError("artifact redirect missing Location header")
+    else:
+        with response:
+            return response.read()
+
+    redirected = urllib.request.Request(
+        location,
+        headers={"User-Agent": v1.USER_AGENT},
     )
+    with urllib.request.urlopen(redirected, timeout=60) as response:
+        return response.read()
 
 
 def _json_members(raw: bytes) -> list[tuple[str, dict]]:
