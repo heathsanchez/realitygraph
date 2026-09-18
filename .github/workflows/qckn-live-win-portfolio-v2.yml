@@ -1,0 +1,31 @@
+name: QCKN Live Win Portfolio V2
+on:
+  push:
+    branches: [qckn-live-win-portfolio-v2]
+    paths:
+      - 'qckn_live_win_portfolio_v2.py'
+      - '.github/workflows/qckn-live-win-portfolio-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile portfolio
+        run: python -m py_compile qckn_live_win_portfolio_v2.py
+      - name: Run sensitivity ranking
+        env:
+          QCKN_LIVE_WIN_PORTFOLIO_V2_RESULT_PATH: qckn-live-win-portfolio-v2-result.json
+        run: python -u qckn_live_win_portfolio_v2.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-win-portfolio-v2
+          path: qckn-live-win-portfolio-v2-result.json
+          if-no-files-found: error
