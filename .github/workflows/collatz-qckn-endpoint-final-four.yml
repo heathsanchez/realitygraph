@@ -1,0 +1,89 @@
+name: Collatz QCKN endpoint final four sources
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-qckn-endpoint-final-four.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m realitygraph.collatz_controller --export-bank /tmp/qckn-bank.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qckn-bank-final-four
+          path: /tmp/qckn-bank.json
+
+  single:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [269578729,269578731,269578733,269578735]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: fa99b01bdd10db37ca7124dcb6ffcf042aa64e55
+          path: collatz
+      - uses: actions/download-artifact@v4
+        with:
+          name: qckn-bank-final-four
+          path: /tmp/bank
+      - run: |
+          set -euo pipefail
+          N=${{ matrix.n }}
+          python -u collatz/experiments/collatz_qckn_worker.py             --lo "$N" --hi "$N" --H 512 --guard 10000             --bank-json /tmp/bank/qckn-bank.json             --out-json "/tmp/single-${N}.json"             | tee "/tmp/single-${N}.txt"
+          grep -q '^PASS_QCKN_WORKER_NO_UNRESOLVED$' "/tmp/single-${N}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-single-${{ matrix.n }}
+          path: /tmp/single-${{ matrix.n }}.json
+
+  promote:
+    needs: single
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original 15 completed shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-worker-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35330269494
+      - run: rm -f /tmp/results/worker-2.json
+      - name: Download 15 completed 128-source isolates
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-iso-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35337370918
+      - run: rm -f /tmp/results/iso-13.json
+      - name: Download four exact source artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-single-*
+          path: /tmp/results
+          merge-multiple: true
+      - name: QCKN complete-band promotion
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller             --consume-dir /tmp/results             --report-json /tmp/endpoint-generation3-final.json             | tee /tmp/endpoint-generation3-final.txt
+          grep -q '^PASS_QCKN_FRESH_BAND_PROMOTION$' /tmp/endpoint-generation3-final.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-endpoint-generation3-final
+          path: |
+            /tmp/endpoint-generation3-final.json
+            /tmp/endpoint-generation3-final.txt
