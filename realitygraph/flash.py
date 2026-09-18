@@ -349,6 +349,7 @@ class FlashDelta:
     pruned_candidate_occurrences: int
     changed_obligations: tuple[str, ...]
     flash_radius: int
+    restored_candidate_occurrences: int = 0
 
 
 class FlashClosure:
@@ -476,6 +477,26 @@ class FlashClosure:
         )
         return delta
 
+    def revoke_obstruction(
+        self,
+        obstruction_id: str,
+        *,
+        reason: str,
+    ) -> FlashDelta:
+        if obstruction_id not in self.obstructions:
+            raise ValueError("cannot revoke unknown obstruction")
+        if not reason:
+            raise ValueError("obstruction revocation requires reason")
+        del self.obstructions[obstruction_id]
+        self.event_count += 1
+        delta = self.close()
+        self._record_flash_event(
+            "obstruction-revocation",
+            obstruction_id,
+            delta,
+        )
+        return delta
+
     def revoke_capability(
         self,
         capability_id: str,
@@ -517,6 +538,7 @@ class FlashClosure:
                 "flash_radius": delta.flash_radius,
                 "generated_capabilities": list(delta.generated_capabilities),
                 "pruned_candidate_occurrences": delta.pruned_candidate_occurrences,
+                "restored_candidate_occurrences": delta.restored_candidate_occurrences,
                 "discharged": list(delta.discharged),
                 "reopened": list(delta.reopened),
             }
@@ -569,8 +591,9 @@ class FlashClosure:
                 return False
         return True
 
-    def _apply_obstructions(self) -> tuple[int, set[str]]:
+    def _apply_obstructions(self) -> tuple[int, int, set[str]]:
         pruned = 0
+        restored = 0
         changed: set[str] = set()
         by_contract: dict[tuple[str, str, str, str], set[str]] = {}
         for obstruction in self.obstructions.values():
@@ -578,19 +601,22 @@ class FlashClosure:
                 obstruction.candidate_fingerprint
             )
         for obligation in self.obligations.values():
-            if obligation.status != "OPEN":
-                continue
             forbidden = by_contract.get(obligation.contract_key, set())
-            for fingerprint in obligation.candidate_fingerprints:
-                if (
-                    fingerprint in forbidden
-                    and fingerprint not in obligation.pruned_fingerprints
-                    and fingerprint not in obligation.searched_fingerprints
-                ):
-                    obligation.pruned_fingerprints.add(fingerprint)
-                    pruned += 1
-                    changed.add(obligation.obligation_id)
-        return pruned, changed
+            searched = set(obligation.searched_fingerprints)
+            desired = {
+                fingerprint
+                for fingerprint in obligation.candidate_fingerprints
+                if fingerprint in forbidden and fingerprint not in searched
+            }
+            current = set(obligation.pruned_fingerprints)
+            newly_pruned = desired - current
+            newly_restored = current - desired
+            if newly_pruned or newly_restored:
+                obligation.pruned_fingerprints = desired
+                pruned += len(newly_pruned)
+                restored += len(newly_restored)
+                changed.add(obligation.obligation_id)
+        return pruned, restored, changed
 
     def _derive_compositions(self) -> tuple[list[str], bool]:
         generated: list[str] = []
@@ -723,6 +749,7 @@ class FlashClosure:
         reopened: set[str] = set()
         changed_obligations: set[str] = set()
         pruned_total = 0
+        restored_total = 0
         iterations = 0
 
         while True:
@@ -731,10 +758,11 @@ class FlashClosure:
                 raise RuntimeError("flash closure failed to reach fixed point")
             changed = False
 
-            pruned, pruned_obligations = self._apply_obstructions()
-            if pruned:
+            pruned, restored, pruned_obligations = self._apply_obstructions()
+            if pruned or restored:
                 changed = True
                 pruned_total += pruned
+                restored_total += restored
                 self.total_pruned_occurrences += pruned
                 changed_obligations.update(pruned_obligations)
 
@@ -764,6 +792,7 @@ class FlashClosure:
             pruned_candidate_occurrences=pruned_total,
             changed_obligations=tuple(sorted(changed_obligations)),
             flash_radius=len(changed_obligations),
+            restored_candidate_occurrences=restored_total,
         )
 
     def compiled_present(self) -> CompiledPresent:
