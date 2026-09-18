@@ -47,9 +47,9 @@ PROVENANCE = {
     },
     "arc": {
         "repository": "heathsanchez/Minimal-Sufficient-Interface",
-        "branch": "arc3-global-flash-closure-v3",
-        "run": 35403837544,
-        "note": "public development diagnostics; V3 matched market-local protected performance but is not a hidden competition score",
+        "branch": "arc3-global-flash-closure-v4",
+        "run": 35405132123,
+        "note": "public development diagnostics; V4 matched market-local protected performance, produced no structural prunes, and is not a hidden competition score",
     },
     "collatz": {
         "repository": "heathsanchez/test",
@@ -120,7 +120,7 @@ def portfolio(profile: str) -> tuple[WinOpportunity, ...]:
             maintenance_cost=0.3,
             deadline_relevance=0.70,
             external_visibility=0.80,
-            provenance=("run:35403837544",),
+            provenance=("run:35405132123",),
         ),
         WinOpportunity(
             "collatz",
