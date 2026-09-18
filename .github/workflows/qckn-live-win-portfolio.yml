@@ -1,0 +1,34 @@
+name: QCKN Live Win Portfolio V1
+on:
+  push:
+    branches: [qckn-live-win-portfolio-v1]
+    paths:
+      - 'qckn_live_win_portfolio_v1.py'
+      - '.github/workflows/qckn-live-win-portfolio.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qckn-live-win-portfolio-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  rank:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile live portfolio snapshot
+        run: python -m py_compile qckn_live_win_portfolio_v1.py
+      - name: Run live sensitivity ranking
+        env:
+          QCKN_LIVE_WIN_PORTFOLIO_RESULT_PATH: qckn-live-win-portfolio-result.json
+        run: python -u qckn_live_win_portfolio_v1.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-win-portfolio-v1
+          path: qckn-live-win-portfolio-result.json
+          if-no-files-found: error
