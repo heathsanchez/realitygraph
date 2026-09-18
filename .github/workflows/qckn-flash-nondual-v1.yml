@@ -15,5 +15,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Run future quotient tests
-        run: python -m unittest tests.test_flash_future_quotient -v
+      - name: Run future quotient and nonlinear flash tests
+        run: python -m unittest tests.test_flash_future_quotient tests.test_flash_nonlinear -v
+      - name: Run frozen nonlinear non-dual experiment
+        run: python qckn_flash_nonlinear_nondual_v1.py
