@@ -1,0 +1,19 @@
+name: QCKN Flash non-dual v1
+
+on:
+  push:
+    branches:
+      - qckn-flash-nondual-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  future-quotient-red-green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run future quotient tests
+        run: python -m unittest tests.test_flash_future_quotient -v
