@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+from realitygraph.capability_graph import CapabilityGraph
 from realitygraph.developmental_types import canonical_digest
 from realitygraph.fixtures.meta_growth_v3 import (
     ADD_FINITE_MEMORY_2,
@@ -25,6 +26,7 @@ from realitygraph.meta_memory import (
     RepairPhase,
     RepairRuleStatus,
 )
+from realitygraph.memory_graph import MemoryGraphV2, MemoryRevocation
 from realitygraph.meta_snapshot import MetaSnapshot
 from verified_language_growth_closure_v2 import run_qualification as run_v2_qualification
 
@@ -296,13 +298,43 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         authority_snapshot=AUTHORITY,
     )
     restarted_snapshot = MetaSnapshot.from_text(snapshot.text())
-    restarted_object_state, restarted_memory = restarted_snapshot.restore()
+    restarted_object_state, snapshot_restarted_memory = restarted_snapshot.restore()
     snapshot_exact = (
         restarted_object_state.digest == t_calibration.object_state.digest
         and restarted_object_state.to_text() == t_calibration.object_state.to_text()
-        and restarted_memory.digest == promoted_memory.digest
-        and restarted_memory.text() == promoted_memory.text()
+        and snapshot_restarted_memory.digest == promoted_memory.digest
+        and snapshot_restarted_memory.text() == promoted_memory.text()
         and restarted_snapshot.text() == snapshot.text()
+    )
+
+    c_calibration_capability = c_calibration.selected_generation.capability
+    t_calibration_capability = t_calibration.selected_generation.capability
+    if c_calibration_capability is None or t_calibration_capability is None:
+        raise AssertionError("calibration did not produce both retained capabilities")
+
+    active_object_graph = CapabilityGraph(
+        (c_calibration_capability, t_calibration_capability)
+    )
+    mg2_memory = MemoryGraphV2.from_capability_graph(active_object_graph).merge(
+        MemoryGraphV2.from_meta_memory(promoted_memory)
+    )
+    mg2_text = mg2_memory.text()
+    restarted_mg2 = MemoryGraphV2.parse(mg2_text)
+    restarted_graph = restarted_mg2.to_capability_graph()
+    restarted_memory = restarted_mg2.to_meta_memory()
+    mg2_exact = (
+        restarted_mg2.text() == mg2_text
+        and restarted_mg2.digest == mg2_memory.digest
+    )
+    mg2_active_present = (
+        set(restarted_graph.active_ids())
+        == {
+            c_calibration_capability.capability_id,
+            t_calibration_capability.capability_id,
+        }
+        and {rule.rule_id for rule in restarted_memory.rules}
+        == {rule.rule_id for rule in promoted}
+        and restarted_memory.episodes == ()
     )
 
     c_future_bundle = make_episode(FAMILY_C, "future", RepairPhase.FUTURE)
@@ -324,13 +356,33 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         if rule.strategy_id == ADD_FINITE_MEMORY_2
     )
 
-    c_ablated_memory = restarted_memory.revoke(c_rule.rule_id)
+    c_ablated_memory = restarted_mg2.merge(
+        MemoryGraphV2(
+            revocations=(
+                MemoryRevocation(
+                    "repair_rule",
+                    c_rule.rule_id,
+                    "verified-meta-growth-v3-ablation",
+                ),
+            )
+        )
+    ).to_meta_memory()
     c_ablated = execute_meta_growth(
         c_future_bundle.state,
         c_ablated_memory,
         c_future_bundle.spec,
     )
-    t_ablated_memory = restarted_memory.revoke(t_rule.rule_id)
+    t_ablated_memory = restarted_mg2.merge(
+        MemoryGraphV2(
+            revocations=(
+                MemoryRevocation(
+                    "repair_rule",
+                    t_rule.rule_id,
+                    "verified-meta-growth-v3-ablation",
+                ),
+            )
+        )
+    ).to_meta_memory()
     t_ablated = execute_meta_growth(
         t_future_bundle.state,
         t_ablated_memory,
@@ -405,6 +457,8 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
             and t_future.selected_generation.future.grammar_search_calls == 0
         ),
         "exact_meta_snapshot_restart": snapshot_exact,
+        "mg2_exact_restart": mg2_exact,
+        "mg2_combined_active_present": mg2_active_present,
         "rule_ablation_restores_cold_search": (
             not c_ablated.rule_hit
             and c_ablated.portfolio_search_calls > 0
@@ -448,6 +502,9 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         },
         "controls": controls,
         "meta_snapshot_digest": snapshot.digest,
+        "mg2_digest": restarted_mg2.digest,
+        "mg2_active_capability_ids": list(restarted_graph.active_ids()),
+        "mg2_active_rule_ids": sorted(rule.rule_id for rule in restarted_memory.rules),
         "meta_memory_digest": restarted_memory.digest,
         "inherited_v2_certificate": inherited_v2["closure"]["certificate_digest"],
         "claims": {
@@ -501,7 +558,15 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
             "before_object_digest": t_calibration.object_state.digest,
             "after_object_digest": restarted_object_state.digest,
             "before_memory_digest": promoted_memory.digest,
-            "after_memory_digest": restarted_memory.digest,
+            "after_memory_digest": snapshot_restarted_memory.digest,
+        },
+        "mg2": {
+            "digest": restarted_mg2.digest,
+            "exact": mg2_exact,
+            "combined_active_present": mg2_active_present,
+            "capability_ids": list(restarted_graph.active_ids()),
+            "repair_rule_ids": sorted(rule.rule_id for rule in restarted_memory.rules),
+            "raw_episode_count": len(restarted_memory.episodes),
         },
         "inherited_v2": {
             "passed": inherited_v2["passed"],
