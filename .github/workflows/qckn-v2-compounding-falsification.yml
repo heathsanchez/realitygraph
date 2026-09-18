@@ -1,0 +1,58 @@
+name: QCKN V2 compounding falsification
+
+on:
+  push:
+    branches: [qckn-v2-compounding-falsification-v1]
+    paths:
+      - 'qckn_v2_compounding_falsification.py'
+      - 'tests/test_qckn_v2_compounding_falsification.py'
+      - 'realitygraph/**'
+      - 'docs/research/qckn-v2-compounding-falsification.md'
+      - '.github/workflows/qckn-v2-compounding-falsification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  falsify:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
+    steps:
+      - name: Checkout RealityGraph V2 experiment
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout frozen QCKN contract
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify frozen inputs and V2 branch
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+          test "$(git -C realitygraph branch --show-current)" = "qckn-v2-compounding-falsification-v1"
+      - name: Run focused falsification tests
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_v2_compounding_falsification -v
+      - name: Protect frozen V1 regressions
+        working-directory: realitygraph
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Measure canonical V2 evidence
+        working-directory: realitygraph
+        env:
+          QCKN_V2_RESULT_PATH: qckn-v2-compounding-result.json
+        run: python qckn_v2_compounding_falsification.py
+      - name: Upload falsification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qckn-v2-compounding-falsification-evidence
+          path: realitygraph/qckn-v2-compounding-result.json
+          if-no-files-found: error
