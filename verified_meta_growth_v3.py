@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from realitygraph.capability_graph import CapabilityGraph
+from realitygraph.compiled_present import CompiledPresent
 from realitygraph.developmental_types import canonical_digest
 from realitygraph.fixtures.meta_growth_v3 import (
     ADD_FINITE_MEMORY_2,
@@ -26,7 +27,6 @@ from realitygraph.meta_memory import (
     RepairPhase,
     RepairRuleStatus,
 )
-from realitygraph.memory_graph import MemoryGraphV2, MemoryRevocation
 from realitygraph.meta_snapshot import MetaSnapshot
 from verified_language_growth_closure_v2 import run_qualification as run_v2_qualification
 
@@ -315,16 +315,16 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
     active_object_graph = CapabilityGraph(
         (c_calibration_capability, t_calibration_capability)
     )
-    mg2_memory = MemoryGraphV2.from_capability_graph(active_object_graph).merge(
-        MemoryGraphV2.from_meta_memory(promoted_memory)
+    compiled_present = CompiledPresent.compile(
+        active_object_graph,
+        promoted_memory,
     )
-    mg2_text = mg2_memory.text()
-    restarted_mg2 = MemoryGraphV2.parse(mg2_text)
-    restarted_graph = restarted_mg2.to_capability_graph()
-    restarted_memory = restarted_mg2.to_meta_memory()
+    restarted_present = compiled_present.restart()
+    restarted_graph = restarted_present.capability_graph
+    restarted_memory = restarted_present.meta_memory
     mg2_exact = (
-        restarted_mg2.text() == mg2_text
-        and restarted_mg2.digest == mg2_memory.digest
+        restarted_present.text() == compiled_present.text()
+        and restarted_present.digest == compiled_present.digest
     )
     mg2_active_present = (
         set(restarted_graph.active_ids())
@@ -356,33 +356,19 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         if rule.strategy_id == ADD_FINITE_MEMORY_2
     )
 
-    c_ablated_memory = restarted_mg2.merge(
-        MemoryGraphV2(
-            revocations=(
-                MemoryRevocation(
-                    "repair_rule",
-                    c_rule.rule_id,
-                    "verified-meta-growth-v3-ablation",
-                ),
-            )
-        )
-    ).to_meta_memory()
+    c_ablated_memory = restarted_present.revoke_repair_rule(
+        c_rule.rule_id,
+        provenance="verified-meta-growth-v3-ablation",
+    ).meta_memory
     c_ablated = execute_meta_growth(
         c_future_bundle.state,
         c_ablated_memory,
         c_future_bundle.spec,
     )
-    t_ablated_memory = restarted_mg2.merge(
-        MemoryGraphV2(
-            revocations=(
-                MemoryRevocation(
-                    "repair_rule",
-                    t_rule.rule_id,
-                    "verified-meta-growth-v3-ablation",
-                ),
-            )
-        )
-    ).to_meta_memory()
+    t_ablated_memory = restarted_present.revoke_repair_rule(
+        t_rule.rule_id,
+        provenance="verified-meta-growth-v3-ablation",
+    ).meta_memory
     t_ablated = execute_meta_growth(
         t_future_bundle.state,
         t_ablated_memory,
@@ -502,7 +488,7 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         },
         "controls": controls,
         "meta_snapshot_digest": snapshot.digest,
-        "mg2_digest": restarted_mg2.digest,
+        "mg2_digest": restarted_present.digest,
         "mg2_active_capability_ids": list(restarted_graph.active_ids()),
         "mg2_active_rule_ids": sorted(rule.rule_id for rule in restarted_memory.rules),
         "meta_memory_digest": restarted_memory.digest,
@@ -561,7 +547,7 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
             "after_memory_digest": snapshot_restarted_memory.digest,
         },
         "mg2": {
-            "digest": restarted_mg2.digest,
+            "digest": restarted_present.digest,
             "exact": mg2_exact,
             "combined_active_present": mg2_active_present,
             "capability_ids": list(restarted_graph.active_ids()),
