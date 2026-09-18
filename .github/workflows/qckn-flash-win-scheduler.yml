@@ -1,0 +1,73 @@
+name: QCKN Flash Win Scheduler V1
+on:
+  push:
+    branches: [qckn-flash-win-scheduler-v1]
+    paths:
+      - 'realitygraph/win_scheduler.py'
+      - 'qckn_flash_win_scheduler_v1.py'
+      - 'tests/test_qckn_flash_win_scheduler_v1.py'
+      - '.github/workflows/qckn-flash-win-scheduler.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qckn-flash-win-scheduler-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
+    steps:
+      - name: Checkout win scheduler
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout frozen QCKN contract
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify frozen inputs
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+          test "$(git -C realitygraph branch --show-current)" = "qckn-flash-win-scheduler-v1"
+      - name: Compile scheduler
+        working-directory: realitygraph
+        run: python -m py_compile realitygraph/win_scheduler.py qckn_flash_win_scheduler_v1.py
+      - name: Run win-scheduler qualification
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_flash_win_scheduler_v1 -v
+      - name: Protect frozen Flash runtime
+        working-directory: realitygraph
+        run: python -m unittest tests.test_flash tests.test_flash_future_quotient tests.test_qckn_flash_closure_v1 -q
+      - name: Run full RealityGraph regression
+        working-directory: realitygraph
+        run: python -m unittest discover -s tests -p 'test_*.py' -q
+      - name: Emit canonical win-scheduler evidence
+        working-directory: realitygraph
+        env:
+          QCKN_WIN_SCHEDULER_RESULT_PATH: qckn-win-scheduler-evidence/result.json
+        run: |
+          mkdir -p qckn-win-scheduler-evidence
+          python -u qckn_flash_win_scheduler_v1.py | tee qckn-win-scheduler-evidence/stdout.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          path=Path('qckn-win-scheduler-evidence/result.json')
+          raw=path.read_bytes()
+          print('QCKN_WIN_SCHEDULER_EVIDENCE_SHA256='+hashlib.sha256(raw).hexdigest())
+          print('QCKN_WIN_SCHEDULER_EVIDENCE_BYTES='+str(len(raw)))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-flash-win-scheduler-v1-evidence
+          path: realitygraph/qckn-win-scheduler-evidence/
+          if-no-files-found: error
