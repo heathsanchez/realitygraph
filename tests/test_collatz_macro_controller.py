@@ -30,8 +30,8 @@ def row_for_word(word):
 
 
 class CollatzMacroControllerTests(unittest.TestCase):
-    def _candidate(self):
-        row=row_for_word(((1,1,1),))
+    def _candidate(self, word=((1,1,1),)):
+        row=row_for_word(word)
         payload={
             "version":"collatz-forward-macro-candidate-v1",
             "train_range":[3,31],
@@ -42,7 +42,7 @@ class CollatzMacroControllerTests(unittest.TestCase):
             "macros":[row],
         }
         payload["evidence_digest"]=hashlib.sha256(canonical(payload).encode()).hexdigest()
-        path=Path(tempfile.mkdtemp())/"candidate.json"
+        path=Path(tempfile.mkdtemp())/(row["macro_id"]+".json")
         path.write_text(canonical(payload)+"\n")
         return str(path),row
 
@@ -62,6 +62,37 @@ class CollatzMacroControllerTests(unittest.TestCase):
         )
         restarted=ablated.materialize_compiled_present().restart()
         self.assertEqual(active_macro_rows(restarted),())
+
+    def test_distinct_generations_union_and_targeted_ablation_restores_ancestor(self):
+        p1,r1=self._candidate(((1,1,1),))
+        p2,r2=self._candidate(((1,1,2),))
+
+        ledger,present1,_e1,_=promote_candidate(p1)
+        self.assertEqual(active_macro_rows(present1),(r1,))
+
+        gen2_id="collatz-forward-descent-macro-bank-test-gen2"
+        ledger,present2,_e2,_=promote_candidate(
+            p2,
+            ledger=ledger,
+            capability_id=gen2_id,
+            provenance_ids=("test-gen2",),
+        )
+        self.assertEqual(
+            {row["macro_id"] for row in active_macro_rows(present2)},
+            {r1["macro_id"],r2["macro_id"]},
+        )
+
+        # Revoking only generation 2 reconstructs generation 1 exactly at the
+        # active macro identity level.
+        ablated=type(ledger)(ledger.events.values())
+        ablated.append_revoke_capability(
+            gen2_id,
+            "qckn-v1-collatz-adapter",
+            reason="generation-test",
+            parents=ledger.heads,
+        )
+        restarted=ablated.materialize_compiled_present().restart()
+        self.assertEqual(active_macro_rows(restarted),(r1,))
 
     def test_tampered_macro_is_rejected(self):
         path,row=self._candidate()
