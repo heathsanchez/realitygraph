@@ -1,0 +1,30 @@
+name: QCKN compiled present v1
+
+on:
+  push:
+    branches: [qckn-compiled-present-v1]
+    paths:
+      - 'realitygraph/compiled_present.py'
+      - 'realitygraph/__init__.py'
+      - 'verified_meta_growth_v3.py'
+      - 'tests/test_compiled_present.py'
+      - 'tests/test_memory_graph_v2*.py'
+      - '.github/workflows/qckn-compiled-present-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compiled-present:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Qualify compiled present
+        run: |
+          python -m unittest             tests.test_memory_graph_v2             tests.test_memory_graph_v2_integration             tests.test_compiled_present -v
+      - name: Re-run bounded verified meta-growth through compiled present
+        run: python verified_meta_growth_v3.py
