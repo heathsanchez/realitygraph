@@ -22,7 +22,7 @@ jobs:
       - name: Exact Flash runtime tests
         run: |
           set -euo pipefail
-          python -m unittest tests.test_flash -v
+          python -m unittest tests.test_flash tests.test_flash_future_quotient -v
       - name: Run global consequence-graph falsification
         run: |
           set -euo pipefail
