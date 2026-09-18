@@ -1,0 +1,29 @@
+name: MG2 memory graph v1
+
+on:
+  push:
+    branches: [qck-v1-memory-graph-v1]
+    paths:
+      - 'realitygraph/memory_graph.py'
+      - 'realitygraph/__init__.py'
+      - 'tests/test_memory_graph_v2.py'
+      - 'docs/superpowers/specs/2026-09-17-mg2-memory-graph-design.md'
+      - '.github/workflows/mg2-memory-graph-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mg2:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: MG2 canonical memory qualification
+        run: python -m unittest tests.test_memory_graph_v2 -v
+      - name: Existing capability and meta-memory regressions
+        run: |
+          python -m unittest             tests.test_capability_algebra             tests.test_developmental_state             tests.test_meta_memory             tests.test_retained_capability -v
