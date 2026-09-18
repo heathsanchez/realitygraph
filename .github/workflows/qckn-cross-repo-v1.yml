@@ -1,0 +1,39 @@
+name: QCKN cross-repo v1
+
+on:
+  push:
+    branches: [qckn-cross-repo-v1]
+    paths:
+      - 'tests/test_qckn_cross_repo.py'
+      - '.github/workflows/qckn-cross-repo-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-repo:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout RealityGraph
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout frozen QCKN adapter
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify frozen QCKN adapter ref
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+      - name: Qualify QCK -> MDA -> causal promotion -> compiled present
+        env:
+          PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_cross_repo -v
