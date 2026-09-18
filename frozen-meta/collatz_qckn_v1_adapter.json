@@ -1,0 +1,44 @@
+{
+  "adapter_branch": "collatz-qckn-v1-adapter",
+  "adapter_code_commit": "be72ef3380cb5d119522823addc427a673920604",
+  "authority_ids": [
+    "collatz-shortcut-exact-v1"
+  ],
+  "causal_metrics": {
+    "cold_portfolio_search_calls": 12,
+    "cold_verifier_calls": 12,
+    "full_ablation_matches_cold": true,
+    "heldout_hits": 25,
+    "heldout_unique_endpoints": 12,
+    "raw_history_matches_cold": true,
+    "sham_matches_cold": true,
+    "warm_portfolio_search_calls": 0,
+    "warm_verifier_calls": 6
+  },
+  "claim_boundary": "bounded causal Collatz capability compounding under frozen QCKN V1; not a proof of the Collatz conjecture",
+  "closure_certificate": "8783a898a02fcfb1d07fcc59f15d871989de1f88143122be8c274b77dcc68c1f",
+  "macro_transfer_metrics": {
+    "compiled_macros": 481,
+    "heldout_closed": 88,
+    "heldout_hard": 74,
+    "heldout_sources": 162,
+    "training_sources": 252
+  },
+  "qck_version": "QCK V1",
+  "qckn_base_commit": "527cb7df1d931be53a61b1523abeaae20501af27",
+  "qckn_protocol_version": "QCKN V1",
+  "qualification_runs": {
+    "causal_adapter": 35328943187,
+    "cross_repo": 35329030486
+  },
+  "source_evidence": {
+    "collatz_core_commit": "34b1979f048993a914cc75dcd2af3f7b6daa04e2",
+    "forward_macro_commit": "91742a2d544e9a4e46d2b936560000b8ae6f5643",
+    "forward_macro_job": 105543545053,
+    "forward_macro_run": 35327397877
+  },
+  "verifier_ids": [
+    "collatz-exact-integer-replay-v1"
+  ],
+  "version": "collatz-qckn-v1-adapter-1"
+}
