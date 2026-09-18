@@ -6,6 +6,7 @@ on:
       - 'realitygraph/flash.py'
       - 'qckn_flash_closure_v1.py'
       - 'tests/test_flash.py'
+      - 'tests/test_flash_future_quotient.py'
       - 'tests/test_qckn_flash_closure_v1.py'
       - '.github/workflows/qckn-flash-closure.yml'
   workflow_dispatch:
@@ -18,18 +19,38 @@ jobs:
   qualify:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Flash runtime
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout frozen QCKN contract
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Verify frozen cross-repo input
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+          test "$(git -C realitygraph branch --show-current)" = "qckn-flash-closure-v1"
       - name: Compile implementation
+        working-directory: realitygraph
         run: python -m py_compile realitygraph/flash.py qckn_flash_closure_v1.py
       - name: Run Flash contracts
-        run: python -m unittest tests.test_flash tests.test_qckn_flash_closure_v1 -v
+        working-directory: realitygraph
+        run: python -m unittest tests.test_flash tests.test_flash_future_quotient tests.test_qckn_flash_closure_v1 -v
       - name: Run full RealityGraph regression
+        working-directory: realitygraph
         run: python -m unittest discover -s tests -p 'test_*.py' -q
       - name: Emit canonical Flash evidence
+        working-directory: realitygraph
         env:
           QCKN_FLASH_RESULT_PATH: qckn-flash-evidence/result.json
         run: |
@@ -47,5 +68,5 @@ jobs:
         if: always()
         with:
           name: qckn-flash-closure-v1-evidence
-          path: qckn-flash-evidence/
+          path: realitygraph/qckn-flash-evidence/
           if-no-files-found: error
