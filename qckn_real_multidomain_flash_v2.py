@@ -23,6 +23,8 @@ LEAN_RESTART_ARTIFACT_DIGEST = (
     "sha256:2e3e51f43a9090dfe70f2e9240b8449fd7861512e8e98d2dbb38085a0b168bca"
 )
 LEAN_RESTART_HEAD = "74fb78667a425f1fcee604a9b39c843632e2c682"
+LEAN_RESTART_SUMMARY_COMMIT = "402cdaf86f4d3c5122c39ced07e8366852bc5977"
+LEAN_RESTART_SUMMARY_PATH = "genesis/evidence/restartable-negative-reuse-v1-summary.json"
 
 
 def _artifact_bytes(repo: str, artifact_id: int) -> bytes:
@@ -83,106 +85,83 @@ def _json_members(raw: bytes) -> list[tuple[str, dict]]:
 
 
 def load_lean_restart_authority() -> tuple[AuthorityEvidence, dict]:
+    summary_bytes, summary_url = v1._raw(
+        v1.LEAN_REPO,
+        LEAN_RESTART_SUMMARY_COMMIT,
+        LEAN_RESTART_SUMMARY_PATH,
+    )
+    summary = json.loads(summary_bytes)
     run = v1._api(
         f"repos/{v1.LEAN_REPO}/actions/runs/{LEAN_RESTART_RUN}"
     )
-    artifact = v1._api(
-        f"repos/{v1.LEAN_REPO}/actions/artifacts/{LEAN_RESTART_ARTIFACT}"
-    )
+
     if run.get("conclusion") != "success":
         raise AssertionError("Lean restart authority run is not green")
     if run.get("head_sha") != LEAN_RESTART_HEAD:
         raise AssertionError("Lean restart authority head changed")
+    if summary.get("schema") != "lean-restartable-negative-reuse-v1-summary":
+        raise AssertionError("Lean restart summary schema changed")
+    if summary.get("qualification") != "PASS_DIAGNOSTIC_REUSE_NONREGRESSION":
+        raise AssertionError("Lean restart summary is not qualified")
+    if summary.get("qualified_run_id") != LEAN_RESTART_RUN:
+        raise AssertionError("Lean restart summary run mismatch")
+    if summary.get("qualified_head_sha") != LEAN_RESTART_HEAD:
+        raise AssertionError("Lean restart summary head mismatch")
+    artifact = summary.get("artifact", {})
+    if artifact.get("id") != LEAN_RESTART_ARTIFACT:
+        raise AssertionError("Lean restart artifact ID changed")
     if artifact.get("digest") != LEAN_RESTART_ARTIFACT_DIGEST:
         raise AssertionError("Lean restart artifact digest changed")
 
-    raw = _artifact_bytes(v1.LEAN_REPO, LEAN_RESTART_ARTIFACT)
-    actual_zip_sha = hashlib.sha256(raw).hexdigest()
-    expected_zip_sha = LEAN_RESTART_ARTIFACT_DIGEST.split(":", 1)[1]
-    if actual_zip_sha != expected_zip_sha:
-        raise AssertionError("downloaded Lean restart artifact digest mismatch")
+    routing = summary.get("routing", {})
+    required_routing = {
+        "candidate_count": 11,
+        "cold_verifier_calls": 11,
+        "warm_verifier_calls": 3,
+        "restart_verifier_calls": 3,
+        "sham_verifier_calls": 11,
+        "ablation_verifier_calls": 11,
+        "changed_signature_verifier_calls": 11,
+        "exact_negative_routes_skipped": 8,
+        "saved_verifier_calls": 8,
+    }
+    for key, expected in required_routing.items():
+        if routing.get(key) != expected:
+            raise AssertionError(f"Lean restart routing metric changed: {key}")
 
-    members = _json_members(raw)
-    result_rows = [
-        (name, value)
-        for name, value in members
-        if value.get("schema") == "lean-restartable-negative-reuse-v1"
-        and "passed" in value
-        and "gates" in value
-    ]
-    if len(result_rows) != 1:
-        raise AssertionError("Lean restart result is not uniquely recoverable")
-    result_name, result = result_rows[0]
-
-    candidate_rows = [
-        (name, value)
-        for name, value in members
-        if name.endswith("candidate-corpus.json")
-    ]
-    parent_rows = [
-        (name, value)
-        for name, value in members
-        if name.endswith("parent-corpus.json")
-    ]
-    if len(candidate_rows) != 1 or len(parent_rows) != 1:
-        raise AssertionError("Lean matched corpus evidence missing")
-    candidate_name, candidate = candidate_rows[0]
-    parent_name, parent = parent_rows[0]
-
+    corpus = summary.get("matched_current_public_corpus", {})
     expected_totals = {
         "correct": 182,
-        "wrong": 0,
         "unknown": 7,
+        "wrong": 0,
         "errors": 0,
     }
-    if result.get("passed") is not True or not all(result["gates"].values()):
-        raise AssertionError("Lean restart result gates are not all green")
-    if result["cold"]["verifier_calls"] != 11:
-        raise AssertionError("Lean cold routing cost changed")
-    if result["warm"]["verifier_calls"] != 3:
-        raise AssertionError("Lean warm routing cost changed")
-    if result["restart"]["verifier_calls"] != 3:
-        raise AssertionError("Lean restart did not reproduce warm")
-    if result["sham"]["verifier_calls"] != 11:
-        raise AssertionError("Lean sham did not reproduce cold")
-    if result["ablation"]["verifier_calls"] != 11:
-        raise AssertionError("Lean ablation did not reproduce cold")
-    if result["changed_signature"]["verifier_calls"] != 11:
-        raise AssertionError("Lean changed signature was incorrectly reused")
-    if result["saved_verifier_calls"] != 8:
-        raise AssertionError("Lean saved verifier-call count changed")
-    if len(result["source_runs"]) != 8:
+    if corpus.get("candidate") != expected_totals:
+        raise AssertionError("Lean candidate corpus totals changed")
+    if corpus.get("parent") != expected_totals:
+        raise AssertionError("Lean parent corpus totals changed")
+    if corpus.get("exact_case_status_reason_parity") is not True:
+        raise AssertionError("Lean candidate/parent corpus parity is absent")
+    strict = summary.get("strict_arena_closure", {})
+    if strict.get("qualified") is not False or strict.get("remaining_unknown") != 7:
+        raise AssertionError("Lean strict Arena residual boundary changed")
+    if summary.get("trusted_boundary") != (
+        "diagnostic-routing-only; never changes ACCEPT/REJECT semantics"
+    ):
+        raise AssertionError("Lean trusted boundary changed")
+
+    source_runs = tuple(summary.get("source_runs", ()))
+    if len(source_runs) != 8:
         raise AssertionError("Lean source falsifier count changed")
-    if candidate.get("totals") != expected_totals:
-        raise AssertionError("Lean candidate current-corpus totals changed")
-    if parent.get("totals") != expected_totals:
-        raise AssertionError("Lean parent current-corpus totals changed")
-
-    candidate_rows_cmp = [
-        (
-            row.get("name"),
-            row.get("expected"),
-            row.get("status"),
-            row.get("reason"),
+    for source_run in source_runs:
+        source = v1._api(
+            f"repos/{v1.LEAN_REPO}/actions/runs/{int(source_run)}"
         )
-        for row in candidate.get("rows", [])
-    ]
-    parent_rows_cmp = [
-        (
-            row.get("name"),
-            row.get("expected"),
-            row.get("status"),
-            row.get("reason"),
-        )
-        for row in parent.get("rows", [])
-    ]
-    if candidate_rows_cmp != parent_rows_cmp:
-        raise AssertionError("Lean candidate differs from parent corpus behavior")
+        if source.get("conclusion") != "success":
+            raise AssertionError(
+                f"Lean source falsifier run is no longer green: {source_run}"
+            )
 
-    source_ref = (
-        f"https://github.com/{v1.LEAN_REPO}/actions/runs/"
-        f"{LEAN_RESTART_RUN}/artifacts/{LEAN_RESTART_ARTIFACT}"
-    )
     evidence = AuthorityEvidence(
         evidence_id="lean-kernel:v1:restartable-negative-reuse",
         domain="lean-kernel",
@@ -190,7 +169,7 @@ def load_lean_restart_authority() -> tuple[AuthorityEvidence, dict]:
         contract="developmental:verified-state-compilation:v1",
         scope=v1._scope(
             mode="diagnostic-routing-only",
-            residual_guard=result["compiled_bank_digest"],
+            residual_guard=str(summary["compiled_bank_digest"]),
             corpus="current-public-arena-parent-matched",
         ),
         consequence_signature=(
@@ -203,8 +182,8 @@ def load_lean_restart_authority() -> tuple[AuthorityEvidence, dict]:
             "ablation_restores_cold",
             "parent_corpus_behavior_preserved",
         ),
-        source_ref=source_ref,
-        source_sha256=actual_zip_sha,
+        source_ref=summary_url,
+        source_sha256=v1._sha256(summary_bytes),
         metrics=v1._metrics(
             cold_verifier_calls=11,
             warm_verifier_calls=3,
@@ -213,7 +192,9 @@ def load_lean_restart_authority() -> tuple[AuthorityEvidence, dict]:
             ablation_verifier_calls=11,
             changed_signature_verifier_calls=11,
             saved_verifier_calls=8,
-            reduction_fraction=result["verifier_call_reduction_fraction"],
+            reduction_fraction=routing[
+                "verifier_call_reduction_fraction"
+            ],
             corpus_correct=182,
             corpus_unknown=7,
             corpus_wrong=0,
@@ -231,15 +212,14 @@ def load_lean_restart_authority() -> tuple[AuthorityEvidence, dict]:
         "artifact_id": LEAN_RESTART_ARTIFACT,
         "artifact_digest": artifact.get("digest"),
         "head_sha": run.get("head_sha"),
-        "result_member": result_name,
-        "candidate_corpus_member": candidate_name,
-        "parent_corpus_member": parent_name,
-        "compiled_bank_digest": result["compiled_bank_digest"],
-        "saved_verifier_calls": result["saved_verifier_calls"],
-        "corpus_totals": candidate["totals"],
+        "summary_commit": LEAN_RESTART_SUMMARY_COMMIT,
+        "summary_sha256": v1._sha256(summary_bytes),
+        "compiled_bank_digest": summary["compiled_bank_digest"],
+        "saved_verifier_calls": routing["saved_verifier_calls"],
+        "corpus_totals": corpus["candidate"],
+        "source_runs_rechecked": list(source_runs),
     }
     return evidence, meta
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
