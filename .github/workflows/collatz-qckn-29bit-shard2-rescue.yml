@@ -1,0 +1,90 @@
+name: Collatz QCKN 29-bit shard2 rescue
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-qckn-29bit-shard2-rescue.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export frozen generation-2 bank
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller --export-bank /tmp/qckn-bank.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qckn-endpoint-bank-rescue
+          path: /tmp/qckn-bank.json
+
+  rescue:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0,1,2,3,4,5,6,7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: fa99b01bdd10db37ca7124dcb6ffcf042aa64e55
+          path: collatz
+      - uses: actions/download-artifact@v4
+        with:
+          name: qckn-endpoint-bank-rescue
+          path: /tmp/bank
+      - name: Split original shard 2 without changing bank
+        run: |
+          set -euo pipefail
+          P=${{ matrix.part }}
+          BASE=269484033
+          W=65536
+          LO=$((BASE + P*W))
+          HI=$((BASE + (P+1)*W - 1))
+          if [ "$P" -eq 7 ]; then HI=270008319; fi
+          python -u collatz/experiments/collatz_qckn_worker.py             --lo "$LO" --hi "$HI" --H 512 --guard 10000             --bank-json /tmp/bank/qckn-bank.json             --out-json "/tmp/rescue-${P}.json"             | tee "/tmp/rescue-${P}.txt"
+          grep -q '^PASS_QCKN_WORKER_NO_UNRESOLVED$' "/tmp/rescue-${P}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-rescue-${{ matrix.part }}
+          path: /tmp/rescue-${{ matrix.part }}.json
+
+  merge-promote:
+    needs: rescue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the 15 completed original shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-worker-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35330269494
+      - name: Remove original shard 2 if it eventually appeared
+        run: rm -f /tmp/results/worker-2.json
+      - name: Download rescue shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue-*
+          path: /tmp/results
+          merge-multiple: true
+      - name: Full-band QCKN promotion from frozen evidence
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller             --consume-dir /tmp/results             --report-json /tmp/full-band-report.json             | tee /tmp/full-band-report.txt
+          grep -q '^PASS_QCKN_FRESH_BAND_PROMOTION$' /tmp/full-band-report.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-29bit-full-band-rescue-report
+          path: |
+            /tmp/full-band-report.json
+            /tmp/full-band-report.txt
