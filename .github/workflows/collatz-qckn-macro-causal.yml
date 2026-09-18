@@ -1,0 +1,136 @@
+name: Collatz QCKN macro causal compounding
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - 'realitygraph/collatz_macro_controller.py'
+      - '.github/workflows/collatz-qckn-macro-causal.yml'
+  workflow_dispatch:
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: f4185c30da25ed7cc13147b5c13f443d2c7dacd9
+          path: collatz
+      - name: Acquire candidate macro bank from training only
+        run: |
+          set -euo pipefail
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_acquire.py             --train-hi 8191 --maxlen 12 --out-json /tmp/macro-candidate.json             | tee /tmp/macro-acquire.txt
+          grep -q '^TRAIN 3 8191 SOURCES 252 MACROS 481 ANCHORS 9 MAXLEN 12$' /tmp/macro-acquire.txt
+          grep -q '^PASS_QCKN_MACRO_CANDIDATE_ACQUISITION$' /tmp/macro-acquire.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-macro-candidate
+          path: |
+            /tmp/macro-candidate.json
+            /tmp/macro-acquire.txt
+
+  promote:
+    needs: acquire
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: collatz-macro-candidate
+          path: /tmp/candidate
+      - name: QCKN verify, causally promote, restart, and ablate macro bank
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_macro_controller             --candidate-json /tmp/candidate/macro-candidate.json             --export-bank /tmp/warm-macro-bank.json             --export-ablated-bank /tmp/cold-macro-bank.json             --report-json /tmp/macro-promotion-report.json             | tee /tmp/macro-promotion.txt
+          grep -q '^PROMOTED_MACROS 481$' /tmp/macro-promotion.txt
+          grep -q '^ABLATION_MACROS 0$' /tmp/macro-promotion.txt
+          grep -q '^PASS_QCKN_MACRO_PROMOTION$' /tmp/macro-promotion.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-banks
+          path: |
+            /tmp/warm-macro-bank.json
+            /tmp/cold-macro-bank.json
+            /tmp/macro-promotion-report.json
+            /tmp/macro-promotion.txt
+
+  heldout:
+    needs: promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: f4185c30da25ed7cc13147b5c13f443d2c7dacd9
+          path: collatz
+      - uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-banks
+          path: /tmp/banks
+      - name: WARM prospective macro reuse
+        run: |
+          set -euo pipefail
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_worker.py             --bank-json /tmp/banks/warm-macro-bank.json             --lo 8193 --hi 16383 --K 96             --out-json /tmp/warm-result.json             | tee /tmp/warm-result.txt
+          grep -q '^CLOSED 88$' /tmp/warm-result.txt
+          grep -q '^HARD 74 ' /tmp/warm-result.txt
+          grep -q '^PASS_QCKN_MACRO_REUSE$' /tmp/warm-result.txt
+      - name: ABLATED/COLD same held-out sources
+        run: |
+          set -euo pipefail
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_worker.py             --bank-json /tmp/banks/cold-macro-bank.json             --lo 8193 --hi 16383 --K 96             --out-json /tmp/cold-result.json             | tee /tmp/cold-result.txt
+          grep -q '^CLOSED 0$' /tmp/cold-result.txt
+          grep -q '^HARD 162 ' /tmp/cold-result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-heldout
+          path: |
+            /tmp/warm-result.json
+            /tmp/warm-result.txt
+            /tmp/cold-result.json
+            /tmp/cold-result.txt
+
+  assess:
+    needs: heldout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-heldout
+          path: /tmp/results
+      - name: Assert causal macro advantage
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          warm=json.loads(Path('/tmp/results/warm-result.json').read_text())
+          cold=json.loads(Path('/tmp/results/cold-result.json').read_text())
+          assert warm['counts']['sources']==162
+          assert warm['counts']['closed']==88
+          assert len(warm['hard_sources'])==74
+          assert cold['counts']['sources']==162
+          assert cold['counts'].get('closed',0)==0
+          assert len(cold['hard_sources'])==162
+          report={
+              'version':'collatz-qckn-macro-causal-report-v1',
+              'heldout_sources':162,
+              'warm_closed':88,
+              'warm_hard':74,
+              'ablated_closed':0,
+              'ablated_hard':162,
+              'causal_closure_delta':88,
+          }
+          Path('/tmp/causal-report.json').write_text(
+              json.dumps(report,sort_keys=True,separators=(',',':'))+'\n'
+          )
+          print('CAUSAL_CLOSURE_DELTA',88)
+          print('PASS_QCKN_MACRO_CAUSAL_COMPOUNDING')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-causal-report
+          path: /tmp/causal-report.json
