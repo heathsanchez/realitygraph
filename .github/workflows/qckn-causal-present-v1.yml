@@ -1,0 +1,30 @@
+name: QCKN causal present v1
+
+on:
+  push:
+    branches: [qckn-causal-present-v1]
+    paths:
+      - 'realitygraph/ledger.py'
+      - 'realitygraph/compiled_present.py'
+      - 'realitygraph/memory_graph.py'
+      - 'tests/test_causal_compiled_present.py'
+      - 'tests/test_compiled_present.py'
+      - '.github/workflows/qckn-causal-present-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  causal-present:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Qualify causal history compression
+        run: |
+          python -m unittest             tests.test_compiled_present             tests.test_causal_compiled_present -v
+      - name: Preserve legacy ledger semantics
+        run: python -m unittest tests.test_realitygraph.RealityGraphTests.test_ledger_merges_concurrent_edits_without_overwrite tests.test_realitygraph.RealityGraphTests.test_revoke_only_kills_versions_it_causally_observed -v
