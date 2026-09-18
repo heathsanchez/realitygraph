@@ -130,9 +130,15 @@ Ran 170 tests in 14.777s ... OK
 
 Canonical JSON evidence was 2,269 bytes with SHA-256
 `97507c75144478aefd242f34675a48c0590590a79da9722f9368d452c356c763`.
-The branch workflow reproduces the focused suite, full suite, probe, and artifact
-upload. Its hosted GitHub Actions result remains pending until the branch is
-pushed.
+
+Hosted GitHub Actions qualification also passed:
+
+- branch commit: `77e5fef15762f98de90edd1713f650047fb5af74`;
+- run: `35337879739` (`Success`, 1m 17s);
+- job: `falsify` (`Success`, 36s);
+- artifact: `qckn-v2-compounding-falsification-evidence`;
+- artifact digest:
+  `sha256:5c640d3831d8713f17462ad53b51c2908466c94046e657baec825b18d401f792`.
 
 ## Bounded conclusion
 
