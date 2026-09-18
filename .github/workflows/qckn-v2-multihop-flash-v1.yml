@@ -1,0 +1,78 @@
+name: QCKN V2 Multi-Hop Flash V1
+
+on:
+  push:
+    branches: [qckn-v2-multihop-flash-v1]
+    paths:
+      - 'qckn_v2_multihop_flash_v1.py'
+      - 'tests/test_qckn_v2_multihop_flash_v1.py'
+      - 'qckn_v2_flash_closure_v1.py'
+      - 'tests/test_qckn_v2_flash_closure_v1.py'
+      - 'qckn_v2_compounding_falsification.py'
+      - 'tests/test_qckn_v2_compounding_falsification.py'
+      - 'realitygraph/**'
+      - 'docs/research/qckn-v2-multihop-flash-v1.md'
+      - 'docs/superpowers/specs/2026-09-19-qckn-v2-multihop-flash-v1-design.md'
+      - '.github/workflows/qckn-v2-multihop-flash-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  falsify-multihop:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
+    steps:
+      - name: Checkout RealityGraph multi-hop experiment
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+
+      - name: Checkout frozen QCKN contract
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify frozen inputs and multi-hop branch
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+          test "$(git -C realitygraph branch --show-current)" = "qckn-v2-multihop-flash-v1"
+
+      - name: Run focused multi-hop falsification tests
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_v2_multihop_flash_v1 -v
+
+      - name: Protect one-hop Flash result
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_v2_flash_closure_v1 -v
+
+      - name: Protect serial V2 result
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_v2_compounding_falsification -v
+
+      - name: Protect inherited V1 regressions
+        working-directory: realitygraph
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Measure canonical multi-hop evidence
+        working-directory: realitygraph
+        env:
+          QCKN_MULTIHOP_RESULT_PATH: qckn-v2-multihop-flash-result.json
+        run: python qckn_v2_multihop_flash_v1.py
+
+      - name: Upload multi-hop evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qckn-v2-multihop-flash-v1-evidence
+          path: realitygraph/qckn-v2-multihop-flash-result.json
+          if-no-files-found: error
