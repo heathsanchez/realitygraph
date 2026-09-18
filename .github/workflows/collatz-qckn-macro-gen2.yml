@@ -1,0 +1,207 @@
+name: Collatz QCKN macro generation 2
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - 'realitygraph/collatz_macro_controller.py'
+      - '.github/workflows/collatz-qckn-macro-gen2.yml'
+  workflow_dispatch:
+
+jobs:
+  acquire-gen2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: b7415d1a96e2d3db8ce460e22d183ca4f71ad7dc
+          path: collatz
+      - name: Download generation-1 WARM residuals
+        uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-heldout
+          path: /tmp/heldout
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331560123
+      - name: Download generation-1 promoted macro bank
+        uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-banks
+          path: /tmp/gen1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331560123
+      - name: Acquire only genuinely new macros from the 74 RED sources
+        run: |
+          set -euo pipefail
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_acquire.py             --sources-json /tmp/heldout/warm-result.json             --source-key hard_sources             --exclude-bank-json /tmp/gen1/warm-macro-bank.json             --maxlen 12             --out-json /tmp/gen2-candidate.json             | tee /tmp/gen2-acquire.txt
+          grep -q '^TRAIN_EXPLICIT REQUESTED 74 ' /tmp/gen2-acquire.txt
+          grep -q '^PASS_QCKN_MACRO_CANDIDATE_ACQUISITION$' /tmp/gen2-acquire.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen2-candidate
+          path: |
+            /tmp/gen2-candidate.json
+            /tmp/gen2-acquire.txt
+
+  promote-gen2:
+    needs: acquire-gen2
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original generation-1 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: collatz-macro-candidate
+          path: /tmp/gen1-candidate
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331560123
+      - uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen2-candidate
+          path: /tmp/gen2-candidate
+      - name: Promote gen1 then gen2 as separate causal capabilities
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from realitygraph.collatz_macro_controller import (
+              promote_candidate, bank_payload, canonical, MACRO_CAPABILITY_ID
+          )
+
+          gen1='/tmp/gen1-candidate/macro-candidate.json'
+          gen2='/tmp/gen2-candidate/gen2-candidate.json'
+
+          ledger,present1,event1,rows1=promote_candidate(gen1)
+          bank1=bank_payload(present1)
+
+          gen2_payload=json.loads(Path(gen2).read_text())
+          new_count=int(gen2_payload['macro_count'])
+          assert new_count > 0, 'no new gen2 macros acquired'
+
+          gen2_cap='collatz-forward-descent-macro-bank-gen2-v1'
+          ledger,present2,event2,rows2=promote_candidate(
+              gen2,
+              ledger=ledger,
+              capability_id=gen2_cap,
+              provenance_ids=(
+                  'qckn-gen1-residuals-74',
+                  str(gen2_payload['training_source_digest']),
+              ),
+          )
+          bank2=bank_payload(present2)
+          assert bank2['macro_count']==bank1['macro_count']+new_count
+
+          # Targeted gen2 ablation must restore exactly the gen1 active macro set.
+          from realitygraph.ledger import Ledger
+          ablated=Ledger(ledger.events.values())
+          ablated.append_revoke_capability(
+              gen2_cap,
+              'qckn-v1-collatz-adapter',
+              reason='generation-2 causal ablation',
+              parents=ledger.heads,
+          )
+          ablated_present=ablated.materialize_compiled_present().restart()
+          ablated_bank=bank_payload(ablated_present)
+          assert ablated_bank['macro_count']==bank1['macro_count']
+          assert ablated_bank['bank_digest']==bank1['bank_digest']
+
+          Path('/tmp/gen1-bank.json').write_text(canonical(bank1)+'\n')
+          Path('/tmp/gen12-bank.json').write_text(canonical(bank2)+'\n')
+          report={
+              'version':'collatz-qckn-macro-gen2-promotion-v1',
+              'gen1_macro_count':bank1['macro_count'],
+              'gen2_new_macro_count':new_count,
+              'combined_macro_count':bank2['macro_count'],
+              'gen1_digest':bank1['bank_digest'],
+              'combined_digest':bank2['bank_digest'],
+              'gen2_capability_id':gen2_cap,
+              'gen2_ablation_restores_gen1':True,
+              'gen1_present_digest':present1.digest,
+              'gen12_present_digest':present2.digest,
+          }
+          Path('/tmp/gen2-promotion.json').write_text(canonical(report)+'\n')
+          print('GEN1_MACROS',bank1['macro_count'])
+          print('GEN2_NEW_MACROS',new_count)
+          print('COMBINED_MACROS',bank2['macro_count'])
+          print('PASS_QCKN_MACRO_GEN2_PROMOTION')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen2-banks
+          path: |
+            /tmp/gen1-bank.json
+            /tmp/gen12-bank.json
+            /tmp/gen2-promotion.json
+
+  fresh-band:
+    needs: promote-gen2
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: b7415d1a96e2d3db8ce460e22d183ca4f71ad7dc
+          path: collatz
+      - uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen2-banks
+          path: /tmp/banks
+      - name: Generation 1 on fresh band
+        run: |
+          set -euo pipefail
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_worker.py             --bank-json /tmp/banks/gen1-bank.json             --lo 16385 --hi 32767 --K 112             --out-json /tmp/gen1-fresh.json             | tee /tmp/gen1-fresh.txt
+      - name: Generation 1 plus 2 on identical fresh band
+        run: |
+          set -euo pipefail
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_worker.py             --bank-json /tmp/banks/gen12-bank.json             --lo 16385 --hi 32767 --K 112             --out-json /tmp/gen12-fresh.json             | tee /tmp/gen12-fresh.txt
+      - name: Measure developmental gain
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          g1=json.loads(Path('/tmp/gen1-fresh.json').read_text())
+          g12=json.loads(Path('/tmp/gen12-fresh.json').read_text())
+          assert g1['counts']['sources']==g12['counts']['sources']
+          c1=int(g1['counts'].get('closed',0))
+          c12=int(g12['counts'].get('closed',0))
+          h1=len(g1['hard_sources'])
+          h12=len(g12['hard_sources'])
+          delta=c12-c1
+          assert delta >= 0
+          report={
+              'version':'collatz-qckn-macro-gen2-fresh-report-v1',
+              'fresh_sources':g1['counts']['sources'],
+              'gen1_closed':c1,
+              'gen12_closed':c12,
+              'gen1_hard':h1,
+              'gen12_hard':h12,
+              'gen2_incremental_closures':delta,
+              'gen12_hard_sources':g12['hard_sources'],
+          }
+          Path('/tmp/gen2-fresh-report.json').write_text(
+              json.dumps(report,sort_keys=True,separators=(',',':'))+'\n'
+          )
+          print('FRESH_SOURCES',report['fresh_sources'])
+          print('GEN1_CLOSED',c1)
+          print('GEN12_CLOSED',c12)
+          print('GEN2_INCREMENTAL_CLOSURES',delta)
+          print('GEN12_HARD',h12)
+          if delta>0:
+              print('PASS_QCKN_MACRO_GEN2_COMPOUNDING')
+          else:
+              print('SEPARATOR_GEN2_NO_INCREMENTAL_GAIN')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen2-fresh
+          path: |
+            /tmp/gen1-fresh.json
+            /tmp/gen12-fresh.json
+            /tmp/gen2-fresh-report.json
+            /tmp/gen1-fresh.txt
+            /tmp/gen12-fresh.txt
