@@ -1,0 +1,82 @@
+name: Collatz QCKN v1 adapter release
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - 'realitygraph/collatz_adapter.py'
+      - 'tests/test_collatz_qckn_adapter.py'
+      - 'frozen-meta/collatz_qckn_v1_adapter.json'
+      - 'docs/COLLATZ_QCKN_V1_ADAPTER.md'
+      - '.github/workflows/collatz-qckn-v1-release.yml'
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout adapter
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout pinned Collatz core evidence
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: 34b1979f048993a914cc75dcd2af3f7b6daa04e2
+          path: collatz-core
+      - name: Checkout pinned forward-macro evidence
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: 91742a2d544e9a4e46d2b936560000b8ae6f5643
+          path: collatz-macro
+      - name: Frozen QCKN runtime regression plus Collatz adapter
+        working-directory: realitygraph
+        run: |
+          set -euo pipefail
+          python -m unittest             tests.test_causal_compiled_present             tests.test_qckn_end_to_end             tests.test_collatz_qckn_adapter -v
+      - name: Verify adapter manifest closure certificate
+        working-directory: realitygraph
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          path = Path("frozen-meta/collatz_qckn_v1_adapter.json")
+          payload = json.loads(path.read_text())
+          expected = payload.pop("closure_certificate")
+          raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+          actual = hashlib.sha256(raw).hexdigest()
+          assert actual == expected, (actual, expected)
+          assert payload["qckn_base_commit"] == "527cb7df1d931be53a61b1523abeaae20501af27"
+          assert payload["claim_boundary"].endswith("not a proof of the Collatz conjecture")
+          print("PASS_COLLATZ_QCKN_MANIFEST", actual)
+          PY
+      - name: Replay pinned Collatz endpoint and reverse-family evidence
+        run: |
+          set -euo pipefail
+          g++ -O3 -std=c++17 collatz-core/experiments/collatz_generic_endpoint_closure.cpp -o /tmp/collatz-closure
+          /tmp/collatz-closure 157755113 105 1 | tee /tmp/endpoint-a.txt
+          /tmp/collatz-closure 373761769 146 1 | tee /tmp/endpoint-b.txt
+          grep -q '^PASS_GENERIC_ENDPOINT_LOWER_MERGE_CLOSURE$' /tmp/endpoint-a.txt
+          grep -q '^PASS_GENERIC_ENDPOINT_LOWER_MERGE_CLOSURE$' /tmp/endpoint-b.txt
+          PYTHONPATH=collatz-core/experiments python -u collatz-core/experiments/collatz_reverse_family_compiler.py --samples 3 | tee /tmp/reverse-family.txt
+          grep -q '^PASS_REVERSE_FAMILY_COMPILER_T153$' /tmp/reverse-family.txt
+      - name: Replay pinned prospective macro transfer
+        working-directory: collatz-macro
+        run: |
+          set -euo pipefail
+          python -u experiments/collatz_forward_descent_macro_transfer.py --train-hi 8191 --held-hi 16383 --K 96 --maxlen 12 | tee /tmp/forward-macro.txt
+          grep -q '^TRAIN 3 8191 SOURCES 252 MACROS 481 ANCHORS 9 MAXLEN 12$' /tmp/forward-macro.txt
+          grep -q '^CLOSED 88$' /tmp/forward-macro.txt
+          grep -q '^HARD 74 ' /tmp/forward-macro.txt
+          grep -q '^OBSERVED_FORWARD_DESCENT_MACRO_TRANSFER$' /tmp/forward-macro.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-v1-adapter-release-evidence
+          path: |
+            /tmp/endpoint-a.txt
+            /tmp/endpoint-b.txt
+            /tmp/reverse-family.txt
+            /tmp/forward-macro.txt
