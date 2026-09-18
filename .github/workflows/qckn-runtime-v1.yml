@@ -1,0 +1,28 @@
+name: QCKN runtime v1
+
+on:
+  push:
+    branches: [qckn-runtime-v1]
+    paths:
+      - 'verified_meta_growth_v3.py'
+      - 'realitygraph/memory_graph.py'
+      - 'tests/test_memory_graph_v2*.py'
+      - '.github/workflows/qckn-runtime-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qckn-runtime:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Qualify canonical MG2 active present
+        run: |
+          python -m unittest             tests.test_memory_graph_v2             tests.test_memory_graph_v2_integration -v
+      - name: Run bounded verified meta-growth through MG2
+        run: python verified_meta_growth_v3.py
