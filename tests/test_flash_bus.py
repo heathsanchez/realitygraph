@@ -141,6 +141,75 @@ class GlobalFlashBusTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "typed costs require an explicit conversion contract"):
             self.bus.scalar_avoided_cost()
 
+    def test_supersession_keeps_history_but_does_not_double_count_active_cost(self):
+        v2 = EvidenceEvent(
+            event_id="arc-v2",
+            domain="arc",
+            consequence_kind="transfer-refutation",
+            consequence_key="ft09->vc33",
+            authority_snapshot="arc3-public-v2",
+            verifier_id="arc3-destination-check",
+            provenance="run:35404864326",
+            avoided_cost=TypedCost("arc.destination_verifier_calls", 7),
+        )
+        self.bus.admit_event(v2)
+        v3 = EvidenceEvent(
+            event_id="arc-v3",
+            domain="arc",
+            consequence_kind="restart-refutation",
+            consequence_key="ft09->vc33",
+            authority_snapshot="arc3-public-v2",
+            verifier_id="arc3-destination-check",
+            provenance="run:35405566334",
+            avoided_cost=TypedCost("arc.destination_verifier_calls", 8),
+            supersedes_event_ids=("arc-v2",),
+        )
+        self.bus.admit_event(v3)
+
+        self.assertEqual(set(self.bus.events), {"arc-v2", "arc-v3"})
+        self.assertEqual(self.bus.active_event_ids(), ("arc-v3",))
+        self.assertEqual(
+            self.bus.avoided_costs_by_unit(),
+            {"arc.destination_verifier_calls": 8.0},
+        )
+        self.assertEqual(
+            self.bus.avoided_costs_by_unit(include_superseded=True),
+            {"arc.destination_verifier_calls": 15.0},
+        )
+
+    def test_supersession_must_be_same_domain_and_known(self):
+        self.bus.admit_event(EvidenceEvent(
+            event_id="lean-v1",
+            domain="lean",
+            consequence_kind="speedup",
+            consequence_key="direct-var",
+            authority_snapshot="arena-510fb",
+            verifier_id="arena-semantic-parity",
+            provenance="run:35380841937",
+        ))
+        with self.assertRaisesRegex(ValueError, "cross-domain supersession forbidden"):
+            self.bus.admit_event(EvidenceEvent(
+                event_id="arc-bad",
+                domain="arc",
+                consequence_kind="x",
+                consequence_key="x",
+                authority_snapshot="arc3-public-v2",
+                verifier_id="arc3-destination-check",
+                provenance="bad",
+                supersedes_event_ids=("lean-v1",),
+            ))
+        with self.assertRaisesRegex(ValueError, "superseded event missing"):
+            self.bus.admit_event(EvidenceEvent(
+                event_id="arc-missing",
+                domain="arc",
+                consequence_kind="x",
+                consequence_key="x",
+                authority_snapshot="arc3-public-v2",
+                verifier_id="arc3-destination-check",
+                provenance="bad",
+                supersedes_event_ids=("does-not-exist",),
+            ))
+
 
 if __name__ == "__main__":
     unittest.main()
