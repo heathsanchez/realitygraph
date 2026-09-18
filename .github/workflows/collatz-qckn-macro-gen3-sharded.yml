@@ -1,0 +1,105 @@
+name: Collatz QCKN macro generation 3 sharded fresh
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-qckn-macro-gen3-sharded.yml'
+  workflow_dispatch:
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: b7415d1a96e2d3db8ce460e22d183ca4f71ad7dc
+          path: collatz
+      - name: Download promoted gen3 banks
+        uses: actions/download-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen3-banks
+          path: /tmp/banks
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35337025337
+      - name: Compare gen12 vs gen123 on shard
+        run: |
+          set -euo pipefail
+          S=${{ matrix.shard }}
+          BASE=32769
+          W=2048
+          LO=$((BASE + S*W))
+          HI=$((BASE + (S+1)*W - 1))
+          if [ "$S" -eq 15 ]; then HI=65535; fi
+
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_worker.py             --bank-json /tmp/banks/gen12-bank.json             --lo "$LO" --hi "$HI" --K 128             --out-json "/tmp/g12-${S}.json" >/tmp/g12.txt
+
+          PYTHONPATH=collatz/experiments python -u collatz/experiments/collatz_qckn_macro_worker.py             --bank-json /tmp/banks/gen123-bank.json             --lo "$LO" --hi "$HI" --K 128             --out-json "/tmp/g123-${S}.json" >/tmp/g123.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gen3-fresh-shard-${{ matrix.shard }}
+          path: |
+            /tmp/g12-${{ matrix.shard }}.json
+            /tmp/g123-${{ matrix.shard }}.json
+
+  assess:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gen3-fresh-shard-*
+          path: /tmp/results
+          merge-multiple: true
+      - name: Aggregate exact fresh-band comparison
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          sources12=closed12=closed123=0
+          hard12=[]; hard123=[]
+          for s in range(16):
+              a=json.loads(Path(f'/tmp/results/g12-{s}.json').read_text())
+              b=json.loads(Path(f'/tmp/results/g123-{s}.json').read_text())
+              assert a['source_range']==b['source_range']
+              assert a['counts']['sources']==b['counts']['sources']
+              sources12+=int(a['counts']['sources'])
+              closed12+=int(a['counts'].get('closed',0))
+              closed123+=int(b['counts'].get('closed',0))
+              hard12.extend(a['hard_sources'])
+              hard123.extend(b['hard_sources'])
+          delta=closed123-closed12
+          assert len(hard12)==sources12-closed12
+          assert len(hard123)==sources12-closed123
+          assert delta>=0
+          report={
+              'version':'collatz-qckn-macro-gen3-sharded-report-v1',
+              'fresh_sources':sources12,
+              'gen12_closed':closed12,
+              'gen123_closed':closed123,
+              'gen12_hard':len(hard12),
+              'gen123_hard':len(hard123),
+              'gen3_incremental_closures':delta,
+              'gen123_hard_sources':hard123,
+          }
+          Path('/tmp/gen3-report.json').write_text(
+              json.dumps(report,sort_keys=True,separators=(',',':'))+'\n'
+          )
+          print('FRESH_SOURCES',sources12)
+          print('GEN12_CLOSED',closed12)
+          print('GEN123_CLOSED',closed123)
+          print('GEN3_INCREMENTAL_CLOSURES',delta)
+          print('GEN123_HARD',len(hard123))
+          print('PASS_QCKN_MACRO_GEN3_SHARDED')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-macro-gen3-sharded-report
+          path: /tmp/gen3-report.json
