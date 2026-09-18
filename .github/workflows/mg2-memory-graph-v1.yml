@@ -24,6 +24,8 @@ jobs:
           python-version: '3.12'
       - name: MG2 canonical memory qualification
         run: python -m unittest tests.test_memory_graph_v2 -v
+      - name: MG2 verified meta-growth integration
+        run: python -m unittest tests.test_memory_graph_v2_integration -v
       - name: Existing capability and meta-memory regressions
         run: |
           python -m unittest             tests.test_capability_algebra             tests.test_developmental_state             tests.test_meta_memory             tests.test_retained_capability -v
