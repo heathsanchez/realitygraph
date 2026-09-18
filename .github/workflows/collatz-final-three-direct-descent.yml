@@ -1,0 +1,32 @@
+name: Collatz final three direct-descent audit
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-final-three-direct-descent.yml'
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exact shortcut audit of final three sources
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          sources=[269578729,269578731,269578735]
+          def T(n):
+              return n//2 if n%2==0 else (3*n+1)//2
+          for n in sources:
+              y=n
+              first=None
+              for t in range(1,513):
+                  y=T(y)
+                  if y<n:
+                      first=(t,y)
+                      break
+              print("SOURCE",n,"BIT_LENGTH",n.bit_length(),"FIRST_DIRECT",first)
+              assert first is not None
+          print("PASS_FINAL_THREE_DIRECT_DESCENT")
+          PY
