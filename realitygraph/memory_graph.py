@@ -349,13 +349,11 @@ class MemoryGraphV2:
         promoted_only: bool = True,
         include_revoked: bool = False,
     ) -> "MemoryGraphV2":
+        if not promoted_only:
+            raise ValueError("MG2 active memory stores promoted repair rules only")
         rules = tuple(
             rule for rule in memory.rules
-            if (
-                rule.status is RepairRuleStatus.PROMOTED
-                if promoted_only
-                else rule.status is not RepairRuleStatus.REVOKED
-            )
+            if rule.status is RepairRuleStatus.PROMOTED
         )
         revocations = ()
         if include_revoked:
