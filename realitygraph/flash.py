@@ -19,6 +19,206 @@ def _digest(payload: object, prefix: str) -> str:
 
 
 @dataclass(frozen=True)
+class PresentState:
+    state_id: str
+    provenance_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.state_id:
+            raise ValueError("present state requires identity")
+        if len(self.provenance_ids) != len(set(self.provenance_ids)):
+            raise ValueError("present state provenance IDs must be unique")
+
+
+@dataclass(frozen=True)
+class ProtectedContinuation:
+    continuation_id: str
+    outcomes: tuple[tuple[str, str], ...]
+    authority_snapshot: str
+    verifier_id: str
+
+    def __post_init__(self) -> None:
+        if not self.continuation_id:
+            raise ValueError("protected continuation requires identity")
+        if not self.authority_snapshot or not self.verifier_id:
+            raise ValueError("protected continuation requires authority and verifier")
+        state_ids = [str(state_id) for state_id, _ in self.outcomes]
+        if not state_ids or len(state_ids) != len(set(state_ids)):
+            raise ValueError("protected continuation requires unique state outcomes")
+
+    @property
+    def outcome_map(self) -> dict[str, str]:
+        return {str(state_id): str(outcome) for state_id, outcome in self.outcomes}
+
+
+@dataclass(frozen=True)
+class QuotientDelta:
+    previous_classes: tuple[tuple[str, ...], ...]
+    current_classes: tuple[tuple[str, ...], ...]
+    split_classes: tuple[tuple[str, ...], ...]
+    merged_classes: tuple[tuple[str, ...], ...]
+    changed_state_ids: tuple[str, ...]
+
+
+class FutureQuotient:
+    """Present identity induced only by currently protected future consequences."""
+
+    def __init__(
+        self,
+        states: Iterable[PresentState],
+        *,
+        authority_snapshot: str,
+        verifier_id: str,
+    ) -> None:
+        rows = tuple(states)
+        state_ids = [row.state_id for row in rows]
+        if not state_ids or len(state_ids) != len(set(state_ids)):
+            raise ValueError("future quotient requires unique present states")
+        if not authority_snapshot or not verifier_id:
+            raise ValueError("future quotient requires authority and verifier")
+        self.states = {row.state_id: row for row in rows}
+        self.authority_snapshot = str(authority_snapshot)
+        self.verifier_id = str(verifier_id)
+        self.continuations: dict[str, ProtectedContinuation] = {}
+
+    def _signature(self, state_id: str) -> tuple[str, ...]:
+        if state_id not in self.states:
+            raise ValueError(f"unknown present state: {state_id}")
+        return tuple(
+            self.continuations[continuation_id].outcome_map[state_id]
+            for continuation_id in sorted(self.continuations)
+        )
+
+    def classes(self) -> tuple[tuple[str, ...], ...]:
+        buckets: dict[tuple[str, ...], list[str]] = {}
+        for state_id in sorted(self.states):
+            buckets.setdefault(self._signature(state_id), []).append(state_id)
+        classes = tuple(tuple(state_ids) for state_ids in buckets.values())
+        return tuple(sorted(classes))
+
+    def equivalent(self, left: str, right: str) -> bool:
+        return self._signature(left) == self._signature(right)
+
+    @staticmethod
+    def _changed_states(
+        previous: tuple[tuple[str, ...], ...],
+        current: tuple[tuple[str, ...], ...],
+    ) -> tuple[str, ...]:
+        previous_class = {
+            state_id: group
+            for group in previous
+            for state_id in group
+        }
+        current_class = {
+            state_id: group
+            for group in current
+            for state_id in group
+        }
+        return tuple(
+            sorted(
+                state_id
+                for state_id in previous_class
+                if previous_class[state_id] != current_class[state_id]
+            )
+        )
+
+    @staticmethod
+    def _split_classes(
+        previous: tuple[tuple[str, ...], ...],
+        current: tuple[tuple[str, ...], ...],
+    ) -> tuple[tuple[str, ...], ...]:
+        current_sets = tuple(set(group) for group in current)
+        split = [
+            group
+            for group in previous
+            if sum(
+                bool(set(group) & current_group)
+                for current_group in current_sets
+            ) > 1
+        ]
+        return tuple(sorted(split))
+
+    @staticmethod
+    def _merged_classes(
+        previous: tuple[tuple[str, ...], ...],
+        current: tuple[tuple[str, ...], ...],
+    ) -> tuple[tuple[str, ...], ...]:
+        previous_sets = tuple(set(group) for group in previous)
+        merged = [
+            group
+            for group in current
+            if sum(
+                bool(set(group) & previous_group)
+                for previous_group in previous_sets
+            ) > 1
+        ]
+        return tuple(sorted(merged))
+
+    def _delta(
+        self,
+        previous: tuple[tuple[str, ...], ...],
+        *,
+        suppress_structural_labels: bool = False,
+    ) -> QuotientDelta:
+        current = self.classes()
+        return QuotientDelta(
+            previous_classes=previous,
+            current_classes=current,
+            split_classes=(
+                ()
+                if suppress_structural_labels
+                else self._split_classes(previous, current)
+            ),
+            merged_classes=(
+                ()
+                if suppress_structural_labels
+                else self._merged_classes(previous, current)
+            ),
+            changed_state_ids=self._changed_states(previous, current),
+        )
+
+    def admit_continuation(
+        self,
+        continuation: ProtectedContinuation,
+    ) -> QuotientDelta:
+        if (
+            continuation.authority_snapshot != self.authority_snapshot
+            or continuation.verifier_id != self.verifier_id
+        ):
+            raise ValueError(
+                "protected continuation authority/verifier mismatch"
+            )
+        if set(continuation.outcome_map) != set(self.states):
+            raise ValueError(
+                "protected continuation must cover exact present-state carrier"
+            )
+        previous = self.classes()
+        had_continuations = bool(self.continuations)
+        old = self.continuations.get(continuation.continuation_id)
+        if old is not None and old != continuation:
+            raise ValueError("protected continuation identity conflict")
+        self.continuations[continuation.continuation_id] = continuation
+        return self._delta(
+            previous,
+            suppress_structural_labels=not had_continuations,
+        )
+
+    def revoke_continuation(
+        self,
+        continuation_id: str,
+        *,
+        reason: str,
+    ) -> QuotientDelta:
+        if not reason:
+            raise ValueError("continuation revocation requires reason")
+        if continuation_id not in self.continuations:
+            raise ValueError("cannot revoke unknown protected continuation")
+        previous = self.classes()
+        del self.continuations[continuation_id]
+        return self._delta(previous)
+
+
+@dataclass(frozen=True)
 class FlashContract:
     authority_snapshot: str
     verifier_id: str
