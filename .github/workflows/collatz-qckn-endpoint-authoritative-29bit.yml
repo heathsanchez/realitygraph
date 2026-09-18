@@ -1,0 +1,126 @@
+name: Collatz QCKN authoritative 29-bit endpoint promotion
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - 'realitygraph/collatz_controller.py'
+      - '.github/workflows/collatz-qckn-endpoint-authoritative-29bit.yml'
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export frozen generation-2 bank
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller --export-bank /tmp/qckn-bank.json
+
+      - name: Original 15 completed shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-worker-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35330269494
+      - run: rm -f /tmp/results/worker-2.json
+
+      - name: First rescue layer
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue2-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331001575
+      - run: rm -f /tmp/results/rescue2-2.json
+
+      - name: Second rescue layer
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue3-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331488812
+      - run: rm -f /tmp/results/rescue3-14.json
+
+      - name: 128-source rescue layer
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-micro-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35337191346
+      - run: rm -f /tmp/results/micro-3.json
+
+      - name: 8-source rescue layer
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-iso-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35337370918
+      - run: rm -f /tmp/results/iso-13.json
+
+      - name: Replace final pathological 8-source block with exact direct-descent evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          bank=json.loads(Path('/tmp/qckn-bank.json').read_text())
+          sources=[269578729,269578731,269578733,269578735]
+          expected={
+              269578729:(2,202184047),
+              269578731:(5,227457055),
+              269578733:(2,202184050),
+              269578735:(175,171306725),
+          }
+          def T(n):
+              return n//2 if n%2==0 else (3*n+1)//2
+          for n in sources:
+              y=n; first=None
+              for t in range(1,513):
+                  y=T(y)
+                  if y<n:
+                      first=(t,y);break
+              assert first==expected[n],(n,first,expected[n])
+
+          result={
+              'version':'collatz-qckn-worker-result-v1',
+              'source_range':[269578729,269578736],
+              'horizon':512,
+              'guard':10000,
+              'bank_digest':bank['bank_digest'],
+              'bank_size':len(bank['endpoints']),
+              'counts':{'exact_direct_descent':4},
+              'reuse':{},
+              'live_endpoint_counts':{},
+              'candidate_acquisitions':[],
+              'unresolved':[],
+          }
+          Path('/tmp/results/direct-final-8.json').write_text(
+              json.dumps(result,sort_keys=True,separators=(',',':'))+'\n'
+          )
+          print('PASS_FINAL_8_DIRECT_EVIDENCE')
+          PY
+
+      - name: Require complete odd-source coverage and promote
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller             --consume-dir /tmp/results             --expect-lo 268435457             --expect-hi 276824063             --report-json /tmp/endpoint-generation3.json             | tee /tmp/endpoint-generation3.txt
+          grep -q '^PASS_QCKN_FRESH_BAND_PROMOTION$' /tmp/endpoint-generation3.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-authoritative-endpoint-generation3
+          path: |
+            /tmp/endpoint-generation3.json
+            /tmp/endpoint-generation3.txt
