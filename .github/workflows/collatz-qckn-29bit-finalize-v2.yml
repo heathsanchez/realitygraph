@@ -1,0 +1,97 @@
+name: Collatz QCKN finalize 29-bit endpoint generation v2
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-qckn-29bit-finalize-v2.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller --export-bank /tmp/qckn-bank.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qckn-endpoint-bank-finalize-v2
+          path: /tmp/qckn-bank.json
+
+  micro:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: fa99b01bdd10db37ca7124dcb6ffcf042aa64e55
+          path: collatz
+      - uses: actions/download-artifact@v4
+        with:
+          name: qckn-endpoint-bank-finalize-v2
+          path: /tmp/bank
+      - name: Scan one 128-source micro-slice
+        run: |
+          set -euo pipefail
+          P=${{ matrix.part }}
+          BASE=269578241
+          W=128
+          LO=$((BASE + P*W))
+          HI=$((BASE + (P+1)*W - 1))
+          if [ "$P" -eq 15 ]; then HI=269580288; fi
+          python -u collatz/experiments/collatz_qckn_worker.py             --lo "$LO" --hi "$HI" --H 512 --guard 10000             --bank-json /tmp/bank/qckn-bank.json             --out-json "/tmp/micro-${P}.json"             | tee "/tmp/micro-${P}.txt"
+          grep -q '^PASS_QCKN_WORKER_NO_UNRESOLVED$' "/tmp/micro-${P}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-micro-${{ matrix.part }}
+          path: /tmp/micro-${{ matrix.part }}.json
+
+  promote:
+    needs: micro
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download 15 original completed shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-worker-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35330269494
+      - run: rm -f /tmp/results/worker-2.json
+      - name: Download completed rescue3 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue3-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331488812
+      - run: rm -f /tmp/results/rescue3-14.json
+      - name: Download 16 micro artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-micro-*
+          path: /tmp/results
+          merge-multiple: true
+      - name: Authoritative complete-band promotion
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller             --consume-dir /tmp/results             --report-json /tmp/endpoint-gen3.json             | tee /tmp/endpoint-gen3.txt
+          grep -q '^PASS_QCKN_FRESH_BAND_PROMOTION$' /tmp/endpoint-gen3.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-endpoint-gen3-final
+          path: |
+            /tmp/endpoint-gen3.json
+            /tmp/endpoint-gen3.txt
