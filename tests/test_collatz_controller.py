@@ -10,6 +10,7 @@ from realitygraph.collatz_controller import (
     endpoint_bank_digest,
     export_bank_payload,
     generation2_present,
+    generation3_present,
 )
 from realitygraph.collatz_adapter import _active_endpoint_bank
 
@@ -22,7 +23,7 @@ class CollatzQCKNControllerTests(unittest.TestCase):
         bank = _active_endpoint_bank(restarted)
         self.assertEqual(len(bank), 16)
 
-        payload = export_bank_payload()
+        payload = export_bank_payload(generation=2)
         self.assertEqual(payload["compiled_present_digest"], present.digest)
         self.assertEqual(payload["bank_digest"], endpoint_bank_digest(bank))
         self.assertEqual(
@@ -30,8 +31,25 @@ class CollatzQCKNControllerTests(unittest.TestCase):
             bank,
         )
 
+    def test_generation3_is_current_and_extends_generation2(self):
+        g2=generation2_present()
+        g3=generation3_present()
+        b2=_active_endpoint_bank(g2)
+        b3=_active_endpoint_bank(g3)
+        self.assertEqual(len(b2),16)
+        self.assertEqual(len(b3),17)
+        self.assertEqual(set(b3)-set(b2),{17_843_037_929})
+        self.assertEqual(b3[17_843_037_929],131)
+
+        payload=export_bank_payload()
+        self.assertEqual(payload["compiled_present_digest"],g3.digest)
+        self.assertEqual(
+            {int(k):int(v) for k,v in payload["endpoints"].items()},
+            b3,
+        )
+
     def _worker_dir(self, *, stale_digest: bool = False):
-        payload = export_bank_payload()
+        payload = export_bank_payload(generation=2)
         prior = {int(k): int(v) for k, v in payload["endpoints"].items()}
         bank_digest = "stale" if stale_digest else payload["bank_digest"]
 
@@ -75,7 +93,7 @@ class CollatzQCKNControllerTests(unittest.TestCase):
 
     def test_worker_candidates_are_reverified_promoted_restarted_and_ablatable(self):
         directory = self._worker_dir()
-        report, ledger = consume_worker_results(directory)
+        report, ledger = consume_worker_results(directory,generation=2)
 
         self.assertEqual(report.worker_shards, 1)
         self.assertEqual(report.prior_bank_size, 16)
@@ -98,7 +116,7 @@ class CollatzQCKNControllerTests(unittest.TestCase):
     def test_stale_worker_bank_is_rejected(self):
         directory = self._worker_dir(stale_digest=True)
         with self.assertRaisesRegex(ValueError, "bank digest"):
-            consume_worker_results(directory)
+            consume_worker_results(directory,generation=2)
 
 
 if __name__ == "__main__":
