@@ -1,0 +1,36 @@
+name: QCKN Flash Closure V1
+on:
+  push:
+    branches: [qckn-flash-closure-v1]
+    paths:
+      - 'realitygraph/flash.py'
+      - 'qckn_flash_closure_v1.py'
+      - 'tests/test_flash.py'
+      - '.github/workflows/qckn-flash-closure-v1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qckn-flash-closure-v1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  flash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exact Flash runtime tests
+        run: |
+          set -euo pipefail
+          python -m unittest tests.test_flash -v
+      - name: Run global consequence-graph falsification
+        run: |
+          set -euo pipefail
+          QCKN_FLASH_RESULT_PATH=/tmp/qckn-flash-v1.json             python -u qckn_flash_closure_v1.py | tee /tmp/qckn-flash-v1.txt
+          grep -q '"passed":true' /tmp/qckn-flash-v1.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qckn-flash-closure-v1
+          path: |
+            /tmp/qckn-flash-v1.json
+            /tmp/qckn-flash-v1.txt
