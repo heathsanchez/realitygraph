@@ -154,8 +154,8 @@ def run_qualification() -> dict[str, Any]:
 
     design = load_design_manifest(_DESIGN_PATH)
     analysis = load_analysis_plan(_ANALYSIS_PATH)
-    if design.status != "REVIEW_PENDING" or design.confirmatory_execution_enabled:
-        raise ValueError("qualification requires the non-executable REVIEW_PENDING design")
+    if design.status not in ("REVIEW_PENDING", "FROZEN") or design.confirmatory_execution_enabled:
+        raise ValueError("qualification requires REVIEW_PENDING/FROZEN design with confirmation disabled")
 
     base_matrix = passing_qualification_matrix()
     path_audit = _analysis_path_audit(base_matrix)
