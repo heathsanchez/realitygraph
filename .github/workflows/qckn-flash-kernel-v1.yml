@@ -1,0 +1,51 @@
+name: QCKN Flash Kernel V1
+
+on:
+  push:
+    branches:
+      - qckn-flash-kernel-v1
+    paths:
+      - "realitygraph/flash_kernel.py"
+      - "qckn_flash_kernel_v1.py"
+      - "tests/test_flash_kernel_v1.py"
+      - "docs/research/qckn-flash-kernel-v1.md"
+      - ".github/workflows/qckn-flash-kernel-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flash-kernel-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Flash Kernel tests
+        run: |
+          python -m unittest tests.test_flash_kernel_v1 -v
+
+      - name: Run frozen four-lens qualification
+        run: |
+          mkdir -p /tmp/qckn-flash-kernel-v1
+          python qckn_flash_kernel_v1.py | tee /tmp/qckn-flash-kernel-v1/evidence.log
+
+      - name: Gate qualification markers
+        run: |
+          grep -q "PASS_FLASH_GLOBAL_FAILURE_CAPITAL" /tmp/qckn-flash-kernel-v1/evidence.log
+          grep -q "PASS_FLASH_RECURSIVE_COMPOSITION" /tmp/qckn-flash-kernel-v1/evidence.log
+          grep -q "PASS_FLASH_FUTURE_DEFINES_PRESENT" /tmp/qckn-flash-kernel-v1/evidence.log
+          grep -q "PASS_FLASH_ABLATION_REOPENS" /tmp/qckn-flash-kernel-v1/evidence.log
+          grep -q "PASS_QCKN_FLASH_KERNEL_V1" /tmp/qckn-flash-kernel-v1/evidence.log
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: qckn-flash-kernel-v1
+          path: /tmp/qckn-flash-kernel-v1/
+          if-no-files-found: error
