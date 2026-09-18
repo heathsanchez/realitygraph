@@ -31,6 +31,11 @@ GEN2_ENDPOINT_EVIDENCE: tuple[tuple[int, int], ...] = (
     (64_877_962_985, 220),
 )
 
+GEN3_CAPABILITY_ID = "collatz-qckn-fresh-endpoints-cb8501461fe9cf8a"
+GEN3_ENDPOINT_EVIDENCE: tuple[tuple[int, int], ...] = (
+    (17_843_037_929, 131),
+)
+
 
 def canonical_json(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"))
@@ -70,8 +75,53 @@ def generation2_present():
     return present
 
 
-def export_bank_payload() -> dict[str, object]:
-    present = generation2_present()
+def generation3_ledger() -> tuple[Ledger, str]:
+    ledger, _base_event = _generation_ledger(generation)
+    capability = endpoint_bank_capability(
+        GEN3_ENDPOINT_EVIDENCE,
+        capability_id=GEN3_CAPABILITY_ID,
+        provenance_ids=(
+            "realitygraph-run-35337836903",
+            "complete-29-bit-source-coverage",
+        ),
+    )
+    event = ledger.append_promote_capability(
+        capability,
+        KERNEL,
+        parents=ledger.heads,
+    )
+    return ledger, event.id
+
+
+def generation3_present():
+    ledger, _event_id = generation3_ledger()
+    present = ledger.materialize_compiled_present().restart()
+    bank = _active_endpoint_bank(present)
+    if len(bank) != 17:
+        raise AssertionError(f"unexpected generation-3 endpoint bank size: {len(bank)}")
+    if _active_repair_rule(present) is None:
+        raise AssertionError("generation-3 present lost promoted endpoint repair rule")
+    return present
+
+
+def _generation_ledger(generation:int) -> tuple[Ledger,str]:
+    if generation==2:
+        return generation2_ledger()
+    if generation==3:
+        return generation3_ledger()
+    raise ValueError(f"unsupported endpoint generation: {generation}")
+
+
+def _generation_present(generation:int):
+    if generation==2:
+        return generation2_present()
+    if generation==3:
+        return generation3_present()
+    raise ValueError(f"unsupported endpoint generation: {generation}")
+
+
+def export_bank_payload(*, generation:int=3) -> dict[str, object]:
+    present = _generation_present(generation)
     bank = _active_endpoint_bank(present)
     return {
         "version": "collatz-endpoint-bank-v1",
@@ -164,8 +214,9 @@ def consume_worker_results(
     *,
     expect_lo:int|None=None,
     expect_hi:int|None=None,
+    generation:int=3,
 ) -> tuple[ControllerReport, Ledger]:
-    present = generation2_present()
+    present = _generation_present(generation)
     prior_bank = _active_endpoint_bank(present)
     prior_digest = endpoint_bank_digest(prior_bank)
     repair_rule = _active_repair_rule(present)
@@ -297,10 +348,11 @@ def main() -> None:
     ap.add_argument("--report-json")
     ap.add_argument("--expect-lo",type=int)
     ap.add_argument("--expect-hi",type=int)
+    ap.add_argument("--generation",type=int,default=3)
     args = ap.parse_args()
 
     if args.export_bank:
-        payload = export_bank_payload()
+        payload = export_bank_payload(generation=args.generation)
         Path(args.export_bank).write_text(canonical_json(payload) + "\n")
         print("EXPORTED_BANK_SIZE", len(payload["endpoints"]))
         print("EXPORTED_BANK_DIGEST", payload["bank_digest"])
@@ -313,6 +365,7 @@ def main() -> None:
             args.consume_dir,
             expect_lo=args.expect_lo,
             expect_hi=args.expect_hi,
+            generation=args.generation,
         )
         payload = {
             "version": "collatz-qckn-controller-report-v1",
