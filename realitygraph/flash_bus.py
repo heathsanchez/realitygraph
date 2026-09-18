@@ -37,6 +37,7 @@ class EvidenceEvent:
     verifier_id: str
     provenance: str
     avoided_cost: TypedCost | None = None
+    supersedes_event_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not all(
@@ -51,6 +52,10 @@ class EvidenceEvent:
             )
         ):
             raise ValueError("evidence event requires complete identity and provenance")
+        if len(self.supersedes_event_ids) != len(set(self.supersedes_event_ids)):
+            raise ValueError("superseded event IDs must be unique")
+        if self.event_id in self.supersedes_event_ids:
+            raise ValueError("event cannot supersede itself")
 
 
 @dataclass(frozen=True)
@@ -180,6 +185,12 @@ class GlobalFlashBus:
         old = self.events.get(event.event_id)
         if old is not None and old != event:
             raise ValueError("event identity conflict")
+        for superseded_id in event.supersedes_event_ids:
+            superseded = self.events.get(superseded_id)
+            if superseded is None:
+                raise ValueError("superseded event missing")
+            if superseded.domain != event.domain:
+                raise ValueError("cross-domain supersession forbidden")
         self.events[event.event_id] = event
         created = self._materialize_for_event(event)
         affected = {event.domain}
@@ -202,12 +213,37 @@ class GlobalFlashBus:
             created.extend(self._materialize_for_event(event))
         return tuple(sorted(set(created)))
 
-    def cross_domain_edges(self) -> tuple[CrossDomainEdge, ...]:
-        return tuple(sorted(self._edges))
+    def _superseded_event_ids(self) -> set[str]:
+        return {
+            superseded_id
+            for event in self.events.values()
+            for superseded_id in event.supersedes_event_ids
+        }
 
-    def avoided_costs_by_unit(self) -> dict[str, float]:
+    def active_event_ids(self) -> tuple[str, ...]:
+        superseded = self._superseded_event_ids()
+        return tuple(sorted(event_id for event_id in self.events if event_id not in superseded))
+
+    def cross_domain_edges(
+        self,
+        *,
+        include_superseded: bool = False,
+    ) -> tuple[CrossDomainEdge, ...]:
+        if include_superseded:
+            return tuple(sorted(self._edges))
+        active = set(self.active_event_ids())
+        return tuple(sorted(edge for edge in self._edges if edge.source_event_id in active))
+
+    def avoided_costs_by_unit(
+        self,
+        *,
+        include_superseded: bool = False,
+    ) -> dict[str, float]:
         totals: dict[str, float] = {}
-        for event in self.events.values():
+        active = set(self.events) if include_superseded else set(self.active_event_ids())
+        for event_id, event in self.events.items():
+            if event_id not in active:
+                continue
             if event.avoided_cost is None:
                 continue
             unit = event.avoided_cost.unit
