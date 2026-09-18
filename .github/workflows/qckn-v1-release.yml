@@ -1,0 +1,99 @@
+name: QCKN v1 release
+
+on:
+  push:
+    branches: [qckn-v1-release]
+    paths:
+      - 'tests/test_qckn_cross_repo.py'
+      - 'tests/test_qckn_end_to_end.py'
+      - 'tests/test_causal_compiled_present.py'
+      - 'tests/test_compiled_present.py'
+      - 'verified_meta_growth_v3.py'
+      - 'realitygraph/**'
+      - 'docs/QCKN_V1_RELEASE.md'
+      - '.github/workflows/qckn-v1-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout RealityGraph release candidate
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout frozen QCKN contract
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify frozen cross-repo inputs
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+          test "$(git -C realitygraph rev-parse HEAD)" = "$(git -C realitygraph rev-parse qckn-v1-release)"
+          git -C qckn-contract fetch --depth=1 origin fc112771bd0a24e40e31e4eaef61ca0442103dd4
+          git -C qckn-contract diff --exit-code fc112771bd0a24e40e31e4eaef61ca0442103dd4 HEAD -- qcklean
+      - name: Qualify frozen finite QCK adapter and MDA
+        working-directory: qckn-contract
+        run: |
+          python -m unittest tests.test_qck_v1_finite_adapter -v
+          python -m unittest tests.test_qckn_mda -v
+      - name: Install Lean via elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Fetch pinned Mathlib
+        working-directory: qckn-contract/qcklean
+        run: |
+          lake update
+          lake exe cache get
+      - name: Verify frozen QCK Core and reject placeholders
+        working-directory: qckn-contract/qcklean
+        run: |
+          set -euo pipefail
+          test "$(git hash-object QCKCore.lean)" = "b9b1921c49c9947a02009be124286cfe3c723cb4"
+          found=0
+          for file in QCK*.lean; do
+            if grep -nE '(^|[^[:alnum:]_])(sorry|admit|axiom|constant|unsafe)([^[:alnum:]_]|$)' "$file" \
+              | grep -vE '^[0-9]+:[[:space:]]*#print[[:space:]]+axioms([[:space:]]|$)'; then
+              found=1
+            fi
+          done
+          test "$found" -eq 0
+      - name: Build and audit bounded QCK v1
+        working-directory: qckn-contract/qcklean
+        run: |
+          set -euo pipefail
+          lake build QCK
+          lake env lean QCKFiniteLinearTest.lean
+          lake env lean QCKAPITest.lean
+          lake env lean QCKAxiomAudit.lean 2>&1 | tee /tmp/qck-axioms.log
+          ! grep -E 'sorryAx' /tmp/qck-axioms.log
+          if grep -F 'depends on axioms:' /tmp/qck-axioms.log \
+            | grep -vE "depends on axioms: \\[(propext|Classical\\.choice|Quot\\.sound)(, (propext|Classical\\.choice|Quot\\.sound))*\\]$"; then
+            echo "Unexpected foundational dependency detected"
+            exit 1
+          fi
+      - name: Qualify cross-repo QCKN bridge
+        env:
+          PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
+        working-directory: realitygraph
+        run: python -m unittest tests.test_qckn_cross_repo -v
+      - name: Qualify causal compiled present
+        working-directory: realitygraph
+        run: |
+          python -m unittest \
+            tests.test_compiled_present \
+            tests.test_causal_compiled_present \
+            tests.test_qckn_end_to_end -v
+      - name: Final bounded developmental qualification
+        working-directory: realitygraph
+        run: python verified_meta_growth_v3.py
