@@ -76,7 +76,7 @@ def generation2_present():
 
 
 def generation3_ledger() -> tuple[Ledger, str]:
-    ledger, _base_event = _generation_ledger(generation)
+    ledger, _base_event = generation2_ledger()
     capability = endpoint_bank_capability(
         GEN3_ENDPOINT_EVIDENCE,
         capability_id=GEN3_CAPABILITY_ID,
