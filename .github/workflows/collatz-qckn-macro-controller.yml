@@ -1,0 +1,19 @@
+name: Collatz QCKN macro controller
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - 'realitygraph/collatz_macro_controller.py'
+      - 'tests/test_collatz_macro_controller.py'
+      - '.github/workflows/collatz-qckn-macro-controller.yml'
+  workflow_dispatch:
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Qualify macro promotion/restart/ablation
+        run: |
+          set -euo pipefail
+          python -m unittest tests.test_collatz_macro_controller -v
