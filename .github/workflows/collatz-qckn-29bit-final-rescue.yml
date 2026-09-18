@@ -1,0 +1,97 @@
+name: Collatz QCKN 29-bit shard2 part2 final rescue
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-qckn-29bit-final-rescue.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller --export-bank /tmp/qckn-bank.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qckn-endpoint-bank-final-rescue
+          path: /tmp/qckn-bank.json
+
+  rescue:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: fa99b01bdd10db37ca7124dcb6ffcf042aa64e55
+          path: collatz
+      - uses: actions/download-artifact@v4
+        with:
+          name: qckn-endpoint-bank-final-rescue
+          path: /tmp/bank
+      - name: Split rescue-v2 part 2 to 2048-source slices
+        run: |
+          set -euo pipefail
+          P=${{ matrix.part }}
+          BASE=269549569
+          W=2048
+          LO=$((BASE + P*W))
+          HI=$((BASE + (P+1)*W - 1))
+          if [ "$P" -eq 15 ]; then HI=269582336; fi
+          python -u collatz/experiments/collatz_qckn_worker.py             --lo "$LO" --hi "$HI" --H 512 --guard 10000             --bank-json /tmp/bank/qckn-bank.json             --out-json "/tmp/rescue3-${P}.json"             | tee "/tmp/rescue3-${P}.txt"
+          grep -q '^PASS_QCKN_WORKER_NO_UNRESOLVED$' "/tmp/rescue3-${P}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-rescue3-${{ matrix.part }}
+          path: /tmp/rescue3-${{ matrix.part }}.json
+
+  full-promote:
+    needs: rescue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original completed shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-worker-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35330269494
+      - run: rm -f /tmp/results/worker-2.json
+      - name: Download rescue-v2 pieces
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue2-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331001575
+      - run: rm -f /tmp/results/rescue2-2.json
+      - name: Download final rescue pieces
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue3-*
+          path: /tmp/results
+          merge-multiple: true
+      - name: QCKN authoritative full-band promotion
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller             --consume-dir /tmp/results             --report-json /tmp/full-report.json             | tee /tmp/full-report.txt
+          grep -q '^PASS_QCKN_FRESH_BAND_PROMOTION$' /tmp/full-report.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-29bit-final-report
+          path: |
+            /tmp/full-report.json
+            /tmp/full-report.txt
