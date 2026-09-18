@@ -151,8 +151,8 @@ def run_implementation_qualification(
     if namespace != "ABGP-DEV-v1":
         raise ValueError("implementation qualification accepts only ABGP-DEV-v1")
     design = load_design_manifest(_ROOT / "preregistration" / "abgp-design-manifest-v1.json")
-    if design.status != "REVIEW_PENDING" or design.confirmatory_execution_enabled:
-        raise ValueError("implementation qualification requires locked REVIEW_PENDING design")
+    if design.status not in ("REVIEW_PENDING", "FROZEN") or design.confirmatory_execution_enabled:
+        raise ValueError("implementation qualification requires REVIEW_PENDING/FROZEN design with confirmation disabled")
 
     matrix = run_executed_dev_matrix(
         a_count=a_count,
@@ -171,7 +171,11 @@ def run_implementation_qualification(
     artifact: dict[str, Any] = {
         "schema": "abgp.implementation-qualification.v1",
         "mode": "DEV_EXECUTED_IMPLEMENTATION_QUALIFICATION",
-        "status": "IMPLEMENTATION_QUALIFIED_REVIEW_PENDING" if implementation_qualified else "IMPLEMENTATION_NOT_QUALIFIED",
+        "status": (
+            "IMPLEMENTATION_QUALIFIED_FROZEN" if implementation_qualified and design.status == "FROZEN"
+            else "IMPLEMENTATION_QUALIFIED_REVIEW_PENDING" if implementation_qualified
+            else "IMPLEMENTATION_NOT_QUALIFIED"
+        ),
         "design_status": design.status,
         "implementation_qualified": implementation_qualified,
         "complete_pass_power_qualified": False,

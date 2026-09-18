@@ -14,7 +14,7 @@ class ABGPRunnerTests(unittest.TestCase):
         self.assertEqual(summary["mode"], "DEV_ONLY")
         self.assertFalse(summary["confirmatory_namespace_used"])
         self.assertFalse(summary["design"]["confirmatory_execution_enabled"])
-        self.assertEqual(summary["design"]["status"], "REVIEW_PENDING")
+        self.assertEqual(summary["design"]["status"], "FROZEN")
         serialized_records = json.dumps(summary["raw_records"], sort_keys=True)
         self.assertNotIn("ABGP-CONFIRM-v1", serialized_records)
         replay = analyze_matrix(summary["analysis_inputs"])

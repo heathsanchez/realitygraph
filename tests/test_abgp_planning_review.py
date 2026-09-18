@@ -8,8 +8,8 @@ class PlanningReviewTests(unittest.TestCase):
         from realitygraph.abgp.planning_review import build_planning_proposal
         plan = load_analysis_plan('preregistration/abgp-analysis-plan-v1.json')
         proposal = build_planning_proposal(plan)
-        self.assertEqual(proposal['status'], 'JOINT_REVIEW_REQUIRED')
-        self.assertFalse(proposal['complete_pass_power_qualified'])
+        self.assertEqual(proposal['status'], 'FROZEN_APPROVED')
+        self.assertTrue(proposal['complete_pass_power_qualified'])
         self.assertEqual(proposal['familywise_alpha'], 0.05)
         self.assertEqual(proposal['component_alpha'], 0.0125)
         self.assertEqual(proposal['arms']['A']['observed_pass_floor'], 0.05)
@@ -50,7 +50,7 @@ class PlanningReviewTests(unittest.TestCase):
         p = proposal['arms']['P']
         self.assertEqual(p['component_count'], 7)
         self.assertEqual(p['deletion_closeness_planning'], 'MECHANICALLY_IDENTICAL_TO_COLD_POTENTIAL_OUTCOME')
-        self.assertFalse(proposal['approved_by_collaborators'])
+        self.assertTrue(proposal['approved_by_collaborators'])
 
 
 if __name__ == '__main__':

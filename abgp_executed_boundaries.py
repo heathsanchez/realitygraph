@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parent
 
 def run_boundary_checks() -> dict:
     design = load_design_manifest(ROOT / 'preregistration/abgp-design-manifest-v1.json')
-    if design.status != 'REVIEW_PENDING' or design.confirmatory_execution_enabled:
-        raise ValueError('boundary checks require the disabled review-only manifest')
+    if design.status not in ('REVIEW_PENDING', 'FROZEN') or design.confirmatory_execution_enabled:
+        raise ValueError('boundary checks require REVIEW_PENDING/FROZEN manifest with confirmation disabled')
     normative_hashes = {name: sha256((ROOT / 'preregistration' / name).read_bytes()).hexdigest()
                        for name in ('abgp-design-manifest-v1.json', 'abgp-analysis-plan-v1.json')}
     started = time.perf_counter()

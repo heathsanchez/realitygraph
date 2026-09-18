@@ -17,7 +17,7 @@ class ImplementationQualificationTests(unittest.TestCase):
         self.assertFalse(result['complete_pass_power_qualified'])
         self.assertFalse(result['freeze_authorized'])
         self.assertFalse(result['confirmatory_namespace_used'])
-        self.assertEqual(result['design_status'], 'REVIEW_PENDING')
+        self.assertEqual(result['design_status'], 'FROZEN')
         self.assertEqual(result['generator_kinds'], {
             'A': 'executed_structural_construction',
             'B': 'independently_generated_cross_grammar',

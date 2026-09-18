@@ -77,15 +77,18 @@ def _component_review(
 
 
 def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
-    if plan.status != "REVIEW_PENDING":
-        raise ValueError("planning proposal is only defined while REVIEW_PENDING")
+    if plan.status not in ("REVIEW_PENDING", "FROZEN"):
+        raise ValueError("planning review requires REVIEW_PENDING or FROZEN plan")
+    frozen = plan.status == "FROZEN"
     qualification = plan.raw["qualification"]
+    approved = qualification.get("approved_planning", {})
+    approved_effects = approved.get("effects", {})
     paired = qualification["paired_nuisance_envelope"]
     g_env = qualification["g_nuisance_envelope"]["max_dose_discordance_rates"]
 
     a = _component_review(
         proposed_n=int(plan.arms["A"]["n"]),
-        planning_effect=0.10,
+        planning_effect=float(approved_effects.get("A", 0.10)),
         observed_floor=float(plan.arms["A"]["effect_floor"]),
         registered_envelope=paired["A"]["discordance_rates"],
         component_count=3,
@@ -98,14 +101,15 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
 
     b = _component_review(
         proposed_n=int(plan.arms["B"]["worlds_per_direction"]),
-        planning_effect=0.25,
+        planning_effect=float(approved_effects.get("B", 0.25)),
         observed_floor=float(plan.arms["B"]["effect_floor_each_control"]),
         registered_envelope=paired["B"]["discordance_rates"],
         component_count=36,
     )
     total_worlds = 12 * int(plan.arms["B"]["worlds_per_direction"])
     agreement_threshold = ceil(0.90 * total_worlds)
-    agreement_power = float(_binomial_upper_tail(total_worlds, agreement_threshold, 0.95))
+    planning_agreement = float(approved.get("B_all_four_world_agreement", 0.95))
+    agreement_power = float(_binomial_upper_tail(total_worlds, agreement_threshold, planning_agreement))
     b_combined = max(
         0.0,
         1.0
@@ -119,7 +123,7 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
         "independent_unit_count_for_agreement_planning": total_worlds,
         "interventions_per_world": int(plan.arms["B"]["interventions_per_unit"]),
         "observed_pooled_agreement_gate": 0.90,
-        "planning_world_all_four_agreement": 0.95,
+        "planning_world_all_four_agreement": planning_agreement,
         "agreement_gate_success_threshold_worlds": agreement_threshold,
         "conservative_agreement_gate_power": agreement_power,
         "conservative_complete_pass_lower_bound": b_combined,
@@ -131,7 +135,7 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
 
     g = _component_review(
         proposed_n=int(plan.arms["G"]["n_worlds"]),
-        planning_effect=0.25,
+        planning_effect=float(approved_effects.get("G", 0.25)),
         observed_floor=float(qualification["g_nuisance_envelope"]["max_dose_effect_floor"]),
         registered_envelope=g_env,
         component_count=1,
@@ -147,7 +151,7 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
 
     p = _component_review(
         proposed_n=int(plan.arms["P"]["n"]),
-        planning_effect=0.10,
+        planning_effect=float(approved_effects.get("P", 0.10)),
         observed_floor=float(plan.arms["P"]["effect_floor"]),
         registered_envelope=paired["P"]["discordance_rates"],
         component_count=7,
@@ -158,9 +162,9 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
         "conservative_complete_pass_lower_bound": p["dependence_agnostic_component_union_lower_bound"],
         "deletion_closeness_planning": "MECHANICALLY_IDENTICAL_TO_COLD_POTENTIAL_OUTCOME",
         "deletion_closeness_note": (
-            "the <=2pp deletion-to-cold gate is treated as an enforced mechanism condition, not a powered "
-            "stochastic advantage: executed deletion removes the sole retained lineage and both deleted and "
-            "cold invocations receive the same null retained state"
+            "deletion-to-cold equality is mechanically enforced rather than powered: executed deletion "
+            "removes the sole retained lineage, and deleted and cold invocations receive the same null "
+            "retained state and the same deterministic future-task payload"
         ),
         "reacquisition_gate_planning": "MECHANICALLY_REENTERS_FROZEN_ACQUISITION_PROCEDURE",
     })
@@ -171,10 +175,10 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
 
     return {
         "schema": "abgp.complete-pass-planning-proposal.v1",
-        "status": "JOINT_REVIEW_REQUIRED",
-        "approved_by_collaborators": False,
+        "status": "FROZEN_APPROVED" if frozen else "JOINT_REVIEW_REQUIRED",
+        "approved_by_collaborators": frozen,
         "scientific_pass_criteria_changed": False,
-        "complete_pass_power_qualified": False,
+        "complete_pass_power_qualified": frozen,
         "minimum_required_power": _MIN_POWER,
         "familywise_alpha": float(plan.familywise_alpha),
         "component_alpha": float(_COMPONENT_ALPHA),
@@ -187,14 +191,14 @@ def build_planning_proposal(plan: ABGPAnalysisPlan) -> dict[str, Any]:
             "discordance points q<planning effect are replaced by the exact feasible boundary q=planning effect"
         ),
         "arms": arms,
-        "joint_decisions_requested": [
+        "joint_decisions_requested": [] if frozen else [
             "approve or revise the planning effects A=.10, B=.25, G=.25, P=.10",
             "confirm the already-reviewed counts remain A=4096, B=1015/direction, G=421, P=4096",
             "approve B planning all-four world agreement=.95 for the >=.90 pooled observed gate",
             "approve P deletion-to-cold equality as a mechanically enforced gate rather than a separate power target",
         ],
-        "normative_update_required_after_approval": True,
+        "normative_update_required_after_approval": not frozen,
         "count_change_requested": False,
         "confirmatory_namespace_used": False,
-        "freeze_authorized": False,
+        "freeze_authorized": frozen,
     }

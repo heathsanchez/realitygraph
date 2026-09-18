@@ -71,12 +71,14 @@ class ABGPPowerTests(unittest.TestCase):
         self.assertAlmostEqual(result["arm_power_lower_bound"], expected_lower)
         self.assertEqual(result["component_count"], 36)
 
-    def test_analysis_plan_registers_pre_freeze_power_rule(self):
+    def test_analysis_plan_registers_frozen_power_rule(self):
         plan = load_analysis_plan(_PLAN)
-        self.assertEqual(plan.status, "REVIEW_PENDING")
+        self.assertEqual(plan.status, "FROZEN")
         self.assertEqual(plan.raw["qualification"]["minimum_power"], 0.80)
         self.assertEqual(plan.raw["qualification"]["holm_component_alpha_floor"], 0.0125)
         self.assertTrue(plan.raw["qualification"]["paired_nuisance_envelope"])
+        self.assertTrue(plan.raw["qualification"]["approved_planning"]["approved"])
+        self.assertEqual(plan.raw["qualification"]["approved_planning"]["B_all_four_world_agreement"], 0.95)
 
     def test_power_audit_is_deterministic_and_reports_each_arm(self):
         plan = load_analysis_plan(_PLAN)

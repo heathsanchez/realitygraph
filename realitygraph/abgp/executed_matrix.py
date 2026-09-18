@@ -157,8 +157,8 @@ def run_executed_dev_matrix(
         raise ValueError("all executed DEV counts must be positive integers")
 
     design = load_design_manifest("preregistration/abgp-design-manifest-v1.json")
-    if design.status != "REVIEW_PENDING" or design.confirmatory_execution_enabled:
-        raise ValueError("executed DEV matrix requires confirmation locked and REVIEW_PENDING")
+    if design.status not in ("REVIEW_PENDING", "FROZEN") or design.confirmatory_execution_enabled:
+        raise ValueError("executed DEV matrix requires confirmation locked and REVIEW_PENDING/FROZEN")
 
     a = run_a_batch(a_count)
     b_records = run_b_batch(b_worlds_per_direction)

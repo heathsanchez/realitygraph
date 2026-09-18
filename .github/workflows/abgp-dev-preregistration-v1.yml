@@ -58,8 +58,11 @@ jobs:
       - name: DEV runner and replay tests
         run: python -m unittest tests.test_abgp_runner -v
 
-      - name: Review-only final-lock tests
+      - name: Legacy review-lock tests
         run: python -m unittest tests.test_abgp_lock -v
+
+      - name: Frozen-lock tests
+        run: python -m unittest tests.test_abgp_frozen_lock -v
 
       - name: Inherited V3 qualification tests
         run: python -m unittest tests.test_verified_meta_growth_v3 -v
@@ -89,7 +92,7 @@ jobs:
           p_budget = json.load(open('abgp-p-episode-budget.json', encoding='utf-8'))
           qualification = json.load(open('abgp-qualification-summary.json', encoding='utf-8'))
 
-          assert design.status == 'REVIEW_PENDING'
+          assert design.status == 'FROZEN'
           assert design.confirmatory_execution_enabled is False
           assert design.development_namespace == 'ABGP-DEV-v1'
           assert design.confirmatory_namespace == 'ABGP-CONFIRM-v1'
