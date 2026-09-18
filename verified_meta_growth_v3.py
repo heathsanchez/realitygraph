@@ -6,6 +6,7 @@ from pathlib import Path
 
 from realitygraph.capability_graph import CapabilityGraph
 from realitygraph.compiled_present import CompiledPresent
+from realitygraph.ledger import Ledger
 from realitygraph.developmental_types import canonical_digest
 from realitygraph.fixtures.meta_growth_v3 import (
     ADD_FINITE_MEMORY_2,
@@ -315,10 +316,22 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
     active_object_graph = CapabilityGraph(
         (c_calibration_capability, t_calibration_capability)
     )
-    compiled_present = CompiledPresent.compile(
-        active_object_graph,
-        promoted_memory,
-    )
+    causal_ledger = Ledger()
+    for capability in sorted(
+        active_object_graph.capabilities,
+        key=lambda item: item.capability_id,
+    ):
+        causal_ledger.append_promote_capability(
+            capability,
+            "verified-meta-growth-v3",
+        )
+    for rule in sorted(promoted, key=lambda item: item.rule_id):
+        causal_ledger.append_promote_repair_rule(
+            rule,
+            "verified-meta-growth-v3",
+        )
+
+    compiled_present = causal_ledger.materialize_compiled_present()
     restarted_present = compiled_present.restart()
     restarted_graph = restarted_present.capability_graph
     restarted_memory = restarted_present.meta_memory
@@ -356,19 +369,33 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         if rule.strategy_id == ADD_FINITE_MEMORY_2
     )
 
-    c_ablated_memory = restarted_present.revoke_repair_rule(
+    c_ablation_ledger = Ledger(causal_ledger.events.values())
+    c_ablation_ledger.append_revoke_repair_rule(
         c_rule.rule_id,
-        provenance="verified-meta-growth-v3-ablation",
-    ).meta_memory
+        "verified-meta-growth-v3",
+        reason="ablation",
+    )
+    c_ablated_memory = (
+        c_ablation_ledger.materialize_compiled_present()
+        .restart()
+        .meta_memory
+    )
     c_ablated = execute_meta_growth(
         c_future_bundle.state,
         c_ablated_memory,
         c_future_bundle.spec,
     )
-    t_ablated_memory = restarted_present.revoke_repair_rule(
+    t_ablation_ledger = Ledger(causal_ledger.events.values())
+    t_ablation_ledger.append_revoke_repair_rule(
         t_rule.rule_id,
-        provenance="verified-meta-growth-v3-ablation",
-    ).meta_memory
+        "verified-meta-growth-v3",
+        reason="ablation",
+    )
+    t_ablated_memory = (
+        t_ablation_ledger.materialize_compiled_present()
+        .restart()
+        .meta_memory
+    )
     t_ablated = execute_meta_growth(
         t_future_bundle.state,
         t_ablated_memory,
@@ -445,6 +472,10 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         "exact_meta_snapshot_restart": snapshot_exact,
         "mg2_exact_restart": mg2_exact,
         "mg2_combined_active_present": mg2_active_present,
+        "causal_ledger_to_compiled_present": (
+            compiled_present.digest == restarted_present.digest
+            and bool(causal_ledger.digest())
+        ),
         "rule_ablation_restores_cold_search": (
             not c_ablated.rule_hit
             and c_ablated.portfolio_search_calls > 0
@@ -489,6 +520,7 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         "controls": controls,
         "meta_snapshot_digest": snapshot.digest,
         "mg2_digest": restarted_present.digest,
+        "causal_ledger_digest": causal_ledger.digest(),
         "mg2_active_capability_ids": list(restarted_graph.active_ids()),
         "mg2_active_rule_ids": sorted(rule.rule_id for rule in restarted_memory.rules),
         "meta_memory_digest": restarted_memory.digest,
@@ -548,6 +580,7 @@ def run_qualification(*, write_result: bool = True) -> dict[str, object]:
         },
         "mg2": {
             "digest": restarted_present.digest,
+            "causal_ledger_digest": causal_ledger.digest(),
             "exact": mg2_exact,
             "combined_active_present": mg2_active_present,
             "capability_ids": list(restarted_graph.active_ids()),
