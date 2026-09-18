@@ -15,6 +15,7 @@ from .lab import (
 from .ledger import Event, Ledger
 from .mg import Law, MG
 from .memory_graph import MemoryGraphV2, MemoryLaw, MemoryRevocation
+from .compiled_present import CompiledPresent
 from .transfer import TransferAssessment, assess_transfer
 from .residual import (
     CompiledResidualModel,
@@ -69,6 +70,7 @@ __all__ = [
     "MemoryGraphV2",
     "MemoryLaw",
     "MemoryRevocation",
+    "CompiledPresent",
     "CandidateTrial",
     "CompiledPredictiveModel",
     "PredictiveCertificate",
