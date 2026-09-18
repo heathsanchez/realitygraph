@@ -1,0 +1,19 @@
+name: Collatz QCKN v1 adapter
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - 'realitygraph/collatz_adapter.py'
+      - 'tests/test_collatz_qckn_adapter.py'
+      - '.github/workflows/collatz-qckn-v1-adapter.yml'
+  workflow_dispatch:
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Collatz QCKN adapter qualification
+        run: |
+          set -euo pipefail
+          python -m unittest tests.test_collatz_qckn_adapter -v
