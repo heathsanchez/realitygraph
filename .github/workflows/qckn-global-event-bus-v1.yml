@@ -16,3 +16,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run Flash bus tests
         run: python -m unittest tests.test_flash_bus -v
+      - name: Ingest real verified project events
+        run: python qckn_global_real_event_ingest_v1.py
