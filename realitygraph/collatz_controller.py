@@ -117,15 +117,54 @@ def _load_worker_results(directory: str) -> list[dict[str, object]]:
     return rows
 
 
-def _ranges_are_disjoint(results: list[dict[str, object]]) -> tuple[int, int]:
+def _odd_bounds(lo:int,hi:int)->tuple[int,int] | None:
+    first=lo if lo%2 else lo+1
+    last=hi if hi%2 else hi-1
+    if first>last:
+        return None
+    return first,last
+
+
+def _ranges_are_disjoint(
+    results: list[dict[str, object]],
+    *,
+    expect_lo:int|None=None,
+    expect_hi:int|None=None,
+) -> tuple[int, int]:
     ranges = sorted(tuple(int(x) for x in row["source_range"]) for row in results)
     for (lo1, hi1), (lo2, hi2) in zip(ranges, ranges[1:]):
         if hi1 >= lo2:
             raise ValueError(f"overlapping worker ranges: {(lo1,hi1)} {(lo2,hi2)}")
+
+    if (expect_lo is None)!=(expect_hi is None):
+        raise ValueError("expected range requires both bounds")
+    if expect_lo is not None:
+        effective=[]
+        for lo,hi in ranges:
+            b=_odd_bounds(lo,hi)
+            if b is not None:
+                effective.append(b)
+        if not effective:
+            raise ValueError("no odd worker coverage")
+        expected=_odd_bounds(int(expect_lo),int(expect_hi))
+        if expected is None:
+            raise ValueError("expected interval contains no odd sources")
+        if effective[0][0]!=expected[0] or effective[-1][1]!=expected[1]:
+            raise ValueError(
+                f"worker coverage boundary mismatch: {effective[0]}..{effective[-1]} expected {expected}"
+            )
+        for left,right in zip(effective,effective[1:]):
+            if right[0]!=left[1]+2:
+                raise ValueError(f"odd-source coverage gap: {left} -> {right}")
     return ranges[0][0], ranges[-1][1]
 
 
-def consume_worker_results(directory: str) -> tuple[ControllerReport, Ledger]:
+def consume_worker_results(
+    directory: str,
+    *,
+    expect_lo:int|None=None,
+    expect_hi:int|None=None,
+) -> tuple[ControllerReport, Ledger]:
     present = generation2_present()
     prior_bank = _active_endpoint_bank(present)
     prior_digest = endpoint_bank_digest(prior_bank)
@@ -134,7 +173,11 @@ def consume_worker_results(directory: str) -> tuple[ControllerReport, Ledger]:
         raise AssertionError("candidate promotion requires active endpoint repair rule")
 
     results = _load_worker_results(directory)
-    source_lo, source_hi = _ranges_are_disjoint(results)
+    source_lo, source_hi = _ranges_are_disjoint(
+        results,
+        expect_lo=expect_lo,
+        expect_hi=expect_hi,
+    )
 
     live_counts: Counter[int] = Counter()
     candidates: dict[int, int] = {}
@@ -252,6 +295,8 @@ def main() -> None:
     ap.add_argument("--export-bank")
     ap.add_argument("--consume-dir")
     ap.add_argument("--report-json")
+    ap.add_argument("--expect-lo",type=int)
+    ap.add_argument("--expect-hi",type=int)
     args = ap.parse_args()
 
     if args.export_bank:
@@ -264,7 +309,11 @@ def main() -> None:
         return
 
     if args.consume_dir:
-        report, _ledger = consume_worker_results(args.consume_dir)
+        report, _ledger = consume_worker_results(
+            args.consume_dir,
+            expect_lo=args.expect_lo,
+            expect_hi=args.expect_hi,
+        )
         payload = {
             "version": "collatz-qckn-controller-report-v1",
             **report.payload(),
