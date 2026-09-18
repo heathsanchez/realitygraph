@@ -131,10 +131,7 @@ class FutureQuotient:
         split = [
             group
             for group in previous
-            if sum(
-                bool(set(group) & current_group)
-                for current_group in current_sets
-            ) > 1
+            if sum(bool(set(group) & current_group) for current_group in current_sets) > 1
         ]
         return tuple(sorted(split))
 
@@ -147,10 +144,7 @@ class FutureQuotient:
         merged = [
             group
             for group in current
-            if sum(
-                bool(set(group) & previous_group)
-                for previous_group in previous_sets
-            ) > 1
+            if sum(bool(set(group) & previous_group) for previous_group in previous_sets) > 1
         ]
         return tuple(sorted(merged))
 
@@ -164,16 +158,8 @@ class FutureQuotient:
         return QuotientDelta(
             previous_classes=previous,
             current_classes=current,
-            split_classes=(
-                ()
-                if suppress_structural_labels
-                else self._split_classes(previous, current)
-            ),
-            merged_classes=(
-                ()
-                if suppress_structural_labels
-                else self._merged_classes(previous, current)
-            ),
+            split_classes=() if suppress_structural_labels else self._split_classes(previous, current),
+            merged_classes=() if suppress_structural_labels else self._merged_classes(previous, current),
             changed_state_ids=self._changed_states(previous, current),
         )
 
@@ -185,13 +171,10 @@ class FutureQuotient:
             continuation.authority_snapshot != self.authority_snapshot
             or continuation.verifier_id != self.verifier_id
         ):
-            raise ValueError(
-                "protected continuation authority/verifier mismatch"
-            )
+            raise ValueError("protected continuation authority/verifier mismatch")
         if set(continuation.outcome_map) != set(self.states):
-            raise ValueError(
-                "protected continuation must cover exact present-state carrier"
-            )
+            raise ValueError("protected continuation must cover exact present-state carrier")
+
         previous = self.classes()
         had_continuations = bool(self.continuations)
         old = self.continuations.get(continuation.continuation_id)
