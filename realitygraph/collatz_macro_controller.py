@@ -73,13 +73,13 @@ def load_candidate(path:str):
     return payload,tuple(sorted(rows,key=lambda r:r["macro_id"]))
 
 
-def macro_capability(rows, candidate_digest:str)->FiniteCapability:
+def macro_capability(rows, candidate_digest:str, *, capability_id:str=MACRO_CAPABILITY_ID, provenance_ids:tuple[str,...]|None=None)->FiniteCapability:
     semantics=tuple(
         (r["macro_id"],canonical(r))
         for r in rows
     )
     return FiniteCapability(
-        capability_id=MACRO_CAPABILITY_ID,
+        capability_id=capability_id,
         input_type="CollatzMacroID",
         output_type="ForwardDescentMacroCertificate",
         semantics=semantics,
@@ -88,7 +88,7 @@ def macro_capability(rows, candidate_digest:str)->FiniteCapability:
         dependencies=(),
         authority_snapshot=MACRO_AUTHORITY,
         verifier_id=MACRO_VERIFIER,
-        provenance_ids=(
+        provenance_ids=provenance_ids or (
             "test-run-35327397877",
             "test-commit-91742a2d544e9a4e46d2b936560000b8ae6f5643",
         ),
@@ -96,29 +96,50 @@ def macro_capability(rows, candidate_digest:str)->FiniteCapability:
     )
 
 
-def promote_candidate(path:str):
+def promote_candidate(
+    path:str,
+    *,
+    ledger:Ledger|None=None,
+    capability_id:str=MACRO_CAPABILITY_ID,
+    provenance_ids:tuple[str,...]|None=None,
+):
     payload,rows=load_candidate(path)
-    ledger,_=generation2_ledger()
-    cap=macro_capability(rows,str(payload["evidence_digest"]))
+    if ledger is None:
+        ledger,_=generation2_ledger()
+    cap=macro_capability(
+        rows,
+        str(payload["evidence_digest"]),
+        capability_id=capability_id,
+        provenance_ids=provenance_ids,
+    )
     event=ledger.append_promote_capability(cap,KERNEL,parents=ledger.heads)
     present=ledger.materialize_compiled_present().restart()
-    if MACRO_CAPABILITY_ID not in present.capability_graph.active_ids():
+    if capability_id not in present.capability_graph.active_ids():
         raise AssertionError("macro capability did not survive compile/restart")
     return ledger,present,event.id,rows
 
 
 def active_macro_rows(present):
     active=set(present.capability_graph.active_ids())
-    rows=[]
+    rows={}
     for cap in present.capability_graph.capabilities:
-        if cap.capability_id!=MACRO_CAPABILITY_ID or cap.capability_id not in active:
+        if cap.capability_id not in active:
+            continue
+        if (
+            cap.input_type!="CollatzMacroID"
+            or cap.output_type!="ForwardDescentMacroCertificate"
+        ):
             continue
         for mid,text in cap.semantics:
             row=json.loads(text)
             if row["macro_id"]!=mid:
                 raise ValueError("active macro identity mismatch")
-            rows.append(verify_macro_row(row))
-    return tuple(sorted(rows,key=lambda r:r["macro_id"]))
+            verified=verify_macro_row(row)
+            prior=rows.get(mid)
+            if prior is not None and prior!=verified:
+                raise ValueError(f"active macro identity conflict: {mid}")
+            rows[mid]=verified
+    return tuple(rows[mid] for mid in sorted(rows))
 
 
 def bank_payload(present):
