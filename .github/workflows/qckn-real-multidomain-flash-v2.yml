@@ -1,0 +1,63 @@
+name: QCKN Real Multidomain Flash V2
+
+on:
+  push:
+    branches:
+      - qckn-real-multidomain-flash-v2
+    paths:
+      - "realitygraph/real_flash.py"
+      - "qckn_real_multidomain_flash_v1.py"
+      - "qckn_real_multidomain_flash_v2.py"
+      - "tests/test_real_flash.py"
+      - ".github/workflows/qckn-real-multidomain-flash-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  real-multidomain-flash-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Protect authority-gated graph contracts
+        run: python -m unittest tests.test_real_flash -v
+      - name: Attach pinned real evidence including Lean restart authority
+        run: |
+          mkdir -p /tmp/qckn-real-multidomain-flash-v2
+          python qckn_real_multidomain_flash_v2.py             --out /tmp/qckn-real-multidomain-flash-v2             | tee /tmp/qckn-real-multidomain-flash-v2/run.log
+      - name: Gate four-domain result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/tmp/qckn-real-multidomain-flash-v2')
+          r=json.loads((root/'real-multidomain-flash-v2.json').read_text())
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values())
+          x=r['cross_domain_result']
+          assert set(x['genuine_meta_flash']['supporting_domains'])=={
+              'sair','arc','gpu-ir','lean-kernel'
+          }
+          assert x['genuine_meta_flash']['estimated_protocol_search_cancelled']==500
+          assert x['lean_authority']['cold_calls']==11
+          assert x['lean_authority']['warm_restart_calls']==3
+          assert x['lean_authority']['strict_arena_unknown_residual_remains']==7
+          assert x['still_unresolved']==['res:gpu-hardware:promote-ir-capability']
+          assert x['scoped_content']['type_mismatches']==4
+          assert x['scoped_content']['cached_repeat_blocks']==4
+          print('PASS_QCKN_REAL_MULTIDOMAIN_FLASH_V2')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-real-multidomain-flash-v2
+          path: /tmp/qckn-real-multidomain-flash-v2/
+          if-no-files-found: error
