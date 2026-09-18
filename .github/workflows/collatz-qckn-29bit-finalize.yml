@@ -1,0 +1,62 @@
+name: Collatz QCKN finalize 29-bit endpoint generation
+on:
+  push:
+    branches: [collatz-qckn-v1-adapter]
+    paths:
+      - '.github/workflows/collatz-qckn-29bit-finalize.yml'
+  workflow_dispatch:
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: fa99b01bdd10db37ca7124dcb6ffcf042aa64e55
+          path: collatz
+      - name: Export the frozen generation-2 endpoint bank
+        working-directory: realitygraph
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller --export-bank /tmp/qckn-bank.json
+          grep -q '^' /tmp/qckn-bank.json
+      - name: Download 15 completed original 29-bit shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-worker-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35330269494
+      - name: Remove cancelled original shard 2
+        run: rm -f /tmp/results/worker-2.json
+      - name: Download completed final-rescue pieces
+        uses: actions/download-artifact@v4
+        with:
+          pattern: collatz-rescue3-*
+          path: /tmp/results
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 35331488812
+      - name: Scan the one missing 2048-source slice against the identical bank
+        run: |
+          set -euo pipefail
+          python -u collatz/experiments/collatz_qckn_worker.py             --lo 269578241 --hi 269580288 --H 512 --guard 10000             --bank-json /tmp/qckn-bank.json             --out-json /tmp/results/rescue3-14.json             | tee /tmp/missing-slice.txt
+          grep -q '^PASS_QCKN_WORKER_NO_UNRESOLVED$' /tmp/missing-slice.txt
+      - name: Authoritative QCKN full-band promotion
+        working-directory: realitygraph
+        run: |
+          set -euo pipefail
+          python -m realitygraph.collatz_controller             --consume-dir /tmp/results             --report-json /tmp/endpoint-generation3.json             | tee /tmp/endpoint-generation3.txt
+          grep -q '^PASS_QCKN_FRESH_BAND_PROMOTION$' /tmp/endpoint-generation3.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collatz-qckn-endpoint-generation3
+          path: |
+            /tmp/endpoint-generation3.json
+            /tmp/endpoint-generation3.txt
+            /tmp/missing-slice.txt
