@@ -1,0 +1,76 @@
+name: QCKN Flash Win Controller V1
+on:
+  push:
+    branches: [qckn-flash-win-controller-v1]
+    paths:
+      - 'realitygraph/flash_bus.py'
+      - 'realitygraph/win_controller.py'
+      - 'realitygraph/win_scheduler.py'
+      - 'qckn_flash_win_controller_v1.py'
+      - 'tests/test_flash_bus.py'
+      - 'tests/test_qckn_flash_win_controller_v1.py'
+      - '.github/workflows/qckn-flash-win-controller.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qckn-flash-win-controller-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}/realitygraph:${{ github.workspace }}/qckn-contract
+    steps:
+      - name: Checkout controller
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout frozen QCKN contract
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify frozen input
+        run: |
+          set -euo pipefail
+          test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
+          test "$(git -C realitygraph branch --show-current)" = "qckn-flash-win-controller-v1"
+      - name: Compile controller
+        working-directory: realitygraph
+        run: python -m py_compile realitygraph/flash_bus.py realitygraph/win_controller.py qckn_flash_win_controller_v1.py
+      - name: Run controller and bus contracts
+        working-directory: realitygraph
+        run: python -m unittest tests.test_flash_bus tests.test_qckn_flash_win_controller_v1 -v
+      - name: Protect Flash and scheduler regressions
+        working-directory: realitygraph
+        run: python -m unittest tests.test_flash tests.test_flash_future_quotient tests.test_qckn_flash_closure_v1 tests.test_qckn_flash_win_scheduler_v1 -q
+      - name: Run full RealityGraph regression
+        working-directory: realitygraph
+        run: python -m unittest discover -s tests -p 'test_*.py' -q
+      - name: Emit canonical controller evidence
+        working-directory: realitygraph
+        env:
+          QCKN_FLASH_WIN_CONTROLLER_RESULT_PATH: qckn-flash-win-controller-evidence/result.json
+        run: |
+          mkdir -p qckn-flash-win-controller-evidence
+          python -u qckn_flash_win_controller_v1.py | tee qckn-flash-win-controller-evidence/stdout.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          path=Path('qckn-flash-win-controller-evidence/result.json')
+          raw=path.read_bytes()
+          print('QCKN_FLASH_WIN_CONTROLLER_EVIDENCE_SHA256='+hashlib.sha256(raw).hexdigest())
+          print('QCKN_FLASH_WIN_CONTROLLER_EVIDENCE_BYTES='+str(len(raw)))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-flash-win-controller-v1-evidence
+          path: realitygraph/qckn-flash-win-controller-evidence/
+          if-no-files-found: error
