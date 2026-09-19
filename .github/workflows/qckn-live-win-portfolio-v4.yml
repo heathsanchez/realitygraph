@@ -10,6 +10,7 @@ on:
       - "qckn_real_multidomain_flash_v1.py"
       - "qckn_real_multidomain_flash_v2.py"
       - "qckn_live_win_portfolio_v4.py"
+      - "qckn_flash_win_scheduler_v1.py"
       - "tests/test_real_flash.py"
       - "tests/test_qckn_flash_win_scheduler_v1.py"
       - ".github/workflows/qckn-live-win-portfolio-v4.yml"
