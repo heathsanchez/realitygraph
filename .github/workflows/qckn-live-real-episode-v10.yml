@@ -1,0 +1,82 @@
+name: QCKN Live Real Episode V10
+
+on:
+  push:
+    branches: [qckn-live-developmental-substrate-v3]
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v10.json"
+      - "qckn_live_real_episode_v10.py"
+      - ".github/workflows/qckn-live-real-episode-v10.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve episode-nine evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10581401124
+          expected_digest='sha256:782d8242750736893f4e00f714458b787702b84a35a8b389c53f53ee2f767383'
+          actual_digest="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v10/episode9
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/episode9.zip
+          unzip -q /tmp/episode9.zip -d /tmp/qckn-live-real-episode-v10/episode9
+          evidence="$(find /tmp/qckn-live-real-episode-v10/episode9 -type f -name episode9.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v10/episode9.json
+
+      - name: Retrieve substitution argument-family evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10581411360
+          expected_digest='sha256:f2ad7207efcba45fba0e0d4328880dbefb16aa6d123dfe1776e74bfb2b9320fa'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v10/target
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/target10.zip
+          unzip -q /tmp/target10.zip -d /tmp/qckn-live-real-episode-v10/target
+          evidence="$(find /tmp/qckn-live-real-episode-v10/target -type f -name substitution-argument-family-diagnostic-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v10/target.json
+
+      - name: Reclose tenth cycle
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v10/result
+          python -u qckn_live_real_episode_v10.py             --precommit frozen-meta/qckn-live-real-episode-v10.json             --target /tmp/qckn-live-real-episode-v10/target.json             --episode9 /tmp/qckn-live-real-episode-v10/episode9.json             --out /tmp/qckn-live-real-episode-v10/result             | tee /tmp/qckn-live-real-episode-v10/run.log
+
+      - name: Gate tenth real cycle
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v10/result/episode10.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['target']['classification']=='distributed-arguments'
+          assert r['closure']['cumulative_exact_routes_eliminated']==10
+          assert 'lean:substitution-arguments-no-compact-family:v1' in r['closure']['obstructions']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V10')
+          print('CUMULATIVE_EXACT_ROUTES_ELIMINATED=10')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v10
+          path: /tmp/qckn-live-real-episode-v10/
+          if-no-files-found: error
