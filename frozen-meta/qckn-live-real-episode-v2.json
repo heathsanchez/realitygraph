@@ -1,0 +1,37 @@
+{
+  "schema": "qckn-live-real-episode-v2-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35422069761,
+  "source_episode_artifact": 10577249725,
+  "source_episode_digest": "sha256:4d2b1bb252c0865738c4ceaefac82c0b3708a5d523c07081c0edf2e4b6dccf1f",
+  "source_target_run": 35421936419,
+  "source_target_artifact": 10576959191,
+  "source_target_digest": "sha256:38d389a8fa8e452f8cf872d5db2cbe2d152995600459730f278eb063c38aada1",
+  "selected_by_reclosure": "lean-cache-overhead-decomposition",
+  "selected_experiment": {
+    "id": "localdef-whnf-cache-overhead-decomposition-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-succ-le-succ-scoped-localdef-whnf-cache-v1",
+    "question": "Is the verified WHNF reuse intrinsically valuable but hidden by cache lookup overhead, or is reuse itself economically neutral at this frontier?",
+    "arms": [
+      "cold",
+      "declaration-guard-only",
+      "lookup-only",
+      "scoped-cache"
+    ],
+    "repetitions_per_case": 3,
+    "classification_rule": {
+      "reuse_gross_beneficial": "median lookup-only wall time > median scoped-cache wall time",
+      "guard_overhead_positive": "median declaration-guard-only wall time > median cold wall time",
+      "lookup_overhead_positive": "median lookup-only wall time > median declaration-guard-only wall time",
+      "net_win": "median scoped-cache wall time < median cold wall time"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_gross_beneficial_but_net_negative": "compile lookup-overhead obstruction and select a cheaper exact key/placement realization",
+    "if_not_gross_beneficial": "compile a cache-at-this-frontier obstruction and pivot away from WHNF memoization",
+    "if_net_win": "promote scoped cache economically and reclose"
+  },
+  "claim_boundary": "Diagnostic decomposition only. No new Lean semantic rule or cache is promoted by this precommit."
+}
