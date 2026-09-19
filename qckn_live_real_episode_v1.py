@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 
-from qckn_live_developmental_substrate_v1 import portfolio
 from realitygraph.flash_contract import (
     CapabilityState,
     DependencyRule,
