@@ -59,6 +59,7 @@ class FrontierState:
     base_search_cost: int
     search_cost: int
     route_ids: set[str] = field(default_factory=set)
+    base_route_ids: set[str] = field(default_factory=set)
     active_capabilities: set[str] = field(default_factory=set)
     reserve_capabilities: set[str] = field(default_factory=set)
     separators: set[str] = field(default_factory=set)
@@ -72,6 +73,7 @@ class FrontierState:
             "base_search_cost": self.base_search_cost,
             "search_cost": self.search_cost,
             "route_ids": sorted(self.route_ids),
+            "base_route_ids": sorted(self.base_route_ids),
             "active_capabilities": sorted(self.active_capabilities),
             "reserve_capabilities": sorted(self.reserve_capabilities),
             "separators": sorted(self.separators),
@@ -133,6 +135,7 @@ class IncrementalFlashRuntime:
 
     def _reset_frontier(self, frontier: FrontierState) -> None:
         frontier.search_cost = frontier.base_search_cost
+        frontier.route_ids = set(frontier.base_route_ids)
         frontier.active_capabilities.clear()
         frontier.reserve_capabilities.clear()
         frontier.separators.clear()
@@ -290,6 +293,7 @@ class IncrementalFlashRuntime:
                     base_search_cost=int(row["base_search_cost"]),
                     search_cost=int(row["search_cost"]),
                     route_ids=set(row["route_ids"]),
+                    base_route_ids=set(row.get("base_route_ids", row["route_ids"])),
                     active_capabilities=set(row["active_capabilities"]),
                     reserve_capabilities=set(row["reserve_capabilities"]),
                     separators=set(row["separators"]),
