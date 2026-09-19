@@ -1,0 +1,226 @@
+name: Open World Recoherence V5 Real Lean Developmental Capital
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qckn-open-world-recoherence-v5-real-lean-capital
+    paths:
+      - 'emit_verified_lean_developmental_capital.py'
+      - '.github/workflows/open-world-recoherence-v5-real-lean-capital.yml'
+      - 'docs/research/open-world-recoherence-v5-real-lean-capital.md'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  harvest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_REPO: metalogiclabs/mathgraph-lean-kernel
+
+    steps:
+      - name: Checkout V5 integration branch
+        uses: actions/checkout@v4
+        with:
+          path: attachment
+
+      - name: Checkout persistent Flash runtime
+        uses: actions/checkout@v4
+        with:
+          ref: qckn-flash-live-router-v3
+          path: runtime
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Harvest authoritative successful Lean developmental artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v5/harvest
+
+          harvest_lane() {
+            lane="$1"
+            branch="$2"
+            workflow_name="$3"
+            artifact_name="$4"
+            marker="$5"
+
+            mkdir -p "/tmp/v5/harvest/$lane/raw"
+            runs="/tmp/v5/harvest/$lane/runs.json"
+            gh api "repos/$SOURCE_REPO/actions/runs?branch=$branch&status=success&per_page=100" > "$runs"
+
+            read -r run_id head_sha < <(
+              python - "$runs" "$workflow_name" <<'PY'
+import json,sys
+path,name=sys.argv[1],sys.argv[2]
+rows=json.load(open(path))['workflow_runs']
+rows=[r for r in rows if r.get('name')==name and r.get('conclusion')=='success']
+if not rows:
+    raise SystemExit(f'no successful workflow run named {name!r}')
+rows.sort(key=lambda r:r.get('created_at',''),reverse=True)
+r=rows[0]
+print(r['id'],r['head_sha'])
+PY
+            )
+
+            artifacts="/tmp/v5/harvest/$lane/artifacts.json"
+            gh api "repos/$SOURCE_REPO/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts"
+
+            read -r artifact_id artifact_digest < <(
+              python - "$artifacts" "$artifact_name" <<'PY'
+import json,sys
+path,name=sys.argv[1],sys.argv[2]
+rows=[a for a in json.load(open(path))['artifacts'] if a.get('name')==name and not a.get('expired')]
+if not rows:
+    raise SystemExit(f'no non-expired artifact named {name!r}')
+a=rows[0]
+print(a['id'],a.get('digest') or 'none')
+PY
+            )
+
+            gh api "repos/$SOURCE_REPO/actions/artifacts/$artifact_id/zip" > "/tmp/v5/harvest/$lane/artifact.zip"
+            unzip -q "/tmp/v5/harvest/$lane/artifact.zip" -d "/tmp/v5/harvest/$lane/raw"
+
+            result_path="$(find "/tmp/v5/harvest/$lane/raw" -type f -name result.txt -print -quit)"
+            test -n "$result_path"
+            grep -Fq "$marker" "$result_path"
+            cp "$result_path" "/tmp/v5/harvest/$lane/result.txt"
+
+            python - "$lane" "$branch" "$workflow_name" "$artifact_name" "$marker" "$run_id" "$head_sha" "$artifact_id" "$artifact_digest" > "/tmp/v5/harvest/$lane/meta.json" <<'PY'
+import json,sys
+lane,branch,wf,artifact,marker,run_id,head_sha,artifact_id,digest=sys.argv[1:]
+print(json.dumps({
+  'lane':lane,
+  'branch':branch,
+  'workflow_name':wf,
+  'artifact_name':artifact,
+  'marker':marker,
+  'run_id':int(run_id),
+  'head_sha':head_sha,
+  'artifact_id':int(artifact_id),
+  'artifact_digest':digest,
+},sort_keys=True))
+PY
+
+            echo "HARVESTED $lane run=$run_id artifact=$artifact_id head=$head_sha"
+          }
+
+          harvest_lane             v26             msikernel-endogenous-closure-genesis-v26             "msikernel endogenous closure genesis v26"             msikernel-endogenous-closure-genesis-v26             "ENDOGENOUS_CLOSURE_GENESIS_V26=BOUNDED_POSITIVE"
+
+          harvest_lane             v38             msi-blind-kernel-interface-genesis-v38             "MSI blind kernel interface genesis v38"             msi-blind-kernel-interface-genesis-v38             "DECISION=BLIND_INTERFACE_GENESIS_TRANSFER"
+
+          harvest_lane             v40_recursive             msi-recursive-interface-genesis-v40             "MSI recursive interface genesis v40"             msi-recursive-interface-genesis-v40             "V40_DECISION=RECURSIVE_NATIVE_INTERFACE_GENESIS_TRANSFER"
+
+          harvest_lane             v40_memory             msi-earned-memory-policy-v40             "MSI earned memory policy v40"             msi-earned-memory-policy-v40             "DECISION=EARNED_MEMORY_POLICY_TRANSFER"
+
+      - name: Compile harvested evidence into typed Flash events
+        run: |
+          mkdir -p /tmp/v5/bundles
+          PYTHONPATH=runtime python attachment/emit_verified_lean_developmental_capital.py             --harvest-root /tmp/v5/harvest             --out /tmp/v5/bundles             | tee /tmp/v5/emission.json
+          test "$(find /tmp/v5/bundles -type f -name event.json | wc -l | tr -d ' ')" -eq 4
+
+      - name: Recover previous V5 compiled present
+        run: |
+          mkdir -p /tmp/v5/previous
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=open-world-recoherence-v5-live-state&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/v5/previous.zip
+            unzip -q /tmp/v5/previous.zip -d /tmp/v5/previous
+            previous="$(find /tmp/v5/previous -type f -name state-bundle.json -print -quit)"
+            if [ -n "$previous" ]; then
+              cp "$previous" /tmp/v5/previous-state-bundle.json
+              echo "PREVIOUS_V5_STATE=present"
+            fi
+          else
+            echo "PREVIOUS_V5_STATE=none"
+          fi
+
+      - name: Reclose harvested real Lean developmental capital
+        run: |
+          mkdir -p /tmp/v5/live-state
+          previous_args=()
+          if [ -f /tmp/v5/previous-state-bundle.json ]; then
+            previous_args=(--previous /tmp/v5/previous-state-bundle.json)
+          fi
+
+          bundle_args=()
+          while IFS= read -r event_path; do
+            bundle_args+=(--bundle "$(dirname "$event_path")")
+          done < <(find /tmp/v5/bundles -type f -name event.json | sort)
+
+          PYTHONPATH=runtime python runtime/qckn_flash_live_router.py             "${previous_args[@]}"             "${bundle_args[@]}"             --out /tmp/v5/live-state
+
+      - name: Qualify real developmental-capital admission
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          cycle=json.loads(Path('/tmp/v5/live-state/cycle.json').read_text())
+          s=cycle['summary']
+          emission=json.loads(Path('/tmp/v5/emission.json').read_text())
+          ids=emission['emitted_event_ids']
+
+          assert len(ids)==4
+          assert s['external_events'] >= 4
+          assert s['active_capabilities'] >= 4
+          active=set(s['active_capability_ids'])
+          for event_id in ids:
+              run_suffix=event_id.split(':')[-1]
+              assert run_suffix.startswith('run-')
+
+          metas={}
+          for lane in ('v26','v38','v40_recursive','v40_memory'):
+              metas[lane]=json.loads(Path(f'/tmp/v5/harvest/{lane}/meta.json').read_text())
+
+          manifest={
+            'schema':'open-world-recoherence-v5-real-lean-developmental-capital',
+            'classification':'HARVESTED_AUTHORITATIVE_REAL_LEAN_DEVELOPMENTAL_CAPITAL',
+            'harvested':metas,
+            'event_ids':ids,
+            'new_event_ids':cycle.get('new_event_ids',[]),
+            'retained_past_event_ids':cycle.get('retained_past_event_ids',[]),
+            'summary':s,
+            'claim_boundary':(
+              'V5 admits only already-successful authoritative GitHub Actions '
+              'artifacts whose exact result markers survive artifact download. '
+              'It turns four real Lean developmental results into persistent typed '
+              'RealityGraph capabilities. It does not relabel those historical '
+              'results as a single prospective causal chain, and it does not yet '
+              'let RealityGraph choose and launch the next Lean experiment.'
+            ),
+          }
+          Path('/tmp/v5/live-state/open-world-v5-manifest.json').write_text(
+              json.dumps(manifest,indent=2,sort_keys=True)+'\n'
+          )
+          print('PASS_OPEN_WORLD_RECOHERENCE_V5_REAL_LEAN_CAPITAL')
+          print(json.dumps({
+            'events':len(ids),
+            'active_capabilities':s['active_capabilities'],
+            'new_event_ids':cycle.get('new_event_ids',[]),
+            'harvested_runs':{k:v['run_id'] for k,v in metas.items()},
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Persist V5 live state
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-world-recoherence-v5-live-state
+          path: /tmp/v5/live-state/
+          if-no-files-found: error
+
+      - name: Persist V5 harvested evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-world-recoherence-v5-harvest
+          path: |
+            /tmp/v5/harvest/*/meta.json
+            /tmp/v5/harvest/*/result.txt
+            /tmp/v5/emission.json
+          if-no-files-found: error
