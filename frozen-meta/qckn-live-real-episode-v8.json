@@ -18,12 +18,13 @@
       "__binderStats.rangeSkips",
       "__compiledNodeHits",
       "__compiledSpineHits",
-      "__semStats"
+      "__semStats",
+      "allocations"
     ],
     "budget_per_case": 4000000,
     "classification_rule": {
-      "input_reuse_saturated": "(substHits + rangeSkips) / (substHits + substMisses + rangeSkips) >= 0.80 in both cases",
-      "input_reuse_sparse": "same ratio <= 0.20 in both cases",
+      "input_reuse_saturated": "substHits / (substHits + substMisses) >= 0.80 in both cases",
+      "input_reuse_sparse": "substHits / (substHits + substMisses) <= 0.20 in both cases",
       "mixed": "otherwise"
     },
     "no_cherry_pick": true
@@ -33,5 +34,5 @@
     "if_input_reuse_sparse": "prospectively test a stronger exact substitution consequence index",
     "if_mixed": "split the frontier by the observed reuse regime before another optimization"
   },
-  "claim_boundary": "Diagnostic accounting of existing verified caches and exact closed-subtree skips only. Aggregate counters do not prove every hit occurs inside isValidChar_UInt32 and do not authorize new semantics."
+  "claim_boundary": "Diagnostic accounting of existing verified caches, exact substitution memoization and aggregate binder closed-subtree skips. rangeSkips is reported as an aggregate binder-transport counter and is not attributed solely to substitution. No new semantics are authorized."
 }
