@@ -13,8 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout RealityGraph
+        uses: actions/checkout@v4
+      - name: Checkout frozen QCKN adapter
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1
+          path: qckn-contract
+      - name: Verify frozen QCKN adapter ref
+        run: test "$(git -C qckn-contract rev-parse HEAD)" = "51ea5ab8121099173bc8d4edb6c83a5bcb7f3fb1"
       - name: Run full RealityGraph unit suite
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/qckn-contract
         run: python -m unittest discover -s tests -v
       - name: Re-run Flash nonlinear non-dual witness
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/qckn-contract
         run: python qckn_flash_nonlinear_nondual_v1.py
