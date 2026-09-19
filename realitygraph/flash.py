@@ -352,6 +352,90 @@ class FlashDelta:
     restored_candidate_occurrences: int = 0
 
 
+@dataclass(frozen=True)
+class CapabilityAdmissionEvent:
+    event_id: str
+    capability: FiniteCapability
+    oracle: tuple[tuple[str, str], ...]
+    support_ids: tuple[str, ...] = ()
+    origin: str = "verified-external"
+
+
+@dataclass(frozen=True)
+class ObstructionAdmissionEvent:
+    event_id: str
+    obstruction: FlashObstruction
+
+
+@dataclass(frozen=True)
+class CapabilityRevocationEvent:
+    event_id: str
+    capability_id: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class ObstructionRevocationEvent:
+    event_id: str
+    obstruction_id: str
+    reason: str
+
+
+class FlashEventRuntime:
+    """Idempotent typed admission boundary for domain-produced Flash events."""
+
+    def __init__(self, closure: "FlashClosure") -> None:
+        self.closure = closure
+        self._events: dict[str, object] = {}
+        self._results: dict[str, FlashDelta] = {}
+
+    def event_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(self._events))
+
+    def apply(
+        self,
+        event: (
+            CapabilityAdmissionEvent
+            | ObstructionAdmissionEvent
+            | CapabilityRevocationEvent
+            | ObstructionRevocationEvent
+        ),
+    ) -> FlashDelta:
+        if not event.event_id:
+            raise ValueError("flash event requires identity")
+        old = self._events.get(event.event_id)
+        if old is not None:
+            if old != event:
+                raise ValueError("flash event identity conflict")
+            return self._results[event.event_id]
+
+        if isinstance(event, CapabilityAdmissionEvent):
+            result = self.closure.admit_capability(
+                event.capability,
+                oracle=event.oracle,
+                support_ids=event.support_ids,
+                origin=event.origin,
+            )
+        elif isinstance(event, ObstructionAdmissionEvent):
+            result = self.closure.admit_obstruction(event.obstruction)
+        elif isinstance(event, CapabilityRevocationEvent):
+            result = self.closure.revoke_capability(
+                event.capability_id,
+                reason=event.reason,
+            )
+        elif isinstance(event, ObstructionRevocationEvent):
+            result = self.closure.revoke_obstruction(
+                event.obstruction_id,
+                reason=event.reason,
+            )
+        else:
+            raise TypeError(f"unsupported flash event: {type(event).__name__}")
+
+        self._events[event.event_id] = event
+        self._results[event.event_id] = result
+        return result
+
+
 class FlashClosure:
     """Global consequence closure over verified capabilities and live obligations.
 
