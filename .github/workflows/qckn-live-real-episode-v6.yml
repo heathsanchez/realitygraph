@@ -1,0 +1,90 @@
+name: QCKN Live Real Episode V6
+
+on:
+  push:
+    branches:
+      - qckn-live-developmental-substrate-v3
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v6.json"
+      - "qckn_live_real_episode_v6.py"
+      - ".github/workflows/qckn-live-real-episode-v6.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve episode-five evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10578428028
+          expected_digest='sha256:d4c45fe366f753941a82803821f6aa758e510f2f7af06b098bb9e8f8462a6c46'
+          actual_digest="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v6/episode5
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/episode5.zip
+          unzip -q /tmp/episode5.zip -d /tmp/qckn-live-real-episode-v6/episode5
+          evidence="$(find /tmp/qckn-live-real-episode-v6/episode5 -type f -name episode5.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v6/episode5.json
+
+      - name: Retrieve isValidChar operation-chain evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10578603222
+          expected_digest='sha256:42da86910ea29de2fcf6cf1a8a7927a434b309620a91394075b04f8fcf26824a'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v6/target
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/target6.zip
+          unzip -q /tmp/target6.zip -d /tmp/qckn-live-real-episode-v6/target
+          evidence="$(find /tmp/qckn-live-real-episode-v6/target -type f -name isvalidchar-operation-chain-diagnostic-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v6/target.json
+
+      - name: Reclose sixth cycle
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v6/result
+          python -u qckn_live_real_episode_v6.py \
+            --precommit frozen-meta/qckn-live-real-episode-v6.json \
+            --target /tmp/qckn-live-real-episode-v6/target.json \
+            --episode5 /tmp/qckn-live-real-episode-v6/episode5.json \
+            --out /tmp/qckn-live-real-episode-v6/result \
+            | tee /tmp/qckn-live-real-episode-v6/run.log
+
+      - name: Gate sixth real cycle
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v6/result/episode6.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['target']['classification']=='stable-edge-basis'
+          assert r['target']['dominant_edge']=='substitute->make'
+          assert r['closure']['cumulative_exact_routes_eliminated']==6
+          assert 'lean:isvalidchar-substitute-to-make-dominant-edge:v1' in r['closure']['separators']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V6')
+          print('CUMULATIVE_EXACT_ROUTES_ELIMINATED=6')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v6
+          path: /tmp/qckn-live-real-episode-v6/
+          if-no-files-found: error
