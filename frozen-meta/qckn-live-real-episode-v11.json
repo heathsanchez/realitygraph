@@ -1,0 +1,27 @@
+{
+  "schema": "qckn-live-real-episode-v11-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35433654472,
+  "source_episode_artifact": 10581074870,
+  "source_episode_digest": "sha256:27f5a6d0ac9587351f67ea28923486db0e3b2eb0b8e19e7e4c28c7fc440c4a73",
+  "selected_by_reclosure": "lean-substitution-argument-provenance-diagnostic",
+  "selected_experiment": {
+    "id": "substitution-argument-provenance-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-substitution-argument-family-diagnostic-v1",
+    "question": "For new substitution-argument identities, which runtime operation originally constructed the argument object: substitute, shift, WHNF, instantiation, normalization, another method, or source/untracked input?",
+    "instrumentation": "tag successfully returned Kernel.make objects with the currently active kernel-method parent in a WeakMap; read the tag only when an exact newArgument cache-key event occurs",
+    "classification_rule": {
+      "single_generator_dominant": "same provenance category exceeds 50% of sampled newArgument events in both cases",
+      "stable_small_generator_basis": "same dominant provenance in both cases and top-3 provenance coverage >= 80% in both, but no single category exceeds 50%",
+      "distributed_generation": "otherwise"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_single_generator_dominant": "move to a prospective representation quotient at that generator boundary rather than broad substitution cache changes",
+    "if_stable_small_generator_basis": "split by generator provenance and target the largest branch prospectively",
+    "if_distributed_generation": "compile obstruction against generator-local explanation and reclose"
+  },
+  "claim_boundary": "Diagnostic object-origin tagging only. Provenance labels are not semantic equality and do not change construction, sharing, substitution, or cache admission."
+}
