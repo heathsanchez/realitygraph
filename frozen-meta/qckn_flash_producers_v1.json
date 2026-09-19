@@ -1,0 +1,37 @@
+{
+  "schema": "qckn-flash-producer-manifest-v1",
+  "producers": [
+    {
+      "id": "lean",
+      "repository": "metalogiclabs/mathgraph-lean-kernel",
+      "emitter_commit": "faaa735170f64d598034f52c795814de4719693d",
+      "emitter_run": 35410908910,
+      "artifact_id": 10574347176,
+      "artifact_digest": "sha256:042e4ca54e238c1070f5685359fb26f6ff849db1bd2b1073970c8166ab2eabcc"
+    },
+    {
+      "id": "arc",
+      "repository": "heathsanchez/Minimal-Sufficient-Interface",
+      "emitter_commit": "94e923df0cbc4cf4d5f6108a05ebada595d30920",
+      "emitter_run": 35411032644,
+      "artifact_id": 10574212585,
+      "artifact_digest": "sha256:ccb57aebdd2d173db2976ba9eda37907d3c1527a51499e7f95d7ff5365b58086"
+    },
+    {
+      "id": "collatz",
+      "repository": "heathsanchez/test",
+      "emitter_commit": "7fe10392f2865a008ff8642f4da64d93378c780f",
+      "emitter_run": 35411042042,
+      "artifact_id": 10574347399,
+      "artifact_digest": "sha256:91c87d2b48afbcbce63d9fb0710f5d43d5feb205dbc56d6025604c5c345c58e9"
+    },
+    {
+      "id": "sair",
+      "repository": "heathsanchez/equational-theories-lean-stage2",
+      "emitter_commit": "6821d765fc33da95a6cf5bef32b0a43b2ee39522",
+      "emitter_run": 35411051587,
+      "artifact_id": 10574657176,
+      "artifact_digest": "sha256:89e67b1a9ecf990154611b82856f6670c95e0853fab5cd5f3703e54f1799397e"
+    }
+  ]
+}
