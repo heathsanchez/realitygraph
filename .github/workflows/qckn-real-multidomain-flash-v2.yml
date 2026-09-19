@@ -6,9 +6,12 @@ on:
       - qckn-real-multidomain-flash-v2
     paths:
       - "realitygraph/real_flash.py"
+      - "realitygraph/flash_bus.py"
       - "qckn_real_multidomain_flash_v1.py"
       - "qckn_real_multidomain_flash_v2.py"
+      - "qckn_real_multidomain_flash_bus_v2.py"
       - "tests/test_real_flash.py"
+      - "tests/test_flash_bus.py"
       - ".github/workflows/qckn-real-multidomain-flash-v2.yml"
   workflow_dispatch:
 
@@ -28,11 +31,19 @@ jobs:
         with:
           python-version: "3.12"
       - name: Protect authority-gated graph contracts
-        run: python -m unittest tests.test_real_flash -v
+        run: |
+          python -m unittest tests.test_real_flash -v
+          python -m unittest tests.test_flash_bus -v
       - name: Attach pinned real evidence including Lean restart authority
         run: |
           mkdir -p /tmp/qckn-real-multidomain-flash-v2
           python qckn_real_multidomain_flash_v2.py             --out /tmp/qckn-real-multidomain-flash-v2             | tee /tmp/qckn-real-multidomain-flash-v2/run.log
+      - name: Materialize exact meta edges on global event bus
+        run: |
+          python qckn_real_multidomain_flash_bus_v2.py \
+            --v2-result /tmp/qckn-real-multidomain-flash-v2/real-multidomain-flash-v2.json \
+            --out /tmp/qckn-real-multidomain-flash-v2
+
       - name: Gate four-domain result
         run: |
           python - <<'PY'
@@ -53,6 +64,18 @@ jobs:
           assert x['still_unresolved']==['res:gpu-hardware:promote-ir-capability']
           assert x['scoped_content']['type_mismatches']==4
           assert x['scoped_content']['cached_repeat_blocks']==4
+          b=json.loads((root/'real-multidomain-flash-bus-v2.json').read_text())
+          assert b['verdict']=='PASS'
+          assert len(b['active_cross_domain_edges'])==4
+          assert b['content_cross_domain_edges']==0
+          assert b['gpu_hardware_cross_domain_edges']==0
+          assert b['scalarization_rejected'] is True
+          assert set(b['typed_avoided_costs'])=={
+              'sair.openrouter_model_calls',
+              'arc.destination_verifier_calls',
+              'lean.diagnostic_verifier_calls',
+              'gpu_ir.developmental_search_steps',
+          }
           print('PASS_QCKN_REAL_MULTIDOMAIN_FLASH_V2')
           PY
       - uses: actions/upload-artifact@v4
