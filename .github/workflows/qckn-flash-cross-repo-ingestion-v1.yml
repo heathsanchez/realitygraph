@@ -16,3 +16,88 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run cross-repo ingestion unit tests
         run: python -m unittest tests.test_flash_cross_repo_ingestion -v
+
+  ingest-frozen-producers:
+    needs: unit-red-green
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: runtime
+      - uses: actions/checkout@v4
+        with:
+          repository: metalogiclabs/mathgraph-lean-kernel
+          ref: faaa735170f64d598034f52c795814de4719693d
+          path: sources/lean
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: 94e923df0cbc4cf4d5f6108a05ebada595d30920
+          path: sources/arc
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: 7fe10392f2865a008ff8642f4da64d93378c780f
+          path: sources/collatz
+      - uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/equational-theories-lean-stage2
+          ref: 6821d765fc33da95a6cf5bef32b0a43b2ee39522
+          path: sources/sair
+
+      - name: Verify producer commits and emit events
+        run: |
+          test "$(git -C sources/lean rev-parse HEAD)" = faaa735170f64d598034f52c795814de4719693d
+          test "$(git -C sources/arc rev-parse HEAD)" = 94e923df0cbc4cf4d5f6108a05ebada595d30920
+          test "$(git -C sources/collatz rev-parse HEAD)" = 7fe10392f2865a008ff8642f4da64d93378c780f
+          test "$(git -C sources/sair rev-parse HEAD)" = 6821d765fc33da95a6cf5bef32b0a43b2ee39522
+          mkdir -p bundles/lean bundles/arc bundles/collatz bundles/sair
+          python sources/lean/experiments/emit_qckn_flash_event.py --commit faaa735170f64d598034f52c795814de4719693d --out bundles/lean
+          python sources/arc/kaggle/scripts/emit_qckn_flash_event.py --commit 94e923df0cbc4cf4d5f6108a05ebada595d30920 --out bundles/arc
+          python sources/collatz/experiments/emit_qckn_flash_event.py --commit 7fe10392f2865a008ff8642f4da64d93378c780f --out bundles/collatz
+          python sources/sair/experiments/mathgraph/residual12/emit_qckn_flash_event.py --commit 6821d765fc33da95a6cf5bef32b0a43b2ee39522 --out bundles/sair
+
+      - name: Ingest all producers through one Flash runtime
+        working-directory: runtime
+        run: |
+          mkdir -p /tmp/qckn-cross-repo
+          PYTHONPATH=. python qckn_flash_cross_repo_ingest.py \
+            --bundle ../bundles/lean \
+            --bundle ../bundles/arc \
+            --bundle ../bundles/collatz \
+            --bundle ../bundles/sair \
+            --out /tmp/qckn-cross-repo
+
+      - name: Qualification checks
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-cross-repo/summary.json'))
+          assert r['external_events']==4, r
+          assert r['active_capabilities']==2, r
+          assert r['obstructions']==2, r
+          assert r['discharged_obligations']==2, r
+          assert r['pruned_candidate_occurrences']==2, r
+          assert r['event_count']==4, r
+          assert r['replay_added_events']==0, r
+          assert sorted(r['repositories'])==[
+              'heathsanchez/Minimal-Sufficient-Interface',
+              'heathsanchez/equational-theories-lean-stage2',
+              'heathsanchez/test',
+              'metalogiclabs/mathgraph-lean-kernel',
+          ], r
+          print('PASS_QCKN_FLASH_CROSS_REPO_INGESTION_V1')
+          print(json.dumps(r,sort_keys=True))
+          PY
+
+      - name: Upload integrated Flash evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-flash-cross-repo-ingestion-v1
+          path: |
+            /tmp/qckn-cross-repo/
+            runtime/frozen-meta/qckn_flash_producers_v1.json
+            bundles/
+          if-no-files-found: error
