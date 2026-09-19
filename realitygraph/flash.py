@@ -500,6 +500,66 @@ class ExternalEventEnvelope:
             payload=payload,
         )
 
+    @classmethod
+    def capability_revocation(
+        cls,
+        *,
+        event_id: str,
+        repository: str,
+        commit: str,
+        authority_snapshot: str,
+        verifier_id: str,
+        source_evidence: bytes,
+        capability_id: str,
+        reason: str,
+    ) -> "ExternalEventEnvelope":
+        if not capability_id or not reason:
+            raise ValueError("capability revocation requires identity and reason")
+        payload: dict[str, object] = {
+            "capability_id": capability_id,
+            "reason": reason,
+        }
+        return cls._build(
+            event_id=event_id,
+            event_kind="capability_revocation",
+            repository=repository,
+            commit=commit,
+            authority_snapshot=authority_snapshot,
+            verifier_id=verifier_id,
+            source_evidence=source_evidence,
+            payload=payload,
+        )
+
+    @classmethod
+    def obstruction_revocation(
+        cls,
+        *,
+        event_id: str,
+        repository: str,
+        commit: str,
+        authority_snapshot: str,
+        verifier_id: str,
+        source_evidence: bytes,
+        obstruction_id: str,
+        reason: str,
+    ) -> "ExternalEventEnvelope":
+        if not obstruction_id or not reason:
+            raise ValueError("obstruction revocation requires identity and reason")
+        payload: dict[str, object] = {
+            "obstruction_id": obstruction_id,
+            "reason": reason,
+        }
+        return cls._build(
+            event_id=event_id,
+            event_kind="obstruction_revocation",
+            repository=repository,
+            commit=commit,
+            authority_snapshot=authority_snapshot,
+            verifier_id=verifier_id,
+            source_evidence=source_evidence,
+            payload=payload,
+        )
+
     def _plain(self) -> dict[str, object]:
         return {
             "schema": self.schema,
@@ -562,7 +622,12 @@ class ExternalEventEnvelope:
 
     def to_runtime_event(
         self,
-    ) -> CapabilityAdmissionEvent | ObstructionAdmissionEvent:
+    ) -> (
+        CapabilityAdmissionEvent
+        | ObstructionAdmissionEvent
+        | CapabilityRevocationEvent
+        | ObstructionRevocationEvent
+    ):
         if self.event_kind == "capability_admission":
             raw = self.payload.get("capability")
             oracle = self.payload.get("oracle")
@@ -618,6 +683,26 @@ class ExternalEventEnvelope:
                 provenance=str(raw.get("provenance", "")),
             )
             return ObstructionAdmissionEvent(self.event_id, obstruction)
+        if self.event_kind == "capability_revocation":
+            capability_id = str(self.payload.get("capability_id", ""))
+            reason = str(self.payload.get("reason", ""))
+            if not capability_id or not reason:
+                raise ValueError("invalid capability revocation payload")
+            return CapabilityRevocationEvent(
+                event_id=self.event_id,
+                capability_id=capability_id,
+                reason=reason,
+            )
+        if self.event_kind == "obstruction_revocation":
+            obstruction_id = str(self.payload.get("obstruction_id", ""))
+            reason = str(self.payload.get("reason", ""))
+            if not obstruction_id or not reason:
+                raise ValueError("invalid obstruction revocation payload")
+            return ObstructionRevocationEvent(
+                event_id=self.event_id,
+                obstruction_id=obstruction_id,
+                reason=reason,
+            )
         raise ValueError(f"unsupported external flash event kind: {self.event_kind}")
 
 
