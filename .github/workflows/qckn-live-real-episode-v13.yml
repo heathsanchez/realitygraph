@@ -1,0 +1,97 @@
+name: QCKN Live Real Episode V13
+
+on:
+  push:
+    branches: [qckn-live-developmental-substrate-v3]
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v13.json"
+      - "qckn_live_real_episode_v13.py"
+      - ".github/workflows/qckn-live-real-episode-v13.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve episode-twelve evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10581753164
+          expected_digest='sha256:bc95772567922300dc5877c2da99d0889e0ae8e7e9f47490bb5a2a06a9191461'
+          actual_digest="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v13/episode12
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/episode12.zip
+          unzip -q /tmp/episode12.zip -d /tmp/qckn-live-real-episode-v13/episode12
+          evidence="$(find /tmp/qckn-live-real-episode-v13/episode12 -type f -name episode12.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v13/episode12.json
+
+      - name: Retrieve historical deferred-substitution evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10378473440
+          expected_digest='sha256:7d97a2741df5ef00efbcf87c4982c2d4fda6a89d0d9bb4f8ae86e521218597a5'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v13/deferred
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/deferred.zip
+          unzip -q /tmp/deferred.zip -d /tmp/qckn-live-real-episode-v13/deferred
+          evidence="$(find /tmp/qckn-live-real-episode-v13/deferred -type f -name deferred-substitution-v2.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v13/deferred.json
+
+      - name: Retrieve historical compiled-plan evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10413695411
+          expected_digest='sha256:a65588ce0488f9139bbc89a3f6b248dab02544e97fb88654967d682d81775fd2'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v13/prefix
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/prefix.zip
+          unzip -q /tmp/prefix.zip -d /tmp/qckn-live-real-episode-v13/prefix
+          evidence="$(find /tmp/qckn-live-real-episode-v13/prefix -type f -name prefix-substitution-plan-focus.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v13/prefix.json
+
+      - name: Reclose historical lineage
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v13/result
+          python -u qckn_live_real_episode_v13.py             --precommit frozen-meta/qckn-live-real-episode-v13.json             --episode12 /tmp/qckn-live-real-episode-v13/episode12.json             --deferred /tmp/qckn-live-real-episode-v13/deferred.json             --prefix-plan /tmp/qckn-live-real-episode-v13/prefix.json             --out /tmp/qckn-live-real-episode-v13/result             | tee /tmp/qckn-live-real-episode-v13/run.log
+
+      - name: Gate lineage reclosure
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v13/result/episode13.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['closure']['historical_exact_routes_eliminated_this_cycle']==2
+          assert r['closure']['cumulative_exact_routes_eliminated']==14
+          assert 'lean:historical-deferred-substitution-v2-no-resolution:v1' in r['closure']['obstructions']
+          assert 'lean:historical-prefix-substitution-plan-not-protected-clean:v1' in r['closure']['obstructions']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V13')
+          print('CUMULATIVE_EXACT_ROUTES_ELIMINATED=14')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v13
+          path: /tmp/qckn-live-real-episode-v13/
+          if-no-files-found: error
