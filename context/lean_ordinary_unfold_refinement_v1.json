@@ -1,0 +1,14 @@
+{
+  "schema": "qckn-flash-capability-context-refinement-v1",
+  "refinement_id": "lean:ordinary-unfold-neutral:v1:framed-separator",
+  "capability_id": "lean:ordinary-unfold-neutral:v1",
+  "suppress_if_present": [
+    "lean:direct-framed-prune:v1"
+  ],
+  "reason": "ordinary-Unfold is lawful but became 1.60% slower in the direct-Framed present; retain in reserve rather than globally active",
+  "evidence": {
+    "composed_reject_run": 35409322776,
+    "isolated_qualification_run": 35409042523,
+    "epistemic_state": "DIST_CONTEXT"
+  }
+}
