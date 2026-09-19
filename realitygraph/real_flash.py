@@ -219,6 +219,43 @@ class RealFlashGraph:
         self.close_residuals()
         return cap
 
+    def settle_residual_with_evidence(
+        self,
+        residual_id: str,
+        *,
+        evidence_id: str,
+    ) -> ProtocolResidual:
+        if residual_id not in self.residuals:
+            raise KeyError(f"unknown residual {residual_id}")
+        if evidence_id not in self.evidence:
+            raise KeyError(f"unknown evidence {evidence_id}")
+        residual = self.residuals[residual_id]
+        evidence = self.evidence[evidence_id]
+        if residual.status != "OPEN":
+            return residual
+        if evidence.domain != residual.domain:
+            raise ValueError(
+                "destination-local residual requires same-domain authority"
+            )
+        if residual.required_pattern not in evidence.pattern_ids:
+            raise ValueError(
+                "evidence does not license the residual's required pattern"
+            )
+        residual.status = "SETTLED"
+        residual.settled_by = evidence.evidence_id
+        self.total_residual_cost_cancelled += max(
+            0, int(residual.estimated_cost)
+        )
+        self.events.append({
+            "kind": "residual_settled_by_local_evidence",
+            "event_id": residual.residual_id,
+            "domain": residual.domain,
+            "settled_by": evidence.evidence_id,
+            "required_pattern": residual.required_pattern,
+            "estimated_cost_cancelled": residual.estimated_cost,
+        })
+        return residual
+
     def close_residuals(self) -> None:
         for residual in self.residuals.values():
             if residual.status != "OPEN":
