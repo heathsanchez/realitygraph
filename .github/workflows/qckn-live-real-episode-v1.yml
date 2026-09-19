@@ -1,0 +1,77 @@
+name: QCKN Live Real Episode V1
+
+on:
+  push:
+    branches:
+      - qckn-live-developmental-substrate-v3
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v1.json"
+      - "qckn_live_real_episode_v1.py"
+      - "realitygraph/flash_contract.py"
+      - ".github/workflows/qckn-live-real-episode-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve prospectively selected target evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10576959191
+          expected_digest='sha256:38d389a8fa8e452f8cf872d5db2cbe2d152995600459730f278eb063c38aada1'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v1/target
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/target.zip
+          unzip -q /tmp/target.zip -d /tmp/qckn-live-real-episode-v1/target
+          evidence="$(find /tmp/qckn-live-real-episode-v1/target -type f -name succ-le-succ-scoped-localdef-whnf-cache-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v1/target.json
+
+      - name: Reclose and rerank after target result
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v1/result
+          python -u qckn_live_real_episode_v1.py \
+            --precommit frozen-meta/qckn-live-real-episode-v1.json \
+            --target /tmp/qckn-live-real-episode-v1/target.json \
+            --out /tmp/qckn-live-real-episode-v1/result \
+            | tee /tmp/qckn-live-real-episode-v1/run.log
+
+      - name: Gate first real prospective episode
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v1/result/episode.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['target_result']['economic_status']=='RESERVE'
+          assert r['closure']['exact_future_acquisition_routes_eliminated']==1
+          assert 'lean:succ-le-succ-scoped-cache-not-profitable:v1' in r['closure']['obstructions']
+          assert r['closure']['active_capabilities']==[]
+          assert 'lean:succ-le-succ-scoped-localdef-whnf-cache:v1' in r['closure']['reserve_capabilities']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V1')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v1
+          path: /tmp/qckn-live-real-episode-v1/
+          if-no-files-found: error
