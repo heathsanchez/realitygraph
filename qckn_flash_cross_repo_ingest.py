@@ -8,12 +8,14 @@ from typing import Iterable
 
 from realitygraph.flash import (
     CapabilityAdmissionEvent,
+    CapabilityRevocationEvent,
     ExternalEventEnvelope,
     FlashClosure,
     FlashContract,
     FlashEventRuntime,
     LiveObligation,
     ObstructionAdmissionEvent,
+    ObstructionRevocationEvent,
 )
 
 
@@ -61,6 +63,16 @@ def _obligation_for(envelope: ExternalEventEnvelope, event):
             ),
             domain=envelope.repository,
         )
+    if isinstance(event, (CapabilityRevocationEvent, ObstructionRevocationEvent)):
+        return None
+    raise TypeError(f"unsupported external runtime event: {type(event).__name__}")
+
+
+def _event_priority(event: object) -> tuple[int, str]:
+    if isinstance(event, (CapabilityAdmissionEvent, ObstructionAdmissionEvent)):
+        return (0, event.event_id)
+    if isinstance(event, (CapabilityRevocationEvent, ObstructionRevocationEvent)):
+        return (1, event.event_id)
     raise TypeError(f"unsupported external runtime event: {type(event).__name__}")
 
 
@@ -71,11 +83,15 @@ def _build_runtime(
     if len(event_ids) != len(set(event_ids)):
         raise ValueError("duplicate external event identity")
 
-    obligations = tuple(_obligation_for(envelope, event) for envelope, event in loaded)
+    obligations = tuple(
+        obligation
+        for envelope, event in loaded
+        if (obligation := _obligation_for(envelope, event)) is not None
+    )
     closure = FlashClosure(obligations, kernel="qckn-flash-cross-repo-ingestion-v1")
     runtime = FlashEventRuntime(closure)
 
-    ordered = sorted(loaded, key=lambda row: row[1].event_id)
+    ordered = sorted(loaded, key=lambda row: _event_priority(row[1]))
     for _envelope, event in ordered:
         runtime.apply(event)
     return closure, runtime, ordered
@@ -97,6 +113,7 @@ def _summary(
         "event_ids": list(runtime.event_ids()),
         "active_capabilities": len(closure.active_capability_ids()),
         "active_capability_ids": list(closure.active_capability_ids()),
+        "revoked_capability_ids": sorted(closure.revoked_ids),
         "obstructions": len(closure.obstructions),
         "obstruction_ids": sorted(closure.obstructions),
         "discharged_obligations": len(closure.discharged_obligation_ids()),
