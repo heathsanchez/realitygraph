@@ -1,0 +1,28 @@
+{
+  "schema": "qckn-live-real-episode-v3-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35422326680,
+  "source_episode_artifact": 10578065010,
+  "source_episode_digest": "sha256:12dd7f614f93dfe79883bad21c862172039acbf0d291b7c619f033a31e2b508e",
+  "selected_by_reclosure": "lean-nat-le-transition-quotient-diagnostic",
+  "selected_experiment": {
+    "id": "nat-le-transition-quotient-diagnostic-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-deep-list-semantic-repair-v1",
+    "question": "Inside the common Nat.succ_le_succ hotspot, do the repeated LE.le Nat instLENat terms collapse through a small number of exact WHNF transition shapes that can replace memoization with a cheaper direct transition?",
+    "target_terms": "WHNF requests whose application spine head is LE.le and whose first two arguments are Nat and instLENat",
+    "sample_limit_per_case": 100000,
+    "classification_rule": {
+      "quotient_candidate": "at least 99% of sampled target transitions fall into <= 8 exact input-shape -> output-shape classes and at least one class has multiplicity >= 10000",
+      "direct_transition_candidate": "the dominant output head is stable across both deep-list cases",
+      "no_candidate": "otherwise"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_quotient_candidate_and_direct_transition_candidate": "freeze a candidate direct LE.le Nat instLENat transition rule and qualify it prospectively against cold/restart/ablation",
+    "if_quotient_candidate_only": "compile a transition-family quotient object but do not alter WHNF semantics",
+    "if_no_candidate": "compile obstruction against this transition-quotient route and reclose"
+  },
+  "claim_boundary": "Diagnostic-only prospective transition measurement. No LE/Nat semantic rewrite is authorized by this precommit."
+}
