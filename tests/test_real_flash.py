@@ -61,5 +61,49 @@ class RealFlashGraphTests(unittest.TestCase):
         self.assertEqual(graph.total_residual_cost_cancelled, 12)
 
 
+
+    def test_local_authority_settles_only_same_domain_exact_pattern(self):
+        graph = RealFlashGraph(("gpu-ir", "gpu-hardware"))
+        graph.add_evidence(
+            ev(
+                "hardware:measured",
+                "gpu-hardware",
+                "gpu-hardware:latency",
+                ("verified_hardware_promotion",),
+            )
+        )
+        graph.add_residual(
+            ProtocolResidual(
+                "hardware-gap",
+                "gpu-hardware",
+                "verified_hardware_promotion",
+                13,
+            )
+        )
+        settled = graph.settle_residual_with_evidence(
+            "hardware-gap",
+            evidence_id="hardware:measured",
+        )
+        self.assertEqual(settled.status, "SETTLED")
+        self.assertEqual(settled.settled_by, "hardware:measured")
+        self.assertEqual(graph.total_residual_cost_cancelled, 13)
+
+        graph.add_residual(
+            ProtocolResidual(
+                "wrong-domain",
+                "gpu-ir",
+                "verified_hardware_promotion",
+                17,
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError, "same-domain authority"
+        ):
+            graph.settle_residual_with_evidence(
+                "wrong-domain",
+                evidence_id="hardware:measured",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
