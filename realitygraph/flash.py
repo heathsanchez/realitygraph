@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Iterable
 
 from .attack import AttackStatus, exhaustive_attack
@@ -384,13 +384,98 @@ class ObstructionRevocationEvent:
 class FlashEventRuntime:
     """Idempotent typed admission boundary for domain-produced Flash events."""
 
+    MANIFEST_SCHEMA = "qckn-flash-event-manifest-v1"
+
     def __init__(self, closure: "FlashClosure") -> None:
         self.closure = closure
         self._events: dict[str, object] = {}
+        self._event_digests: dict[str, str] = {}
         self._results: dict[str, FlashDelta] = {}
 
+    @staticmethod
+    def _event_digest(event: object) -> str:
+        raw = json.dumps(
+            asdict(event),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(
+            type(event).__name__.encode() + b":" + raw
+        ).hexdigest()
+
+    @classmethod
+    def _manifest_text_from_digests(
+        cls,
+        digests: dict[str, str],
+    ) -> str:
+        payload = {
+            "schema": cls.MANIFEST_SCHEMA,
+            "events": [
+                [event_id, digest]
+                for event_id, digest in sorted(digests.items())
+            ],
+        }
+        return json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    def event_manifest_text(self) -> str:
+        return self._manifest_text_from_digests(self._event_digests)
+
+    @classmethod
+    def from_event_manifest(
+        cls,
+        closure: "FlashClosure",
+        text: str,
+    ) -> "FlashEventRuntime":
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid flash event manifest") from exc
+        if payload.get("schema") != cls.MANIFEST_SCHEMA:
+            raise ValueError("unsupported flash event manifest schema")
+        rows = payload.get("events")
+        if not isinstance(rows, list):
+            raise ValueError("invalid flash event manifest events")
+        digests: dict[str, str] = {}
+        for row in rows:
+            if (
+                not isinstance(row, list)
+                or len(row) != 2
+                or not isinstance(row[0], str)
+                or not row[0]
+                or not isinstance(row[1], str)
+                or not row[1]
+            ):
+                raise ValueError("invalid flash event manifest row")
+            event_id, digest = row
+            if event_id in digests:
+                raise ValueError("duplicate flash event identity")
+            digests[event_id] = digest
+        canonical = cls._manifest_text_from_digests(digests)
+        if text != canonical:
+            raise ValueError("noncanonical flash event manifest")
+        runtime = cls(closure)
+        runtime._event_digests = digests
+        return runtime
+
     def event_ids(self) -> tuple[str, ...]:
-        return tuple(sorted(self._events))
+        return tuple(sorted(self._event_digests))
+
+    @staticmethod
+    def _replay_noop() -> FlashDelta:
+        return FlashDelta(
+            iterations=0,
+            discharged=(),
+            reopened=(),
+            generated_capabilities=(),
+            pruned_candidate_occurrences=0,
+            changed_obligations=(),
+            flash_radius=0,
+            restored_candidate_occurrences=0,
+        )
 
     def apply(
         self,
@@ -403,11 +488,12 @@ class FlashEventRuntime:
     ) -> FlashDelta:
         if not event.event_id:
             raise ValueError("flash event requires identity")
-        old = self._events.get(event.event_id)
-        if old is not None:
-            if old != event:
+        digest = self._event_digest(event)
+        old_digest = self._event_digests.get(event.event_id)
+        if old_digest is not None:
+            if old_digest != digest:
                 raise ValueError("flash event identity conflict")
-            return self._results[event.event_id]
+            return self._results.get(event.event_id, self._replay_noop())
 
         if isinstance(event, CapabilityAdmissionEvent):
             result = self.closure.admit_capability(
@@ -432,6 +518,7 @@ class FlashEventRuntime:
             raise TypeError(f"unsupported flash event: {type(event).__name__}")
 
         self._events[event.event_id] = event
+        self._event_digests[event.event_id] = digest
         self._results[event.event_id] = result
         return result
 
