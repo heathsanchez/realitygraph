@@ -1,0 +1,32 @@
+{
+  "schema": "qckn-live-real-episode-v13-precommit",
+  "frozen_before_import": true,
+  "source_episode_run": 35434746406,
+  "source_episode_artifact": 10581753164,
+  "source_episode_digest": "sha256:bc95772567922300dc5877c2da99d0889e0ae8e7e9f47490bb5a2a06a9191461",
+  "selected_by_reclosure": "lean-substitution-lineage-reclosure",
+  "historical_imports": [
+    {
+      "id": "deferred-substitution-v2",
+      "run_id": 34923444179,
+      "artifact_id": 10378473440,
+      "artifact_digest": "sha256:7d97a2741df5ef00efbcf87c4982c2d4fda6a89d0d9bb4f8ae86e521218597a5",
+      "scope": "188-case historical Arena corpus, 1M semantic budget",
+      "frozen_consequence": "no lawful candidate and zero resolved residuals for unchanged direct-redex persistent-environment variants"
+    },
+    {
+      "id": "prefix-substitution-plan-focus",
+      "run_id": 35010257884,
+      "artifact_id": 10413695411,
+      "artifact_digest": "sha256:a65588ce0488f9139bbc89a3f6b248dab02544e97fb88654967d682d81775fd2",
+      "scope": "historical focus suite at 1M semantic budget",
+      "frozen_consequence": "exact compiled substitution-plan candidate was not protected-clean and produced a false REJECT on an expected ACCEPT"
+    }
+  ],
+  "routes_to_remove_if_verified": [
+    "route:retest-deferred-substitution-v2-unchanged",
+    "route:retest-prefix-substitution-plan-unchanged"
+  ],
+  "post_import_policy": "Compile historical scoped obstructions, remove only unchanged-candidate reacquisition routes, preserve current broader representation search, then reclose and rerank.",
+  "claim_boundary": "Historical evidence is imported only at its original scope. It does not prove all deferred substitution or all compiled substitution plans are invalid under the current kernel."
+}
