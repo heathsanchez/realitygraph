@@ -1,0 +1,31 @@
+{
+  "schema": "qckn-live-real-episode-v7-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35425959951,
+  "source_episode_artifact": 10579535046,
+  "source_episode_digest": "sha256:990769532bbffb81625a145703c8333506bd399f58951b53082033548cb38022",
+  "selected_by_reclosure": "lean-substitute-make-shape-quotient-diagnostic",
+  "selected_experiment": {
+    "id": "substitute-make-shape-quotient-diagnostic-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-isvalidchar-operation-chain-diagnostic-v1",
+    "question": "Of the roughly 955,782 substitute->make edges per deep-list case inside isValidChar_UInt32, how many consequentially distinct make-construction shapes are actually present?",
+    "scope": {
+      "declaration": "isValidChar_UInt32",
+      "parent_method": "substitute",
+      "child_method": "make"
+    },
+    "sample_limit_per_case": 200000,
+    "shape_abstraction": "make tag + arity + shallow child tags; variable indices and literal payloads are abstracted only for diagnostic counting",
+    "classification_rule": {
+      "small_stable_basis": "same dominant make shape in both cases, <= 16 sampled classes, top-8 coverage >= 99%, and dominant class count >= 50000",
+      "distributed_shapes": "otherwise"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_small_stable_basis": "compile shape quotient separator and prospectively test direct construction reuse/representation compression for the dominant class",
+    "if_distributed_shapes": "compile obstruction against a small substitute->make shape basis and reclose"
+  },
+  "claim_boundary": "Diagnostic-only shape quotienting. Abstracted shapes are not semantic equality keys and do not authorize construction reuse."
+}
