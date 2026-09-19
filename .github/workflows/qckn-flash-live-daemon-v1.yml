@@ -96,12 +96,15 @@ jobs:
           if [ -f /tmp/qckn-previous-state-bundle.json ]; then
             previous_args=(--previous /tmp/qckn-previous-state-bundle.json)
           fi
+          bundle_args=()
+          while IFS= read -r event_path; do
+            bundle_args+=(--bundle "$(dirname "$event_path")")
+          done < <(find /tmp/qckn-bundles -type f -name event.json | sort)
+          test "${#bundle_args[@]}" -ge 8
+          echo "DISCOVERED_EVENT_BUNDLES=$(("${#bundle_args[@]}" / 2))"
           PYTHONPATH=runtime python runtime/qckn_flash_live_router.py \
             "${previous_args[@]}" \
-            --bundle /tmp/qckn-bundles/lean \
-            --bundle /tmp/qckn-bundles/arc \
-            --bundle /tmp/qckn-bundles/collatz \
-            --bundle /tmp/qckn-bundles/sair \
+            "${bundle_args[@]}" \
             --out /tmp/qckn-live-state
           cp /tmp/qckn-producer-heads.json /tmp/qckn-live-state/producer-heads.json
 
