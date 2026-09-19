@@ -134,11 +134,28 @@ jobs:
           {"artifact_id":10576957132,"artifact_digest":"$expected_digest","run_id":35420028188,"head_sha":"8ea22afeb12dd59c5565befb41673d931ab5ee3e"}
           EOF
 
+      - name: Retrieve qualified WHNF recurrence evidence
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/qckn-live-substrate/recurrence
+          artifact_id=10577696503
+          expected_digest='sha256:b2feeb57d2acbf8426a2a533319f4e263ac08f343e1dbdd2e06c04c4b2607d28'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/recurrence.zip
+          unzip -q /tmp/recurrence.zip -d /tmp/qckn-live-substrate/recurrence
+          evidence="$(find /tmp/qckn-live-substrate/recurrence -type f -name deep-list-succ-le-succ-whnf-recurrence-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-substrate/recurrence-evidence.json
+          cat > /tmp/qckn-live-substrate/recurrence-meta.json <<EOF
+          {"artifact_id":10577696503,"artifact_digest":"$expected_digest","run_id":35420232683,"head_sha":"6749b0f0ba59b7189c0cceca3a4f01ba8a9d9b90"}
+          EOF
+
       - name: Recover previous substrate state if present
         run: |
           set -euo pipefail
-          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=qckn-live-developmental-substrate-v1&per_page=100" \
-            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts | map(select(.expired == false and .name == "qckn-live-developmental-substrate-v1")) | sort_by(.created_at) | reverse | .[0].id // empty')"
           if [ -n "$artifact_id" ]; then
             mkdir -p /tmp/previous-substrate
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/previous-substrate.zip
@@ -164,10 +181,12 @@ jobs:
             --deep-list-evidence /tmp/qckn-live-substrate/deep-list-evidence.json \
             --frontier-evidence /tmp/qckn-live-substrate/frontier-evidence.json \
             --method-evidence /tmp/qckn-live-substrate/method-evidence.json \
+            --recurrence-evidence /tmp/qckn-live-substrate/recurrence-evidence.json \
             --live-meta /tmp/qckn-live-substrate/live-meta.json \
             --deep-meta /tmp/qckn-live-substrate/deep-meta.json \
             --frontier-meta /tmp/qckn-live-substrate/frontier-meta.json \
             --method-meta /tmp/qckn-live-substrate/method-meta.json \
+            --recurrence-meta /tmp/qckn-live-substrate/recurrence-meta.json \
             "${previous_args[@]}" \
             --out /tmp/qckn-live-substrate/result \
             | tee /tmp/qckn-live-substrate/substrate.log
@@ -182,7 +201,7 @@ jobs:
           assert not r['authority_state']['declared_residuals_open']
           assert set(r['battle_consensus'].values())=={'lean-kernel'}
           assert set(r['discovery_consensus'].values())=={'flash-platform-next'}
-          assert r['selected_experiment']['experiment_class']=='deep-list-succ-le-succ-whnf-recurrence'
+          assert r['selected_experiment']['experiment_class']=='localdef-whnf-context-cache'
           for row in r['profiles'].values():
               assert len(row['applied_live_effects'])==5
           print('PASS_QCKN_LIVE_DEVELOPMENTAL_SUBSTRATE_V1')
