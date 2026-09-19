@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: metalogiclabs/mathgraph-lean-kernel
-          ref: qckn-flash-event-emitter-v1
+          ref: qckn-flash-event-emitter-v2
           path: sources/lean
       - uses: actions/checkout@v4
         with:
@@ -72,7 +72,7 @@ jobs:
           arc_sha="$(git -C sources/arc rev-parse HEAD)"
           collatz_sha="$(git -C sources/collatz rev-parse HEAD)"
           sair_sha="$(git -C sources/sair rev-parse HEAD)"
-          python sources/lean/experiments/emit_qckn_flash_event.py --commit "$lean_sha" --out /tmp/qckn-bundles/lean
+          python sources/lean/experiments/emit_qckn_flash_event_v2.py --commit "$lean_sha" --out /tmp/qckn-bundles/lean
           python sources/arc/kaggle/scripts/emit_qckn_flash_event.py --commit "$arc_sha" --out /tmp/qckn-bundles/arc
           python sources/collatz/experiments/emit_qckn_flash_event.py --commit "$collatz_sha" --out /tmp/qckn-bundles/collatz
           python sources/sair/experiments/mathgraph/residual12/emit_qckn_flash_event.py --commit "$sair_sha" --out /tmp/qckn-bundles/sair
