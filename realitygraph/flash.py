@@ -358,6 +358,26 @@ class TemporalFlashDelta:
     quotient: QuotientDelta
     flash: FlashDelta
 
+    @property
+    def previous_classes(self) -> tuple[tuple[str, ...], ...]:
+        return self.quotient.previous_classes
+
+    @property
+    def current_classes(self) -> tuple[tuple[str, ...], ...]:
+        return self.quotient.current_classes
+
+    @property
+    def split_classes(self) -> tuple[tuple[str, ...], ...]:
+        return self.quotient.split_classes
+
+    @property
+    def merged_classes(self) -> tuple[tuple[str, ...], ...]:
+        return self.quotient.merged_classes
+
+    @property
+    def changed_state_ids(self) -> tuple[str, ...]:
+        return self.quotient.changed_state_ids
+
 
 @dataclass(frozen=True)
 class CapabilityAdmissionEvent:
