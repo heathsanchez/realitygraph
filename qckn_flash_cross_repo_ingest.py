@@ -64,13 +64,9 @@ def _obligation_for(envelope: ExternalEventEnvelope, event):
     raise TypeError(f"unsupported external runtime event: {type(event).__name__}")
 
 
-def ingest_bundles(
-    bundle_paths: Iterable[Path],
-) -> tuple[dict[str, object], dict[str, object]]:
-    loaded = [_load_bundle(Path(path)) for path in bundle_paths]
-    if not loaded:
-        raise ValueError("at least one external bundle is required")
-
+def _build_runtime(
+    loaded: list[tuple[ExternalEventEnvelope, object]],
+):
     event_ids = [event.event_id for _, event in loaded]
     if len(event_ids) != len(set(event_ids)):
         raise ValueError("duplicate external event identity")
@@ -82,21 +78,19 @@ def ingest_bundles(
     ordered = sorted(loaded, key=lambda row: row[1].event_id)
     for _envelope, event in ordered:
         runtime.apply(event)
+    return closure, runtime, ordered
 
-    manifest_text = runtime.event_manifest_text()
-    manifest = json.loads(manifest_text)
 
-    before_replay = closure.event_count
-    restarted = FlashEventRuntime.from_event_manifest(closure, manifest_text)
-    for _envelope, event in ordered:
-        delta = restarted.apply(event)
-        if delta.iterations != 0 or delta.changed_obligations:
-            raise AssertionError("restart replay mutated shared Flash state")
-    replay_added = closure.event_count - before_replay
-
+def _summary(
+    loaded: list[tuple[ExternalEventEnvelope, object]],
+    closure: FlashClosure,
+    runtime: FlashEventRuntime,
+    *,
+    replay_added_events: int = 0,
+) -> dict[str, object]:
     pruned = sum(len(row.pruned_fingerprints) for row in closure.obligations.values())
     repositories = sorted({envelope.repository for envelope, _event in loaded})
-    summary: dict[str, object] = {
+    return {
         "schema": "qckn-flash-cross-repo-ingestion-v1",
         "external_events": len(loaded),
         "repositories": repositories,
@@ -111,15 +105,95 @@ def ingest_bundles(
         "pruned_candidate_occurrences": pruned,
         "event_count": closure.event_count,
         "closure_count": closure.closure_count,
-        "replay_added_events": replay_added,
-        "event_manifest": manifest,
+        "replay_added_events": replay_added_events,
+        "event_manifest": json.loads(runtime.event_manifest_text()),
         "source_commits": {
             envelope.repository: envelope.commit
             for envelope, _event in sorted(loaded, key=lambda row: row[0].repository)
         },
     }
-    return summary, manifest
 
+
+def _state_bundle_text(
+    loaded: list[tuple[ExternalEventEnvelope, object]],
+    runtime: FlashEventRuntime,
+) -> str:
+    payload = {
+        "schema": "qckn-flash-state-bundle-v1",
+        "events": [
+            json.loads(envelope.to_text())
+            for envelope, _event in sorted(loaded, key=lambda row: row[1].event_id)
+        ],
+        "event_manifest": json.loads(runtime.event_manifest_text()),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def ingest_bundles(
+    bundle_paths: Iterable[Path],
+) -> tuple[dict[str, object], dict[str, object], str]:
+    loaded = [_load_bundle(Path(path)) for path in bundle_paths]
+    if not loaded:
+        raise ValueError("at least one external bundle is required")
+
+    closure, runtime, ordered = _build_runtime(loaded)
+
+    manifest_text = runtime.event_manifest_text()
+    manifest = json.loads(manifest_text)
+
+    before_replay = closure.event_count
+    restarted = FlashEventRuntime.from_event_manifest(closure, manifest_text)
+    for _envelope, event in ordered:
+        delta = restarted.apply(event)
+        if delta.iterations != 0 or delta.changed_obligations:
+            raise AssertionError("restart replay mutated shared Flash state")
+    replay_added = closure.event_count - before_replay
+
+    summary = _summary(
+        loaded,
+        closure,
+        runtime,
+        replay_added_events=replay_added,
+    )
+    state_text = _state_bundle_text(loaded, runtime)
+    return summary, manifest, state_text
+
+
+def restore_state_bundle(
+    text: str,
+) -> tuple[dict[str, object], FlashEventRuntime]:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid Flash state bundle") from exc
+    if payload.get("schema") != "qckn-flash-state-bundle-v1":
+        raise ValueError("unsupported Flash state bundle schema")
+    rows = payload.get("events")
+    manifest = payload.get("event_manifest")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Flash state bundle requires events")
+    if not isinstance(manifest, dict):
+        raise ValueError("Flash state bundle requires event manifest")
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    if canonical != text:
+        raise ValueError("noncanonical Flash state bundle")
+
+    loaded: list[tuple[ExternalEventEnvelope, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("invalid Flash state bundle event")
+        event_text = json.dumps(row, sort_keys=True, separators=(",", ":"))
+        envelope = ExternalEventEnvelope.from_text(event_text)
+        loaded.append((envelope, envelope.to_runtime_event()))
+
+    closure, runtime, ordered = _build_runtime(loaded)
+    actual_manifest = json.loads(runtime.event_manifest_text())
+    if actual_manifest != manifest:
+        raise ValueError("Flash state bundle manifest mismatch")
+
+    summary = _summary(loaded, closure, runtime)
+    summary["cold_restart_replayed_events"] = len(ordered)
+    return summary, runtime
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -127,7 +201,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
-    summary, manifest = ingest_bundles(args.bundle)
+    summary, manifest, state_text = ingest_bundles(args.bundle)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",
@@ -135,6 +209,10 @@ def main() -> None:
     )
     (args.out / "event-manifest.json").write_text(
         json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    (args.out / "state-bundle.json").write_text(
+        state_text,
         encoding="utf-8",
     )
     print("PASS_QCKN_FLASH_CROSS_REPO_INGESTION_V1")
