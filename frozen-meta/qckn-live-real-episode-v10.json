@@ -1,0 +1,31 @@
+{
+  "schema": "qckn-live-real-episode-v10-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35433372707,
+  "source_episode_artifact": 10581401124,
+  "source_episode_digest": "sha256:782d8242750736893f4e00f714458b787702b84a35a8b389c53f53ee2f767383",
+  "selected_by_reclosure": "lean-substitution-argument-family-diagnostic",
+  "selected_experiment": {
+    "id": "substitution-argument-family-diagnostic-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-substitution-key-diversity-v1",
+    "question": "Among new substitution-argument identities for already-seen expressions, do the arguments fall into a small stable consequential family shared by both deep-list cases?",
+    "sampling": {
+      "new_argument_events_per_kernel_max": 100000,
+      "case_max_if_two_kernels": 200000
+    },
+    "argument_family_signature": "root tag; for applications, application-spine head kind/name plus arity and immediate argument tags; for binders/let/proj, shallow immediate child tags only",
+    "classification_rule": {
+      "small_stable_family": "same dominant family in both cases, <= 16 sampled families, top-8 coverage >= 0.95 in each, and dominant family count >= 50000 in each",
+      "stable_heavy_tail": "same dominant family in both cases and top-8 coverage >= 0.70 in each, but small_stable_family is false",
+      "distributed_arguments": "otherwise"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_small_stable_family": "compile argument-family quotient separator and prospectively inspect exact consequence preservation inside the dominant family before any cross-argument reuse",
+    "if_stable_heavy_tail": "split dominant substitution-argument family from tail and reclose before a narrower quotient experiment",
+    "if_distributed_arguments": "compile obstruction against a compact argument-family quotient and move to argument-generation provenance"
+  },
+  "claim_boundary": "Diagnostic family counting only. Distinct substitution arguments remain semantically distinct; no cross-argument cache reuse or substitution quotient is authorized."
+}
