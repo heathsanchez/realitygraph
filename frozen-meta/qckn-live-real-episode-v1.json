@@ -1,0 +1,28 @@
+{
+  "schema": "qckn-live-real-episode-v1-precommit",
+  "frozen_before_target_experiment": true,
+  "source_substrate_run": 35421558310,
+  "source_substrate_artifact": 10576778954,
+  "source_substrate_digest": "sha256:d14ee07eabbaf9481fcd731e207b8d7fd1ac1c327f5f76e21fd2c3b207f4d55b",
+  "source_identity_cache_run": 35421374389,
+  "source_identity_cache_artifact": 10576888578,
+  "source_identity_cache_digest": "sha256:d5bd6ee29d96097f19627dce94dc69d8e31dc64ead2de26a7db5b288b34cead5",
+  "selected_domain": "lean-kernel",
+  "selected_experiment": {
+    "id": "succ-le-succ-scoped-localdef-whnf-cache-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-localdef-whnf-identity-triple-cache-v1",
+    "question": "Can the semantically verified exact-identity localdef WHNF cache become economically active if restricted to the already-verified Nat.succ_le_succ hotspot?",
+    "candidate": "Enable the exact expression × active-context × universe-params identity cache only while currentDeclaration is Nat.succ_le_succ.",
+    "cold_baseline_ms": 8041,
+    "full_identity_cache_ms": 8531,
+    "full_identity_cache_hits": 2875688,
+    "promotion_rule": "Promote economically only if scoped-cache total wall time is strictly below the paired cold total, all semantic statuses match cold, no REJECT is introduced, restart reproduces, and ablation restores cold behavior.",
+    "no_cherry_pick": true
+  },
+  "post_result_reclosure": {
+    "if_economic_win": "promote scoped cache to ACTIVE, emit PREFERENCE_CHANGE/PROMOTED_CAPABILITY event, remove the promote-cache acquisition route, reclose and rerank all live frontiers",
+    "if_no_economic_win": "retain semantic capability in RESERVE, compile economic obstruction against this realization, remove only this realization route, reclose and rerank all live frontiers"
+  },
+  "claim_boundary": "This precommit freezes the selected experiment and promotion rule before the scoped-cache target run. It does not predict the outcome or authorize any new Lean semantic rule."
+}
