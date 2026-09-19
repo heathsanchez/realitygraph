@@ -1,0 +1,148 @@
+name: QCKN Live Developmental Substrate V2
+
+on:
+  push:
+    branches:
+      - qckn-live-developmental-substrate-v2
+    paths:
+      - "realitygraph/flash_contract.py"
+      - "qckn_flash_six_invariant_gate_v1.py"
+      - "tests/test_flash_contract.py"
+      - "qckn_real_multidomain_flash_v*.py"
+      - "realitygraph/real_flash.py"
+      - "realitygraph/flash_bus.py"
+      - ".github/workflows/qckn-live-developmental-substrate-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  six-invariant-flash-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test Flash V1 typed runtime contract
+        run: |
+          python -m unittest tests.test_flash_contract -v
+          python -m unittest tests.test_real_flash -v
+          python -m unittest tests.test_flash_bus -v
+
+      - name: Reconstruct authority-closed real Flash V3
+        run: |
+          mkdir -p /tmp/qckn-flash-v2/v3
+          python -u qckn_real_multidomain_flash_v3.py \
+            --out /tmp/qckn-flash-v2/v3 \
+            | tee /tmp/qckn-flash-v2/v3/run.log
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-flash-v2/v3/real-multidomain-flash-v3.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values())
+          assert all(x['status']=='SETTLED' for x in r['residuals'].values())
+          PY
+
+      - name: Retrieve current persistent live router state
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/qckn-flash-v2/live
+          artifact_json="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts?per_page=100" \
+            --jq '.artifacts | map(select(.expired == false and .name == "qckn-flash-live-state-v1")) | sort_by(.created_at) | reverse | .[0]')"
+          artifact_id="$(printf '%s' "$artifact_json" | jq -r '.id')"
+          test "$artifact_id" != "null"
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/live.zip
+          unzip -q /tmp/live.zip -d /tmp/qckn-flash-v2/live
+          cycle="$(find /tmp/qckn-flash-v2/live -type f -name cycle.json -print -quit)"
+          test -n "$cycle"
+          cp "$cycle" /tmp/qckn-flash-v2/live-cycle.json
+          echo "$artifact_json" > /tmp/qckn-flash-v2/live-artifact.json
+
+      - name: Retrieve semantic-green string-context cache evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10576707760
+          expected_digest='sha256:6f0e59af5595d59b712cee43a807c95aa292a164a9d374543001e4c0294f5bb3'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-flash-v2/string-cache
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/string-cache.zip
+          unzip -q /tmp/string-cache.zip -d /tmp/qckn-flash-v2/string-cache
+          evidence="$(find /tmp/qckn-flash-v2/string-cache -type f -name localdef-whnf-context-cache-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-flash-v2/string-cache.json
+
+      - name: Retrieve identity-triple cache evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10576888578
+          expected_digest='sha256:d5bd6ee29d96097f19627dce94dc69d8e31dc64ead2de26a7db5b288b34cead5'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-flash-v2/identity-cache
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/identity-cache.zip
+          unzip -q /tmp/identity-cache.zip -d /tmp/qckn-flash-v2/identity-cache
+          evidence="$(find /tmp/qckn-flash-v2/identity-cache -type f -name localdef-whnf-identity-triple-cache-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-flash-v2/identity-cache.json
+
+      - name: Run prospective six-invariant episode
+        run: |
+          mkdir -p /tmp/qckn-flash-v2/result
+          python -u qckn_flash_six_invariant_gate_v1.py \
+            --v3-result /tmp/qckn-flash-v2/v3/real-multidomain-flash-v3.json \
+            --live-cycle /tmp/qckn-flash-v2/live-cycle.json \
+            --string-cache /tmp/qckn-flash-v2/string-cache.json \
+            --identity-cache /tmp/qckn-flash-v2/identity-cache.json \
+            --out /tmp/qckn-flash-v2/result \
+            | tee /tmp/qckn-flash-v2/six-invariant.log
+
+      - name: Hard-gate Flash V1 implementation requirements
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-flash-v2/result/six-invariant-gate.json'))
+          assert r['verdict']=='PASS'
+          g=r['gates']
+          required=[
+              'cross_frontier_propagation',
+              'dormant_capability_revival',
+              'negative_propagation',
+              'incrementality_dependency_cone_only',
+              'revocation_restores_search',
+              'restart_recovers_compiled_present_without_history_replay',
+          ]
+          assert all(g[x] for x in required),g
+          assert g['event_admission_is_idempotent_at_fixed_point']
+          assert g['semantic_and_economic_promotion_separated']
+          caps=r['capability_states']
+          assert caps['lean:localdef-whnf-string-context-cache:v1']['semantic_status']=='VERIFIED'
+          assert caps['lean:localdef-whnf-string-context-cache:v1']['economic_status']=='RESERVE'
+          assert caps['lean:localdef-whnf-identity-triple-cache:v1']['semantic_status']=='VERIFIED'
+          assert caps['lean:localdef-whnf-identity-triple-cache:v1']['economic_status']=='RESERVE'
+          print('PASS_FLASH_CROSS_FRONTIER_PROPAGATION')
+          print('PASS_FLASH_DORMANT_CAPABILITY_REVIVAL')
+          print('PASS_FLASH_NEGATIVE_PROPAGATION')
+          print('PASS_FLASH_INCREMENTALITY')
+          print('PASS_FLASH_REVOCATION')
+          print('PASS_FLASH_RESTART_BENEFIT')
+          print('PASS_FLASH_SEMANTIC_ECONOMIC_SEPARATION')
+          print('PASS_QCKN_LIVE_DEVELOPMENTAL_SUBSTRATE_V2')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-developmental-substrate-v2
+          path: /tmp/qckn-flash-v2/
+          if-no-files-found: error
