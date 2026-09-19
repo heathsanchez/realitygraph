@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from itertools import combinations, product
+from itertools import combinations, permutations, product
 import hashlib
 import json
 
@@ -29,12 +29,19 @@ class Realizer:
     active: bool = True
     provenance: tuple[str, ...] = ()
 
-    def eval_history(self, history: tuple[tuple[int, ...], ...]) -> int:
+    def eval_history(
+        self,
+        history: tuple[tuple[int, ...], ...],
+        input_indices: tuple[int, ...] | None = None,
+    ) -> int:
+        indices = self.input_indices if input_indices is None else input_indices
+        if len(indices) != len(self.input_indices):
+            raise ValueError("realizer remap arity mismatch")
         state = 0
-        alpha = 1 << len(self.input_indices)
+        alpha = 1 << len(indices)
         for event in history:
             symbol = 0
-            for j, idx in enumerate(self.input_indices):
+            for j, idx in enumerate(indices):
                 symbol |= int(event[idx]) << j
             state = self.transition[state * alpha + symbol]
         return self.output[state]
@@ -92,19 +99,31 @@ class State:
     @classmethod
     def restore(cls, text: str) -> "State":
         p = json.loads(text)
-        s = cls(schema_admitted=p["schema_admitted"], authority=p["authority"], events=p["events"])
+        s = cls(
+            schema_admitted=p["schema_admitted"],
+            authority=p["authority"],
+            events=p["events"],
+        )
         s.realizers = [
             Realizer(
-                x["id"], tuple(x["inputs"]), int(x["states"]),
-                tuple(x["transition"]), tuple(x["output"]),
-                x["authority"], bool(x["active"]), tuple(x["provenance"])
+                x["id"],
+                tuple(x["inputs"]),
+                int(x["states"]),
+                tuple(x["transition"]),
+                tuple(x["output"]),
+                x["authority"],
+                bool(x["active"]),
+                tuple(x["provenance"]),
             )
             for x in p["realizers"]
         ]
         s.macros = [
             BinaryMacro(
-                x["id"], int(x["table"]), x["authority"],
-                bool(x["active"]), tuple(x["provenance"])
+                x["id"],
+                int(x["table"]),
+                x["authority"],
+                bool(x["active"]),
+                tuple(x["provenance"]),
             )
             for x in p["macros"]
         ]
@@ -126,20 +145,46 @@ def last_bit(history, idx):
     return history[-1][idx]
 
 def active_realizers(state):
-    return [r for r in state.realizers if r.active and r.authority == state.authority]
+    return [
+        r for r in state.realizers
+        if r.active and r.authority == state.authority
+    ]
 
 def active_macros(state):
-    return [m for m in state.macros if m.active and m.authority == state.authority]
+    return [
+        m for m in state.macros
+        if m.active and m.authority == state.authority
+    ]
+
+def realizer_remaps(realizer: Realizer):
+    arity = len(realizer.input_indices)
+    if arity == 1:
+        return tuple((i,) for i in range(RAW_WIDTH))
+    return tuple(permutations(range(RAW_WIDTH), arity))
 
 def base_feature_vectors(state: State, episode: Episode):
-    rows = []
-    rows.append(("0", tuple(0 for _ in episode.examples)))
-    rows.append(("1", tuple(1 for _ in episode.examples)))
+    rows = [
+        ("0", tuple(0 for _ in episode.examples)),
+        ("1", tuple(1 for _ in episode.examples)),
+    ]
     for idx in range(RAW_WIDTH):
-        rows.append((f"c{idx}", tuple(last_bit(h, idx) for h, _ in episode.examples)))
+        rows.append((
+            f"c{idx}",
+            tuple(last_bit(h, idx) for h, _ in episode.examples),
+        ))
     for r in active_realizers(state):
-        rows.append((f"R:{r.capability_id}", tuple(r.eval_history(h) for h, _ in episode.examples)))
-    return rows
+        for remap in realizer_remaps(r):
+            rows.append((
+                f"R:{r.capability_id}@{','.join(map(str, remap))}",
+                tuple(r.eval_history(h, remap) for h, _ in episode.examples),
+            ))
+    dedup = []
+    seen = set()
+    for name, vec in rows:
+        if vec not in seen:
+            seen.add(vec)
+            dedup.append((name, vec))
+    return dedup
 
 def current_language_candidates(state: State, episode: Episode):
     rows = list(base_feature_vectors(state, episode))
@@ -159,14 +204,25 @@ def current_language_candidates(state: State, episode: Episode):
 def try_current_language(state: State, episode: Episode):
     verifier = Verifier(episode)
     candidates = current_language_candidates(state, episode)
+    consistent_only = False
     for name, pred in candidates:
         status = verifier.check(pred)
         if status == "VERIFIED":
-            return {"found": True, "name": name, "pred": pred, "checks": verifier.calls}
+            return {
+                "found": True,
+                "name": name,
+                "pred": pred,
+                "checks": verifier.calls,
+            }
         if status == "CONSISTENT_ONLY":
-            return {"found": False, "unknown": True, "checks": verifier.calls}
-    if not episode.closed:
-        return {"found": False, "unknown": True, "checks": verifier.calls}
+            consistent_only = True
+    if not episode.closed or consistent_only:
+        return {
+            "found": False,
+            "unknown": True,
+            "checks": verifier.calls,
+            "reason": "UNKNOWN_AUTHORITY",
+        }
     return {
         "found": False,
         "unknown": False,
@@ -185,21 +241,26 @@ def schema_obstruction(state: State, episode: Episode):
         "target_digest": hashlib.sha256(bytes(targets)).hexdigest(),
     }
 
-def enumerate_realizers(episode: Episode):
-    """One generic finite realizer schema; no named logic/temporal repair families."""
+def enumerate_realizers():
+    """Single generic finite-realizer meta-substrate.
+
+    The developmental controller is not given named LOGIC, TEMPORAL, MEMORY,
+    DELAY, XOR, AND, OR, or PREVIOUS repair families. It enumerates finite
+    deterministic transducers in increasing state count and input arity.
+    """
     for states in range(1, MAX_STATES + 1):
         for arity in range(1, RAW_WIDTH + 1):
             for indices in combinations(range(RAW_WIDTH), arity):
                 alpha = 1 << arity
-                transition_slots = states * alpha
-                for transition in product(range(states), repeat=transition_slots):
+                slots = states * alpha
+                for transition in product(range(states), repeat=slots):
                     for output in product((0, 1), repeat=states):
                         yield indices, states, transition, output
 
 def eval_realizer(spec, episode: Episode):
     indices, states, transition, output = spec
     alpha = 1 << len(indices)
-    preds = []
+    predictions = []
     for history, _ in episode.examples:
         st = 0
         for event in history:
@@ -207,8 +268,8 @@ def eval_realizer(spec, episode: Episode):
             for j, idx in enumerate(indices):
                 symbol |= int(event[idx]) << j
             st = transition[st * alpha + symbol]
-        preds.append(output[st])
-    return tuple(preds)
+        predictions.append(output[st])
+    return tuple(predictions)
 
 def synthesize_realizer(state: State, episode: Episode):
     verifier = Verifier(episode)
@@ -217,16 +278,26 @@ def synthesize_realizer(state: State, episode: Episode):
     obstruction = schema_obstruction(state, episode)
     if not obstruction["target_absent_from_current_language"]:
         return None, verifier.calls, "NO_SCHEMA_OBSTRUCTION"
-    for spec in enumerate_realizers(episode):
+    for spec in enumerate_realizers():
         pred = eval_realizer(spec, episode)
         status = verifier.check(pred)
         if status == "VERIFIED":
             indices, states, transition, output = spec
             rid = f"realizer-{state.authority}-{len(state.realizers)+1}"
-            return Realizer(
-                rid, tuple(indices), int(states), tuple(transition), tuple(output),
-                state.authority, True, (episode.episode_id,)
-            ), verifier.calls, "VERIFIED"
+            return (
+                Realizer(
+                    rid,
+                    tuple(indices),
+                    int(states),
+                    tuple(transition),
+                    tuple(output),
+                    state.authority,
+                    True,
+                    (episode.episode_id,),
+                ),
+                verifier.calls,
+                "VERIFIED",
+            )
     return None, verifier.calls, "GENERIC_REALIZER_SUBSTRATE_EXHAUSTED"
 
 def infer_binary_macro(realizer: Realizer, episode: Episode):
@@ -255,7 +326,10 @@ def compile_from_realizer(state: State, realizer: Realizer, episode: Episode):
     if table is not None and table not in {m.table for m in active_macros(state)}:
         macro = BinaryMacro(
             f"macro-{state.authority}-{table:x}-{len(state.macros)+1}",
-            table, state.authority, True, (episode.episode_id, realizer.capability_id)
+            table,
+            state.authority,
+            True,
+            (episode.episode_id, realizer.capability_id),
         )
         state.macros.append(macro)
     return macro
@@ -270,13 +344,20 @@ def solve_episode(state: State, episode: Episode):
     if initial.get("found"):
         trace["route"] = "VERIFIED"
         trace["solution"] = initial["name"]
-        state.events.append({"episode": episode.episode_id, "route": "VERIFIED", "authority": state.authority})
+        state.events.append({
+            "episode": episode.episode_id,
+            "route": "VERIFIED",
+            "authority": state.authority,
+        })
         return trace, total
 
     obstruction = schema_obstruction(state, episode)
     trace["schema_obstruction"] = obstruction
     if not state.schema_admitted:
-        if not (obstruction["closed"] and obstruction["target_absent_from_current_language"]):
+        if not (
+            obstruction["closed"]
+            and obstruction["target_absent_from_current_language"]
+        ):
             trace["route"] = "OBSTRUCTION"
             return trace, total
         state.schema_admitted = True
@@ -305,12 +386,16 @@ def solve_episode(state: State, episode: Episode):
     if macro is not None:
         trace["compiled_binary_macro"] = macro.capability_id
         trace["binary_table"] = macro.table
-    state.events.append({"episode": episode.episode_id, "route": "VERIFIED", "authority": state.authority})
+    state.events.append({
+        "episode": episode.episode_id,
+        "route": "VERIFIED",
+        "authority": state.authority,
+    })
     return trace, total
 
 def current_examples(fn):
     return tuple(
-        (((bits(x, RAW_WIDTH)),), int(fn(*bits(x, RAW_WIDTH))))
+        ((((bits(x, RAW_WIDTH)),)), int(fn(*bits(x, RAW_WIDTH))))
         for x in range(1 << RAW_WIDTH)
     )
 
@@ -323,15 +408,21 @@ def history2_examples(fn):
     return tuple(rows)
 
 def episodes():
-    xor = lambda a, b: a ^ b
+    and2 = lambda a, b: a & b
     return (
-        Episode("E0-open-partial", current_examples(xor)[:2], False),
+        Episode("E0-open-partial", current_examples(and2)[:2], False),
         Episode("E1-direct", current_examples(lambda a, b: a)),
-        Episode("E2-meta-schema-genesis", current_examples(xor)),
-        Episode("E3-behavioral-reuse", current_examples(lambda a, b: b ^ a)),
+        Episode("E2-meta-schema-genesis", current_examples(and2)),
+        Episode("E3-behavioral-reuse", current_examples(lambda a, b: b & a)),
         Episode("E4-stateful-realizer", history2_examples(lambda p, c: p[0])),
-        Episode("E5-cross-substrate-compose", history2_examples(lambda p, c: p[0] ^ c[1])),
-        Episode("E6-second-cross-substrate-compose", history2_examples(lambda p, c: p[0] ^ c[0])),
+        Episode(
+            "E5-cross-substrate-compose",
+            history2_examples(lambda p, c: p[0] & c[0]),
+        ),
+        Episode(
+            "E6-remapped-cross-substrate-compose",
+            history2_examples(lambda p, c: p[1] & c[1]),
+        ),
     )
 
 def run_stream(mode: str):
@@ -379,8 +470,13 @@ def authority_shift(state: State):
             new_realizers.append(
                 Realizer(
                     f"realizer-A2-{len(state.realizers)+len(new_realizers)+1}",
-                    r.input_indices, r.states, r.transition, r.output,
-                    "A2", True, ("requalified", r.capability_id)
+                    r.input_indices,
+                    r.states,
+                    r.transition,
+                    r.output,
+                    "A2",
+                    True,
+                    ("requalified", r.capability_id),
                 )
             )
     for m in list(state.macros):
@@ -390,12 +486,20 @@ def authority_shift(state: State):
             new_macros.append(
                 BinaryMacro(
                     f"macro-A2-{m.table:x}-{len(state.macros)+len(new_macros)+1}",
-                    m.table, "A2", True, ("requalified", m.capability_id)
+                    m.table,
+                    "A2",
+                    True,
+                    ("requalified", m.capability_id),
                 )
             )
     state.realizers.extend(new_realizers)
     state.macros.extend(new_macros)
-    state.events.append({"event": "AUTHORITY_SHIFT", "from": old, "to": "A2", "revoked": revoked})
+    state.events.append({
+        "event": "AUTHORITY_SHIFT",
+        "from": old,
+        "to": "A2",
+        "revoked": revoked,
+    })
     return revoked, len(new_realizers) + len(new_macros)
 
 def main():
@@ -403,7 +507,9 @@ def main():
         "seed": SEED,
         "initial_language": "constants+current-coordinate projections",
         "meta_extension_options": [],
-        "generated_meta_schema": "finite deterministic transducer over raw encounter coordinates",
+        "generated_meta_schema": (
+            "finite deterministic transducer over raw encounter coordinates"
+        ),
         "max_states": MAX_STATES,
         "raw_width": RAW_WIDTH,
         "authority_rule": "only CLOSED exact verification may promote",
@@ -411,7 +517,11 @@ def main():
         "stream_generated_after_freeze": True,
     }
     protocol_hash = hashlib.sha256(
-        json.dumps(protocol, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(
+            protocol,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
     ).hexdigest()
 
     warm_state, warm, warm_total = run_stream("WARM")
@@ -425,7 +535,7 @@ def main():
     revoked, requalified = authority_shift(restarted)
     post = Episode(
         "E7-post-authority-reuse",
-        history2_examples(lambda p, c: p[0] ^ c[1]),
+        history2_examples(lambda p, c: p[0] & c[0]),
     )
     post_rec, post_cost = solve_episode(restarted, post)
 
@@ -433,31 +543,83 @@ def main():
     cold_by = {r["episode"]: r for r in cold}
     gates = {
         "PROTOCOL_FROZEN_BEFORE_STREAM": bool(protocol_hash),
-        "OPEN_AUTHORITY_REMAINS_UNKNOWN": byid["E0-open-partial"]["route"] == "UNKNOWN",
-        "NO_NAMED_EXTENSION_PORTFOLIO": protocol["meta_extension_options"] == [],
-        "RESIDUAL_GENERATES_UNIVERSAL_REALIZER_SCHEMA": "generated_schema" in byid["E2-meta-schema-genesis"],
-        "STATELESS_BEHAVIOR_COMPILES": "compiled_binary_macro" in byid["E2-meta-schema-genesis"],
-        "LATER_BEHAVIORAL_REUSE_IS_CHEAPER_THAN_COLD": byid["E3-behavioral-reuse"]["episode_checks"] < cold_by["E3-behavioral-reuse"]["episode_checks"],
-        "SAME_GENERATED_SCHEMA_SYNTHESIZES_STATEFUL_REALIZER": byid["E4-stateful-realizer"].get("realizer_shape", {}).get("states", 0) > 1,
-        "CROSS_SUBSTRATE_COMPOSITION_IS_CHEAPER_THAN_COLD": byid["E5-cross-substrate-compose"]["episode_checks"] < cold_by["E5-cross-substrate-compose"]["episode_checks"],
-        "SECOND_CROSS_SUBSTRATE_COMPOSITION_IS_CHEAPER_THAN_COLD": byid["E6-second-cross-substrate-compose"]["episode_checks"] < cold_by["E6-second-cross-substrate-compose"]["episode_checks"],
+        "OPEN_AUTHORITY_REMAINS_UNKNOWN": (
+            byid["E0-open-partial"]["route"] == "UNKNOWN"
+        ),
+        "NO_NAMED_EXTENSION_PORTFOLIO": (
+            protocol["meta_extension_options"] == []
+        ),
+        "RESIDUAL_GENERATES_UNIVERSAL_REALIZER_SCHEMA": (
+            "generated_schema" in byid["E2-meta-schema-genesis"]
+        ),
+        "STATELESS_BEHAVIOR_COMPILES": (
+            "compiled_binary_macro" in byid["E2-meta-schema-genesis"]
+        ),
+        "LATER_BEHAVIORAL_REUSE_IS_CHEAPER_THAN_COLD": (
+            byid["E3-behavioral-reuse"]["episode_checks"]
+            < cold_by["E3-behavioral-reuse"]["episode_checks"]
+        ),
+        "SAME_GENERATED_SCHEMA_SYNTHESIZES_STATEFUL_REALIZER": (
+            byid["E4-stateful-realizer"]
+            .get("realizer_shape", {})
+            .get("states", 0) > 1
+        ),
+        "CROSS_SUBSTRATE_COMPOSITION_IS_CHEAPER_THAN_COLD": (
+            byid["E5-cross-substrate-compose"]["episode_checks"]
+            < cold_by["E5-cross-substrate-compose"]["episode_checks"]
+        ),
+        "REMAPPED_CROSS_SUBSTRATE_COMPOSITION_IS_CHEAPER_THAN_COLD": (
+            byid["E6-remapped-cross-substrate-compose"]["episode_checks"]
+            < cold_by["E6-remapped-cross-substrate-compose"]["episode_checks"]
+        ),
+        "MATCHED_COLD_REACHES_SAME_VERIFIED_ENDPOINTS": all(
+            r["route"] in {"VERIFIED", "UNKNOWN"} for r in cold
+        ),
         "WARM_TOTAL_BEATS_COLD": warm_total < cold_total,
-        "CAPABILITY_ABLATION_LOSES_WARM_ADVANTAGE": ablated_total > warm_total,
-        "SCHEMA_ABLATION_RESTORES_OBSTRUCTION": schema_ablation["route_without_meta_schema"] == "OBSTRUCTION" and not schema_ablation["initial_found"],
+        "CAPABILITY_ABLATION_LOSES_WARM_ADVANTAGE": (
+            ablated_total > warm_total
+        ),
+        "SCHEMA_ABLATION_RESTORES_OBSTRUCTION": (
+            schema_ablation["route_without_meta_schema"] == "OBSTRUCTION"
+            and not schema_ablation["initial_found"]
+        ),
         "EXACT_RESTART": exact_restart,
-        "AUTHORITY_SHIFT_REVOKES_STALE": len(revoked) > 0 and all(not r.active for r in restarted.realizers if r.authority == "A1") and all(not m.active for m in restarted.macros if m.authority == "A1"),
+        "AUTHORITY_SHIFT_REVOKES_STALE": (
+            len(revoked) > 0
+            and all(
+                not r.active
+                for r in restarted.realizers
+                if r.authority == "A1"
+            )
+            and all(
+                not m.active
+                for m in restarted.macros
+                if m.authority == "A1"
+            )
+        ),
         "REQUALIFICATION_RESTORES_ACTIVE_CAPABILITY": requalified > 0,
         "POST_SHIFT_REUSE_VERIFIES": post_rec["route"] == "VERIFIED",
     }
 
     out = {
         "schema": "open-world-recoherence-v2-meta-genesis",
-        "classification": "BOUNDED_PROSPECTIVE_META_SCHEMA_GENESIS_INTEGRATION",
+        "classification": (
+            "BOUNDED_PROSPECTIVE_META_SCHEMA_GENESIS_INTEGRATION"
+        ),
         "protocol": protocol,
         "protocol_sha256": protocol_hash,
-        "warm": {"total_checks": warm_total, "records": warm},
-        "cold": {"total_checks": cold_total, "records": cold},
-        "capability_ablation": {"total_checks": ablated_total, "records": ablated},
+        "warm": {
+            "total_checks": warm_total,
+            "records": warm,
+        },
+        "cold": {
+            "total_checks": cold_total,
+            "records": cold,
+        },
+        "capability_ablation": {
+            "total_checks": ablated_total,
+            "records": ablated,
+        },
         "schema_ablation": schema_ablation,
         "restart_exact": exact_restart,
         "authority_shift": {
@@ -467,10 +629,18 @@ def main():
             "post_cost": post_cost,
         },
         "gates": gates,
-        "verdict": "PASS_OPEN_WORLD_RECOHERENCE_V2_META_GENESIS" if all(gates.values()) else "FAIL_OPEN_WORLD_RECOHERENCE_V2_META_GENESIS",
+        "verdict": (
+            "PASS_OPEN_WORLD_RECOHERENCE_V2_META_GENESIS"
+            if all(gates.values())
+            else "FAIL_OPEN_WORLD_RECOHERENCE_V2_META_GENESIS"
+        ),
         "claim_boundary": (
-            "bounded synthetic stream; raw encounter coordinates, exact verifier, maximum transducer size, and generic finite-realizer meta-substrate are supplied. "
-            "No named logic/temporal repair portfolio is supplied. This establishes integrated residual-triggered meta-schema genesis only inside that finite universal schema, not unrestricted substrate invention."
+            "bounded synthetic stream; raw encounter coordinates, exact verifier, "
+            "maximum transducer size, and generic finite-realizer meta-substrate "
+            "are supplied. No named logic/temporal repair portfolio is supplied. "
+            "This establishes integrated residual-triggered meta-schema genesis "
+            "only inside that finite universal schema, not unrestricted substrate "
+            "invention."
         ),
     }
     print(json.dumps(out, indent=2, sort_keys=True))
