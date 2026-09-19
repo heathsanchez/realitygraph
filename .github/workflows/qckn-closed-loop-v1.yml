@@ -1,0 +1,163 @@
+name: QCKN Closed Loop V1
+
+on:
+  push:
+    branches:
+      - qckn-live-win-portfolio-v6
+    paths:
+      - "qckn_closed_loop_v1.py"
+      - ".github/workflows/qckn-closed-loop-v1.yml"
+      - "qckn_live_win_portfolio_v4.py"
+      - "qckn_live_win_portfolio_v5.py"
+      - "qckn_real_multidomain_flash_v2.py"
+      - "realitygraph/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  closed-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Protect QCKN controller contracts
+        run: |
+          python -m unittest tests.test_real_flash -v
+          python -m unittest tests.test_qckn_flash_win_scheduler_v1 -v
+          python -m unittest tests.test_flash_bus -v
+          python -m unittest tests.test_qckn_flash_win_controller_v1 -v
+          python -m py_compile qckn_closed_loop_v1.py
+
+      - name: Reconstruct real Flash prerequisite
+        run: |
+          mkdir -p /tmp/qckn-closed-loop-v1/real
+          python -u qckn_real_multidomain_flash_v2.py \
+            --out /tmp/qckn-closed-loop-v1/real \
+            | tee /tmp/qckn-closed-loop-v1/real/run.log
+
+      - name: Reclose live win portfolio
+        run: |
+          python -u qckn_live_win_portfolio_v5.py \
+            --real-result /tmp/qckn-closed-loop-v1/real/real-multidomain-flash-v2.json \
+            --out /tmp/qckn-closed-loop-v1/portfolio-v5.json \
+            | tee /tmp/qckn-closed-loop-v1/portfolio-v5.log
+
+      - name: Select next experiment from market
+        run: |
+          python -u qckn_closed_loop_v1.py select \
+            --portfolio-result /tmp/qckn-closed-loop-v1/portfolio-v5.json \
+            --out /tmp/qckn-closed-loop-v1/launch.json
+          python - <<'PY'
+          import json
+          p='/tmp/qckn-closed-loop-v1/launch.json'
+          r=json.load(open(p))
+          assert r['selected_opportunity']=='lean-kernel'
+          assert r['experiment']['repository']=='heathsanchez/lean-kernel-arena'
+          assert r['experiment']['ref']=='a449228f46dcef2bb30a8de73d84a4f4d3f8a3d5'
+          print('PASS_CLOSED_LOOP_SELECTION')
+          PY
+
+      - name: Checkout selected Lean experiment
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/lean-kernel-arena
+          ref: a449228f46dcef2bb30a8de73d84a4f4d3f8a3d5
+          path: _selected/lean
+
+      - name: Protect selected Lean experiment
+        working-directory: _selected/lean
+        run: |
+          node genesis/test.mjs
+          node --test genesis/*.test.mjs
+
+      - name: Retrieve current public Arena corpus
+        working-directory: _selected/lean
+        run: |
+          mkdir -p _build/tests
+          curl --fail --location --retry 3 \
+            https://arena.lean-lang.org/lean-arena-tests.tar.gz \
+            -o /tmp/arena.tar.gz
+          python3 - <<'PY'
+          import tarfile,pathlib,json,hashlib
+          root=pathlib.Path('_build/tests')
+          rows=[]
+          with tarfile.open('/tmp/arena.tar.gz','r:gz') as archive:
+              for m in archive:
+                  if not m.isfile() or not m.name.endswith('.ndjson'):
+                      continue
+                  parts=pathlib.PurePosixPath(m.name).parts
+                  group=next((i for i,x in enumerate(parts) if x in ('good','bad')),None)
+                  if group is None:
+                      continue
+                  name=pathlib.PurePosixPath(*parts[group+1:])
+                  if name.is_absolute() or '..' in name.parts:
+                      raise ValueError(m.name)
+                  data=archive.extractfile(m).read()
+                  path=root/name
+                  path.parent.mkdir(parents=True,exist_ok=True)
+                  path.write_bytes(data)
+                  rows.append(dict(
+                      name=str(name),
+                      expected='ACCEPT' if parts[group]=='good' else 'REJECT',
+                      bytes=len(data),
+                      sha256=hashlib.sha256(data).hexdigest(),
+                  ))
+          (root/'manifest.json').write_text(json.dumps(rows,indent=2))
+          print('ARENA_CASES='+str(len(rows)))
+          PY
+
+      - name: Launch selected experiment
+        working-directory: _selected/lean
+        run: |
+          timeout 1000s node genesis/seven-unknown-resource-sweep-v1.mjs \
+            | tee /tmp/qckn-closed-loop-v1/lean-selected.log
+          grep -q PASS_LEAN_SEVEN_UNKNOWN_RESOURCE_SWEEP_V1 \
+            /tmp/qckn-closed-loop-v1/lean-selected.log
+          cp genesis/evidence/seven-unknown-resource-sweep-v1.json \
+            /tmp/qckn-closed-loop-v1/lean-selected-evidence.json
+
+      - name: Ingest evidence and rerun market
+        run: |
+          python -u qckn_closed_loop_v1.py ingest \
+            --portfolio-result /tmp/qckn-closed-loop-v1/portfolio-v5.json \
+            --launch /tmp/qckn-closed-loop-v1/launch.json \
+            --evidence /tmp/qckn-closed-loop-v1/lean-selected-evidence.json \
+            --out /tmp/qckn-closed-loop-v1/closed-loop-v1.json \
+            | tee /tmp/qckn-closed-loop-v1/ingest.log
+
+      - name: Gate closed loop
+        run: |
+          python - <<'PY'
+          import json
+          root='/tmp/qckn-closed-loop-v1'
+          r=json.load(open(root+'/closed-loop-v1.json'))
+          assert r['passed'] is True
+          assert all(r['gates'].values())
+          assert r['launch']['selected_opportunity']=='lean-kernel'
+          assert r['evidence_summary']['closed_count']==0
+          assert r['evidence_summary']['latent_wrong_reject_count']==2
+          assert r['evidence_summary']['persistent_unknown_count']==5
+          assert r['next_global_opportunity']=='lean-kernel'
+          assert r['next_local_experiment_class']=='deep-list-semantic-repair'
+          assert r['local_residual_queue'][0]['family']=='deep-list'
+          print('PASS_QCKN_CLOSED_LOOP_V1')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-closed-loop-v1
+          path: /tmp/qckn-closed-loop-v1/
+          if-no-files-found: error
