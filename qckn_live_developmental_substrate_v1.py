@@ -306,6 +306,27 @@ def _validate_deep_list(row: dict[str, Any]) -> None:
             raise AssertionError("deep-list candidate reintroduced wrong reject")
 
 
+
+def _validate_frontier(frontier: dict[str, Any]) -> None:
+    if frontier.get("schema") != "deep-list-post-semantic-frontier-v1":
+        raise AssertionError("unexpected post-semantic frontier schema")
+    if not all(frontier.get("gates", {}).values()):
+        raise AssertionError("post-semantic frontier gates are not green")
+    rows = frontier.get("rows", [])
+    if len(rows) != 2:
+        raise AssertionError("expected two post-semantic frontier cases")
+    terminal = frontier.get("terminal_frontiers", [])
+    if len(terminal) != 2 or terminal[0] != terminal[1] or terminal[0] is None:
+        raise AssertionError("deep-list cases do not share one terminal frontier")
+    for row in rows:
+        attempt = row.get("attempts", [])[-1]
+        if attempt.get("status") != "UNKNOWN" or attempt.get("budget") != 4_000_000:
+            raise AssertionError("post-semantic frontier horizon changed")
+        top = attempt.get("top_declaration_ticks", [])
+        if not top or "succ_le_succ" not in str(top[0].get("declaration")):
+            raise AssertionError("common dominant succ_le_succ hotspot changed")
+
+
 def _apply_live_effects(
     scheduler: GlobalWinScheduler,
     cycle: dict[str, Any],
@@ -433,8 +454,10 @@ def main() -> int:
     p.add_argument("--live-cycle", required=True)
     p.add_argument("--context-view", required=True)
     p.add_argument("--deep-list-evidence", required=True)
+    p.add_argument("--frontier-evidence", required=True)
     p.add_argument("--live-meta", required=True)
     p.add_argument("--deep-meta", required=True)
+    p.add_argument("--frontier-meta", required=True)
     p.add_argument("--previous-state")
     p.add_argument("--out", required=True)
     args = p.parse_args()
@@ -443,19 +466,24 @@ def main() -> int:
     live_cycle_path = Path(args.live_cycle)
     context_path = Path(args.context_view)
     deep_path = Path(args.deep_list_evidence)
+    frontier_path = Path(args.frontier_evidence)
     live_meta_path = Path(args.live_meta)
     deep_meta_path = Path(args.deep_meta)
+    frontier_meta_path = Path(args.frontier_meta)
 
     v3 = _load(v3_path)
     cycle = _load(live_cycle_path)
     context = _load(context_path)
     deep = _load(deep_path)
+    frontier = _load(frontier_path)
     live_meta = _load(live_meta_path)
     deep_meta = _load(deep_meta_path)
+    frontier_meta = _load(frontier_meta_path)
 
     _validate_v3(v3)
     _validate_live(cycle, context)
     _validate_deep_list(deep)
+    _validate_frontier(frontier)
 
     profiles = {
         profile: run_profile(profile, v3, cycle, context, deep)
@@ -491,19 +519,20 @@ def main() -> int:
     selected = next(iter(battle_tops.values()))
     selected_experiment = {
         "opportunity_id": selected,
-        "experiment_class": "deep-list-post-semantic-frontier",
+        "experiment_class": "deep-list-succ-le-succ-method-profile",
         "repository": "heathsanchez/lean-kernel-arena",
-        "ref": "mda-deep-list-semantic-repair-v1",
-        "ref_sha": "a2450817fd57b6299f227f6e1e05f703c4292151",
-        "source_evidence_run": 35412538505,
-        "source_evidence_artifact": 10574609822,
+        "ref": "mda-deep-list-succ-le-succ-method-profile-v1",
+        "ref_sha": "8ea22afeb12dd59c5565befb41673d931ab5ee3e",
+        "source_evidence_run": 35419905616,
+        "source_evidence_artifact": 10577446253,
+        "source_evidence_digest": "sha256:cafce85914807c519b2ece264fd8543438babfb322405b5fbd6735fc9f14c64e",
         "next_question": (
-            "after eliminating the latent rigid false reject and adding exact Nat "
-            "reductions, what repeated consequence dominates the two 8M-step UNKNOWN frontiers?"
+            "inside the common Nat.succ_le_succ hotspot now dominating both deep-list "
+            "UNKNOWN cases, which exact kernel operation is consuming the repeated consequence cost?"
         ),
         "claim_boundary": (
-            "diagnostic next-step selection only; no claim that additional budget "
-            "or any unverified conversion rule will close the Arena cases"
+            "diagnostic method-attribution selection only; no optimization or new "
+            "conversion authority is admitted until destination evidence verifies it"
         ),
     }
     history.append(
@@ -522,6 +551,13 @@ def main() -> int:
                 }
                 for row in deep["rows"]
             ],
+            "post_semantic_frontier": {
+                "common_terminal_frontier": frontier["terminal_frontiers"][0],
+                "dominant_declarations": [
+                    row["attempts"][-1]["top_declaration_ticks"][:5]
+                    for row in frontier["rows"]
+                ],
+            },
         }
     )
 
@@ -534,8 +570,10 @@ def main() -> int:
             "live_cycle_sha256": _sha(live_cycle_path),
             "context_view_sha256": _sha(context_path),
             "deep_list_evidence_sha256": _sha(deep_path),
+            "frontier_evidence_sha256": _sha(frontier_path),
             "live_artifact": live_meta,
             "deep_list_artifact": deep_meta,
+            "frontier_artifact": frontier_meta,
         },
         "authority_state": {
             "declared_residuals_open": [],
