@@ -338,6 +338,7 @@ class CapabilityRecord:
     capability: FiniteCapability
     support_ids: tuple[str, ...]
     origin: str
+    future_equivalences: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -353,12 +354,19 @@ class FlashDelta:
 
 
 @dataclass(frozen=True)
+class TemporalFlashDelta:
+    quotient: QuotientDelta
+    flash: FlashDelta
+
+
+@dataclass(frozen=True)
 class CapabilityAdmissionEvent:
     event_id: str
     capability: FiniteCapability
     oracle: tuple[tuple[str, str], ...]
     support_ids: tuple[str, ...] = ()
     origin: str = "verified-external"
+    future_equivalences: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -407,9 +415,14 @@ class FlashEventRuntime:
     ) -> None:
         self.closure = closure
         self.future_quotient = future_quotient
+        if future_quotient is not None:
+            if closure.future_quotient is None:
+                closure.future_quotient = future_quotient
+            elif closure.future_quotient is not future_quotient:
+                raise ValueError("Flash closure/runtime future quotient mismatch")
         self._events: dict[str, object] = {}
         self._event_digests: dict[str, str] = {}
-        self._results: dict[str, FlashDelta | QuotientDelta] = {}
+        self._results: dict[str, FlashDelta | QuotientDelta | TemporalFlashDelta] = {}
 
     @staticmethod
     def _event_digest(event: object) -> str:
@@ -491,7 +504,7 @@ class FlashEventRuntime:
     def _replay_noop(
         self,
         event: object,
-    ) -> FlashDelta | QuotientDelta:
+    ) -> FlashDelta | QuotientDelta | TemporalFlashDelta:
         if isinstance(
             event,
             (ContinuationAdmissionEvent, ContinuationRevocationEvent),
@@ -499,13 +512,24 @@ class FlashEventRuntime:
             if self.future_quotient is None:
                 raise ValueError("future quotient required for continuation event")
             classes = self.future_quotient.classes()
-            return QuotientDelta(
+            quotient_noop = QuotientDelta(
                 previous_classes=classes,
                 current_classes=classes,
                 split_classes=(),
                 merged_classes=(),
                 changed_state_ids=(),
             )
+            flash_noop = FlashDelta(
+                iterations=0,
+                discharged=(),
+                reopened=(),
+                generated_capabilities=(),
+                pruned_candidate_occurrences=0,
+                changed_obligations=(),
+                flash_radius=0,
+                restored_candidate_occurrences=0,
+            )
+            return TemporalFlashDelta(quotient_noop, flash_noop)
         return FlashDelta(
             iterations=0,
             discharged=(),
@@ -527,7 +551,7 @@ class FlashEventRuntime:
             | ContinuationAdmissionEvent
             | ContinuationRevocationEvent
         ),
-    ) -> FlashDelta | QuotientDelta:
+    ) -> FlashDelta | QuotientDelta | TemporalFlashDelta:
         if not event.event_id:
             raise ValueError("flash event requires identity")
         digest = self._event_digest(event)
@@ -545,6 +569,7 @@ class FlashEventRuntime:
                 oracle=event.oracle,
                 support_ids=event.support_ids,
                 origin=event.origin,
+                future_equivalences=event.future_equivalences,
             )
         elif isinstance(event, ObstructionAdmissionEvent):
             result = self.closure.admit_obstruction(event.obstruction)
@@ -561,16 +586,20 @@ class FlashEventRuntime:
         elif isinstance(event, ContinuationAdmissionEvent):
             if self.future_quotient is None:
                 raise ValueError("future quotient required for continuation event")
-            result = self.future_quotient.admit_continuation(
+            quotient_delta = self.future_quotient.admit_continuation(
                 event.continuation
             )
+            flash_delta = self.closure.close()
+            result = TemporalFlashDelta(quotient_delta, flash_delta)
         elif isinstance(event, ContinuationRevocationEvent):
             if self.future_quotient is None:
                 raise ValueError("future quotient required for continuation event")
-            result = self.future_quotient.revoke_continuation(
+            quotient_delta = self.future_quotient.revoke_continuation(
                 event.continuation_id,
                 reason=event.reason,
             )
+            flash_delta = self.closure.close()
+            result = TemporalFlashDelta(quotient_delta, flash_delta)
         else:
             raise TypeError(f"unsupported flash event: {type(event).__name__}")
 
@@ -594,6 +623,7 @@ class FlashClosure:
         *,
         composition_rules: Iterable[FlashCompositionRule] = (),
         kernel: str = "qckn-flash-closure-v1",
+        future_quotient: FutureQuotient | None = None,
     ) -> None:
         rows = tuple(obligations)
         ids = [row.obligation_id for row in rows]
@@ -605,6 +635,7 @@ class FlashClosure:
         if len(rule_ids) != len(set(rule_ids)):
             raise ValueError("composition rule IDs must be unique")
         self.kernel = str(kernel)
+        self.future_quotient = future_quotient
         self.ledger = Ledger()
         self.capabilities: dict[str, CapabilityRecord] = {}
         self.revoked_ids: set[str] = set()
@@ -668,14 +699,33 @@ class FlashClosure:
         oracle: tuple[tuple[str, str], ...],
         support_ids: Iterable[str] = (),
         origin: str = "verified-external",
+        future_equivalences: Iterable[tuple[str, str]] = (),
     ) -> FlashDelta:
         if not self._verify_capability(capability, oracle):
             raise ValueError("capability failed declared independent authority")
         support = tuple(sorted(set(str(value) for value in support_ids)))
+        future_guard = tuple(
+            sorted(
+                {
+                    (str(left), str(right))
+                    for left, right in future_equivalences
+                }
+            )
+        )
+        if future_guard and self.future_quotient is None:
+            raise ValueError("future equivalence guard requires future quotient")
+        if self.future_quotient is not None:
+            for left, right in future_guard:
+                self.future_quotient.equivalent(left, right)
         if capability.capability_id in support:
             raise ValueError("capability cannot causally support itself")
         old = self.capabilities.get(capability.capability_id)
-        record = CapabilityRecord(capability, support, str(origin))
+        record = CapabilityRecord(
+            capability,
+            support,
+            str(origin),
+            future_guard,
+        )
         if old is not None and old != record:
             raise ValueError("capability identity conflict")
         if old is None:
@@ -782,6 +832,14 @@ class FlashClosure:
         record = self.capabilities.get(capability_id)
         if record is None:
             return False
+        if record.future_equivalences:
+            if self.future_quotient is None:
+                return False
+            if not all(
+                self.future_quotient.equivalent(left, right)
+                for left, right in record.future_equivalences
+            ):
+                return False
         seen = set() if seen is None else set(seen)
         if capability_id in seen:
             raise ValueError("causal support cycle")
