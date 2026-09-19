@@ -1,0 +1,32 @@
+{
+  "schema": "qckn-live-real-episode-v14-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35434872033,
+  "source_episode_artifact": 10582093003,
+  "source_episode_digest": "sha256:841e41d66e4628e33060503398b27039bc3d2d6845aa93a471a8830454632419",
+  "selected_by_reclosure": "lean-substitute-node-reuse-accounting-diagnostic",
+  "selected_experiment": {
+    "id": "substitute-node-reuse-accounting-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-substitute-generated-argument-fanout-v1",
+    "question": "For Kernel.make calls occurring inside exact substitution, how much construction is already removed by the compiled node-reuse layer or lower structural sharing, and which constructor tags still allocate fresh nodes?",
+    "accounting_categories": [
+      "compiled_node_hit",
+      "lower_layer_reuse_without_allocation",
+      "fresh_allocation"
+    ],
+    "budget_per_case": 4000000,
+    "classification_rule": {
+      "reuse_saturated": "(compiled_node_hit + lower_layer_reuse_without_allocation) / substitute_make_calls >= 0.80 in both cases",
+      "allocation_dominant": "fresh_allocation / substitute_make_calls >= 0.50 in both cases",
+      "mixed": "otherwise"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_reuse_saturated": "compile separator that output node identity reuse is largely captured; move above node construction rather than adding another make cache",
+    "if_allocation_dominant": "prospectively isolate the largest fresh-allocation constructor tag and test a representation quotient there",
+    "if_mixed": "split fresh allocation from existing reuse by constructor tag and reclose"
+  },
+  "claim_boundary": "Diagnostic accounting only. The wrapper observes existing exact reuse/allocation counters around make calls inside substitute and does not change make, sharing, substitution, or semantics."
+}
