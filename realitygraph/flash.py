@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
@@ -409,6 +410,9 @@ class AcquisitionScore:
     future_search_removed: int
     verification_cost: int
     value: float
+    direct_obligations_solved: tuple[str, ...] = ()
+    predicted_generated_capabilities: tuple[str, ...] = ()
+    predicted_flash_radius: int = 0
 
 
 @dataclass(frozen=True)
@@ -1165,12 +1169,14 @@ class FlashClosure:
         self,
         proposals: Iterable[AcquisitionProposal],
     ) -> tuple[AcquisitionScore, ...]:
-        """Rank speculative proposals by predicted global search removal per verify cost.
+        """Rank untrusted proposals by counterfactual fixed-point value per verify cost.
 
-        This is developmental policy only. Calling it never admits a capability,
-        writes the ledger, or changes obligation state.
+        Each proposal is injected only into a disposable deep copy. The live graph,
+        ledger, future quotient, and obligation state are never mutated by ranking.
         """
         scores: list[AcquisitionScore] = []
+        open_before = set(self.open_obligation_ids())
+
         for proposal in proposals:
             guard_valid = True
             if proposal.future_equivalences:
@@ -1182,28 +1188,60 @@ class FlashClosure:
                         for left, right in proposal.future_equivalences
                     )
 
-            solved: list[str] = []
-            removed = 0
+            direct: list[str] = []
             if guard_valid:
                 for obligation in self.obligations.values():
                     if obligation.status != "OPEN":
                         continue
-                    if self._capability_solves(
-                        proposal.capability,
-                        obligation,
-                    ):
-                        solved.append(obligation.obligation_id)
-                        removed += obligation.remaining_search()
+                    if self._capability_solves(proposal.capability, obligation):
+                        direct.append(obligation.obligation_id)
+
+            solved: tuple[str, ...] = ()
+            removed = 0
+            generated: tuple[str, ...] = ()
+            radius = 0
+
+            if guard_valid and proposal.capability.capability_id not in self.capabilities:
+                fork: FlashClosure = copy.deepcopy(self)
+                baseline_removed = fork.total_cancelled_future_search
+                fork.capabilities[proposal.capability.capability_id] = CapabilityRecord(
+                    proposal.capability,
+                    (),
+                    f"speculative:{proposal.proposal_id}",
+                    proposal.future_equivalences,
+                )
+                try:
+                    delta = fork.close()
+                except (ValueError, RuntimeError):
+                    delta = None
+                if delta is not None:
+                    solved = tuple(
+                        sorted(
+                            obligation_id
+                            for obligation_id in open_before
+                            if fork.obligations[obligation_id].status == "DISCHARGED"
+                        )
+                    )
+                    removed = (
+                        fork.total_cancelled_future_search
+                        - baseline_removed
+                    )
+                    generated = delta.generated_capabilities
+                    radius = delta.flash_radius
 
             scores.append(
                 AcquisitionScore(
                     proposal_id=proposal.proposal_id,
-                    obligations_solved=tuple(sorted(solved)),
+                    obligations_solved=solved,
                     future_search_removed=removed,
                     verification_cost=proposal.verification_cost,
                     value=float(removed) / float(proposal.verification_cost),
+                    direct_obligations_solved=tuple(sorted(direct)),
+                    predicted_generated_capabilities=generated,
+                    predicted_flash_radius=radius,
                 )
             )
+
         return tuple(
             sorted(
                 scores,
