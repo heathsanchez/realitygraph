@@ -1,0 +1,30 @@
+{
+  "schema": "qckn-live-real-episode-v9-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35433119341,
+  "source_episode_artifact": 10582075523,
+  "source_episode_digest": "sha256:c4ee54f80947f157e6934b60137bd7879e056f41c2d5078123bb7c2711ac4be7",
+  "selected_by_reclosure": "lean-substitution-key-diversity-diagnostic",
+  "selected_experiment": {
+    "id": "substitution-key-diversity-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-substitute-consequence-accounting-v1",
+    "question": "For exact substitution memoization misses, which cache-key dimension creates the missing distinction: new expression identity, new substitution argument identity for a known expression, or new binder depth for a known expression/argument pair?",
+    "instrumentation": "diagnostic-only partition inside exact-binder-transport substitution visits before cache lookup",
+    "classification_rule": {
+      "expression_identity_dominant": "new-expression fraction is the largest miss component in both cases",
+      "argument_identity_dominant": "new-argument fraction is the largest miss component in both cases",
+      "binder_depth_dominant": "new-depth fraction is the largest miss component in both cases",
+      "mixed_dimension": "dominant miss component differs between cases or ties are material"
+    },
+    "partition_invariant": "newExpression + newArgument + newDepth + exactRepeat == total substitution-key visits",
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_expression_identity_dominant": "move from cache-key tuning toward a representation quotient that increases exact subtree identity reuse",
+    "if_argument_identity_dominant": "diagnose substitution-argument family quotienting before any broader cache",
+    "if_binder_depth_dominant": "diagnose depth/cutoff quotienting under exact binder guards",
+    "if_mixed_dimension": "split the frontier by miss cause and reclose"
+  },
+  "claim_boundary": "Diagnostic partition of existing exact cache-key misses only. Instrumentation does not change substitution results or cache admission."
+}
