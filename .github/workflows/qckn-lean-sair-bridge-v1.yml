@@ -1,0 +1,97 @@
+name: QCKN Real Lean SAIR Bridge V1
+on:
+  push:
+    branches: [qckn-lean-sair-bridge-v1]
+    paths:
+      - 'qckn_lean_sair_bridge_v1.py'
+      - '.github/workflows/qckn-lean-sair-bridge-v1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qckn-real-lean-sair-bridge-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MATHGRAPH_REPO: ${{ github.workspace }}/mathgraph
+      SAIR_REPO: ${{ github.workspace }}/sair-stage2
+      ARENA_REPO: ${{ github.workspace }}/arena
+      LEAN4EXPORT_BIN: ${{ github.workspace }}/lean4export/.lake/build/bin/lean4export
+      QCKN_LEAN_SAIR_BRIDGE_OUT: ${{ github.workspace }}/realitygraph/qckn-lean-sair-bridge-results
+      QCKN_LEAN_SAIR_TARGET: '6'
+    steps:
+      - name: Free runner disk for Lean and Mathlib
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h
+      - name: Checkout bridge harness
+        uses: actions/checkout@v4
+        with:
+          path: realitygraph
+      - name: Checkout pinned MathGraph SAIR source
+        uses: actions/checkout@v4
+        with:
+          repository: metalogiclabs/mathgraph
+          ref: e80fed62b6e58d2f4b62e2ceb012646c60dd1e28
+          path: mathgraph
+      - name: Checkout pinned official SAIR Stage 2 judge
+        uses: actions/checkout@v4
+        with:
+          repository: SAIRcompetition/equational-theories-lean-stage2
+          ref: 817a4653bf762584931d49c6714c9fcfab7df66a
+          path: sair-stage2
+      - name: Checkout frozen MathGraph Lean checker
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/lean-kernel-arena
+          ref: 416cfb268ffeeda2d782120d169df1e1567d04d5
+          path: arena
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build official SAIR Lean judge
+        working-directory: sair-stage2
+        env:
+          SKIP_DOCKER: '1'
+        run: |
+          bash scripts/setup.sh
+          source .env.judge
+          lean --version
+          lake --version
+      - name: Build lean4export under the exact SAIR Lean toolchain
+        run: |
+          export PATH="$HOME/.elan/bin:$PATH"
+          git clone --depth=1 https://github.com/leanprover/lean4export lean4export
+          cp sair-stage2/lean-toolchain lean4export/lean-toolchain
+          cd lean4export
+          lake build
+          test -x .lake/build/bin/lean4export
+      - name: Check frozen MathGraph checker JavaScript
+        run: |
+          for f in arena/checkers/mathgraph/*.mjs; do node --check "$f"; done
+      - name: Run real official-proof bridge qualification
+        working-directory: realitygraph
+        env:
+          PATH: ${{ env.HOME }}/.elan/bin:${{ env.PATH }}
+        run: |
+          export PATH="$HOME/.elan/bin:$PATH"
+          python -u qckn_lean_sair_bridge_v1.py | tee qckn-lean-sair-bridge-results/stdout.txt
+      - name: Hash canonical evidence
+        working-directory: realitygraph
+        if: always()
+        run: |
+          if test -f qckn-lean-sair-bridge-results/result.json; then
+            sha256sum qckn-lean-sair-bridge-results/result.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-real-lean-sair-bridge-v1
+          path: realitygraph/qckn-lean-sair-bridge-results/
+          if-no-files-found: warn
