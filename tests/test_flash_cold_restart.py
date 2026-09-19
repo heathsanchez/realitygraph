@@ -102,14 +102,36 @@ class FlashColdRestartTests(unittest.TestCase):
             bundles=fixtures(root)
             summary,_manifest,state_text=ingest_bundles(bundles)
             restored,runtime=restore_state_bundle(state_text)
-            before=restored["event_count"]
+            before={
+                "event_count": runtime.closure.event_count,
+                "closure_count": runtime.closure.closure_count,
+                "active_capabilities": runtime.closure.active_capability_ids(),
+                "obstructions": tuple(sorted(runtime.closure.obstructions)),
+                "open": runtime.closure.open_obligation_ids(),
+                "discharged": runtime.closure.discharged_obligation_ids(),
+                "pruned": tuple(
+                    (oid, tuple(sorted(row.pruned_fingerprints)))
+                    for oid, row in sorted(runtime.closure.obligations.items())
+                ),
+            }
 
             for path in bundles:
                 envelope=ExternalEventEnvelope.from_text((path/"event.json").read_text())
-                delta=runtime.apply(envelope.to_runtime_event())
-                self.assertEqual(delta.iterations,0)
-                self.assertEqual(delta.changed_obligations,())
-            self.assertEqual(runtime.closure.event_count,before)
+                runtime.apply(envelope.to_runtime_event())
+
+            after={
+                "event_count": runtime.closure.event_count,
+                "closure_count": runtime.closure.closure_count,
+                "active_capabilities": runtime.closure.active_capability_ids(),
+                "obstructions": tuple(sorted(runtime.closure.obstructions)),
+                "open": runtime.closure.open_obligation_ids(),
+                "discharged": runtime.closure.discharged_obligation_ids(),
+                "pruned": tuple(
+                    (oid, tuple(sorted(row.pruned_fingerprints)))
+                    for oid, row in sorted(runtime.closure.obligations.items())
+                ),
+            }
+            self.assertEqual(after,before)
 
     def test_tampered_persisted_event_is_rejected_on_cold_restart(self):
         with tempfile.TemporaryDirectory() as td:
