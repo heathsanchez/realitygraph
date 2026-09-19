@@ -1,0 +1,90 @@
+name: QCKN Live Real Episode V3
+
+on:
+  push:
+    branches:
+      - qckn-live-developmental-substrate-v3
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v3.json"
+      - "qckn_live_real_episode_v3.py"
+      - ".github/workflows/qckn-live-real-episode-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve episode-two evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10578065010
+          expected_digest='sha256:12dd7f614f93dfe79883bad21c862172039acbf0d291b7c619f033a31e2b508e'
+          actual_digest="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v3/episode2
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/episode2.zip
+          unzip -q /tmp/episode2.zip -d /tmp/qckn-live-real-episode-v3/episode2
+          evidence="$(find /tmp/qckn-live-real-episode-v3/episode2 -type f -name episode2.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v3/episode2.json
+
+      - name: Retrieve Nat.le transition diagnostic
+        run: |
+          set -euo pipefail
+          artifact_id=10578288835
+          expected_digest='sha256:55af8ffd71d8ee527b6169192a2bd18b6d0a344f9a7f4c70a8a85c00d059ffeb'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v3/target
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/target3.zip
+          unzip -q /tmp/target3.zip -d /tmp/qckn-live-real-episode-v3/target
+          evidence="$(find /tmp/qckn-live-real-episode-v3/target -type f -name nat-le-transition-quotient-diagnostic-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v3/target.json
+
+      - name: Reclose third cycle
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v3/result
+          python -u qckn_live_real_episode_v3.py \
+            --precommit frozen-meta/qckn-live-real-episode-v3.json \
+            --target /tmp/qckn-live-real-episode-v3/target.json \
+            --episode2 /tmp/qckn-live-real-episode-v3/episode2.json \
+            --out /tmp/qckn-live-real-episode-v3/result \
+            | tee /tmp/qckn-live-real-episode-v3/run.log
+
+      - name: Gate third real cycle
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v3/result/episode3.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['target']['classification']=='quotient-and-direct-transition-candidate'
+          assert r['closure']['cumulative_exact_routes_eliminated']==3
+          assert 'lean:le-le-nat-instlenat-to-nat-le:v1' in r['closure']['separators']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V3')
+          print('CUMULATIVE_EXACT_ROUTES_ELIMINATED=3')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v3
+          path: /tmp/qckn-live-real-episode-v3/
+          if-no-files-found: error
