@@ -1,8 +1,8 @@
-name: QCKN Flash live router v1
+name: QCKN Flash live router v3 context reclosure
 
 on:
   push:
-    branches: [qckn-flash-live-router-v1]
+    branches: [qckn-flash-live-router-v3]
   workflow_dispatch:
 
 permissions:
@@ -32,8 +32,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: metalogiclabs/mathgraph-lean-kernel
-          ref: qckn-flash-event-emitter-v2
-          path: sources/lean
+          ref: qckn-flash-event-emitter-v2-frozen
+          path: sources/lean-unfold
+      - uses: actions/checkout@v4
+        with:
+          repository: metalogiclabs/mathgraph-lean-kernel
+          ref: qckn-flash-event-emitter-v3
+          path: sources/lean-framed
       - uses: actions/checkout@v4
         with:
           repository: heathsanchez/Minimal-Sufficient-Interface
@@ -67,17 +72,19 @@ jobs:
 
       - name: Emit current producer events
         run: |
-          mkdir -p /tmp/qckn-bundles/{lean,arc,collatz,sair}
-          lean_sha="$(git -C sources/lean rev-parse HEAD)"
+          mkdir -p /tmp/qckn-bundles/{lean-unfold,lean-framed,arc,collatz,sair}
+          lean_unfold_sha="$(git -C sources/lean-unfold rev-parse HEAD)"
+          lean_framed_sha="$(git -C sources/lean-framed rev-parse HEAD)"
           arc_sha="$(git -C sources/arc rev-parse HEAD)"
           collatz_sha="$(git -C sources/collatz rev-parse HEAD)"
           sair_sha="$(git -C sources/sair rev-parse HEAD)"
-          python sources/lean/experiments/emit_qckn_flash_event_v2.py --commit "$lean_sha" --out /tmp/qckn-bundles/lean
+          python sources/lean-unfold/experiments/emit_qckn_flash_event_v2.py --commit "$lean_unfold_sha" --out /tmp/qckn-bundles/lean-unfold
+          python sources/lean-framed/experiments/emit_qckn_flash_framed_event_v1.py --commit "$lean_framed_sha" --out /tmp/qckn-bundles/lean-framed
           python sources/arc/kaggle/scripts/emit_qckn_flash_event.py --commit "$arc_sha" --out /tmp/qckn-bundles/arc
           python sources/collatz/experiments/emit_qckn_flash_event.py --commit "$collatz_sha" --out /tmp/qckn-bundles/collatz
           python sources/sair/experiments/mathgraph/residual12/emit_qckn_flash_event.py --commit "$sair_sha" --out /tmp/qckn-bundles/sair
           cat > /tmp/qckn-producer-heads.json <<EOF
-          {"arc":"$arc_sha","collatz":"$collatz_sha","lean":"$lean_sha","sair":"$sair_sha"}
+          {"arc":"$arc_sha","collatz":"$collatz_sha","lean_framed":"$lean_framed_sha","lean_unfold":"$lean_unfold_sha","sair":"$sair_sha"}
           EOF
 
       - name: Route only new events
@@ -89,7 +96,8 @@ jobs:
           fi
           PYTHONPATH=runtime python runtime/qckn_flash_live_router.py \
             "${previous_args[@]}" \
-            --bundle /tmp/qckn-bundles/lean \
+            --bundle /tmp/qckn-bundles/lean-unfold \
+            --bundle /tmp/qckn-bundles/lean-framed \
             --bundle /tmp/qckn-bundles/arc \
             --bundle /tmp/qckn-bundles/collatz \
             --bundle /tmp/qckn-bundles/sair \
@@ -116,6 +124,29 @@ jobs:
           print('NEW_EVENT_IDS=' + json.dumps(r['new_event_ids']))
           print('UNCHANGED_EVENT_IDS=' + json.dumps(r['unchanged_event_ids']))
           print('RETAINED_PAST_EVENT_IDS=' + json.dumps(r['retained_past_event_ids']))
+          PY
+
+      - name: Reclose contextual capability present
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python runtime/qckn_flash_context_scope.py \
+            --state /tmp/qckn-live-state/state-bundle.json \
+            --refinement runtime/context/lean_ordinary_unfold_refinement_v1.json \
+            --out /tmp/qckn-live-state/context-view.json | tee /tmp/qckn-live-state/context-view.log
+          python - <<'PY'
+          import json
+          v=json.load(open('/tmp/qckn-live-state/context-view.json'))
+          active=set(v['contextual_active_capability_ids'])
+          reserve=set(v['contextual_reserve_capability_ids'])
+          assert 'lean:direct-var:v1' in active, v
+          assert 'lean:direct-framed-prune:v1' in active, v
+          assert 'lean:ordinary-unfold-neutral:v1' in reserve, v
+          assert 'lean:ordinary-unfold-neutral:v1' not in active, v
+          assert v['invariant_history_retained'], v
+          print('PASS_QCKN_FLASH_CONTEXT_RECLOSURE_V1')
+          print('CONTEXT_ACTIVE='+json.dumps(sorted(active)))
+          print('CONTEXT_RESERVE='+json.dumps(sorted(reserve)))
           PY
 
       - uses: actions/upload-artifact@v4
