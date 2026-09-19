@@ -1,0 +1,37 @@
+{
+  "schema": "qckn-live-real-episode-v5-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35425477279,
+  "source_episode_artifact": 10578499369,
+  "source_episode_digest": "sha256:dc4049fff8c38f924e804250770df80fde88726c1d4fc726ac783b9bfe24abcc",
+  "selected_by_reclosure": "lean-isvalidchar-frontier-diagnostic",
+  "selected_experiment": {
+    "id": "isvalidchar-method-profile-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-deep-list-semantic-repair-v1",
+    "question": "After compiling away the tested Nat.succ_le_succ memoization and direct-transition realizations, which exact kernel operation dominates the common isValidChar_UInt32 frontier in both deep-list cases?",
+    "profiled_declaration": "[\"$lean-name-v1\",[\"str\",\"_private\"],[\"str\",\"Init\"],[\"str\",\"Prelude\"],[\"num\",0],[\"str\",\"isValidChar_UInt32\"]]",
+    "methods": [
+      "whnf",
+      "normal",
+      "equal",
+      "infer",
+      "proofType",
+      "instantiateDeclaration",
+      "same",
+      "substitute",
+      "shift",
+      "getApp",
+      "make",
+      "appN"
+    ],
+    "budget_per_case": 4000000,
+    "classification_rule": "A next method frontier is licensed only if the same method is dominant in both cases and accounts for at least 50% of ticks attributed inside the profiled declaration in each case.",
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_common_dominant_method": "compile method separator, remove this diagnostic route, reclose and select the cheapest prospective diagnostic/candidate inside that method",
+    "otherwise": "compile obstruction against a single-method explanation and reclose"
+  },
+  "claim_boundary": "Diagnostic method attribution only. No new Lean semantic or performance capability is authorized."
+}
