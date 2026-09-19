@@ -1,0 +1,164 @@
+name: QCKN Live Developmental Substrate V1
+
+on:
+  push:
+    branches:
+      - qckn-live-developmental-substrate-v1
+    paths:
+      - "qckn_live_developmental_substrate_v1.py"
+      - "qckn_real_multidomain_flash_v*.py"
+      - "realitygraph/real_flash.py"
+      - "realitygraph/flash_bus.py"
+      - "realitygraph/win_scheduler.py"
+      - "realitygraph/win_controller.py"
+      - "tests/test_real_flash.py"
+      - "tests/test_flash_bus.py"
+      - "tests/test_qckn_flash_win_scheduler_v1.py"
+      - "tests/test_qckn_flash_win_controller_v1.py"
+      - ".github/workflows/qckn-live-developmental-substrate-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  live-substrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Protect graph bus scheduler and controller contracts
+        run: |
+          python -m unittest tests.test_real_flash -v
+          python -m unittest tests.test_flash_bus -v
+          python -m unittest tests.test_qckn_flash_win_scheduler_v1 -v
+          python -m unittest tests.test_qckn_flash_win_controller_v1 -v
+
+      - name: Reconstruct hardware-closed real Flash V3
+        run: |
+          mkdir -p /tmp/qckn-live-substrate/v3
+          python -u qckn_real_multidomain_flash_v3.py \
+            --out /tmp/qckn-live-substrate/v3 \
+            | tee /tmp/qckn-live-substrate/v3/run.log
+          test "$(python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-substrate/v3/real-multidomain-flash-v3.json'))
+          print(r['verdict'])
+          PY
+          )" = "PASS"
+
+      - name: Recover latest persistent cross-repo live state
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/qckn-live-substrate/live
+          artifact_json="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts?name=qckn-flash-live-state-v1&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0]')"
+          artifact_id="$(printf '%s' "$artifact_json" | jq -r '.id')"
+          artifact_digest="$(printf '%s' "$artifact_json" | jq -r '.digest')"
+          run_id="$(printf '%s' "$artifact_json" | jq -r '.workflow_run.id')"
+          head_sha="$(printf '%s' "$artifact_json" | jq -r '.workflow_run.head_sha')"
+          test "$artifact_id" != "null"
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/live.zip
+          unzip -q /tmp/live.zip -d /tmp/qckn-live-substrate/live
+          cycle="$(find /tmp/qckn-live-substrate/live -type f -name cycle.json -print -quit)"
+          context="$(find /tmp/qckn-live-substrate/live -type f -name context-view.json -print -quit)"
+          test -n "$cycle"
+          test -n "$context"
+          cp "$cycle" /tmp/qckn-live-substrate/live-cycle.json
+          cp "$context" /tmp/qckn-live-substrate/context-view.json
+          cat > /tmp/qckn-live-substrate/live-meta.json <<EOF
+          {"artifact_id":$artifact_id,"artifact_digest":"$artifact_digest","run_id":$run_id,"head_sha":"$head_sha"}
+          EOF
+          echo "LIVE_ARTIFACT=$artifact_id $artifact_digest"
+
+      - name: Retrieve pinned qualified deep-list semantic repair evidence
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/qckn-live-substrate/deep
+          artifact_id=10574609822
+          expected_digest='sha256:fd36fc9af5abeac9926a39f6887bfdd65757723accb79d0a281376b0be87ee22'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/deep.zip
+          unzip -q /tmp/deep.zip -d /tmp/qckn-live-substrate/deep
+          evidence="$(find /tmp/qckn-live-substrate/deep -type f -name deep-list-semantic-repair-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-substrate/deep-list-evidence.json
+          cat > /tmp/qckn-live-substrate/deep-meta.json <<EOF
+          {"artifact_id":10574609822,"artifact_digest":"$expected_digest","run_id":35412538505,"head_sha":"a2450817fd57b6299f227f6e1e05f703c4292151"}
+          EOF
+
+      - name: Recover previous substrate state if present
+        run: |
+          set -euo pipefail
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=qckn-live-developmental-substrate-v1&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            mkdir -p /tmp/previous-substrate
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/previous-substrate.zip
+            unzip -q /tmp/previous-substrate.zip -d /tmp/previous-substrate
+            prev="$(find /tmp/previous-substrate -type f -name state.json -print -quit)"
+            if [ -n "$prev" ]; then
+              cp "$prev" /tmp/qckn-live-substrate/previous-state.json
+              echo "PREVIOUS_SUBSTRATE_STATE=present"
+            fi
+          fi
+
+      - name: Reclose live developmental market
+        run: |
+          previous_args=()
+          if [ -f /tmp/qckn-live-substrate/previous-state.json ]; then
+            previous_args=(--previous-state /tmp/qckn-live-substrate/previous-state.json)
+          fi
+          mkdir -p /tmp/qckn-live-substrate/result
+          python -u qckn_live_developmental_substrate_v1.py \
+            --v3-result /tmp/qckn-live-substrate/v3/real-multidomain-flash-v3.json \
+            --live-cycle /tmp/qckn-live-substrate/live-cycle.json \
+            --context-view /tmp/qckn-live-substrate/context-view.json \
+            --deep-list-evidence /tmp/qckn-live-substrate/deep-list-evidence.json \
+            --live-meta /tmp/qckn-live-substrate/live-meta.json \
+            --deep-meta /tmp/qckn-live-substrate/deep-meta.json \
+            "${previous_args[@]}" \
+            --out /tmp/qckn-live-substrate/result \
+            | tee /tmp/qckn-live-substrate/substrate.log
+
+      - name: Gate live substrate
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-substrate/result/substrate.json'))
+          assert r['passed'] is True
+          assert all(r['gates'].values())
+          assert not r['authority_state']['declared_residuals_open']
+          assert set(r['battle_consensus'].values())=={'lean-kernel'}
+          assert set(r['discovery_consensus'].values())=={'flash-platform-next'}
+          assert r['selected_experiment']['experiment_class']=='deep-list-post-semantic-frontier'
+          for row in r['profiles'].values():
+              assert len(row['applied_live_effects'])==5
+          print('PASS_QCKN_LIVE_DEVELOPMENTAL_SUBSTRATE_V1')
+          print('CYCLE='+str(r['cycle_number']))
+          print('BATTLE_SELECTED='+r['selected_experiment']['opportunity_id'])
+          print('NEXT_EXPERIMENT='+r['selected_experiment']['experiment_class'])
+          PY
+
+      - name: Publish substrate state into artifact root
+        run: |
+          cp /tmp/qckn-live-substrate/result/substrate.json /tmp/qckn-live-substrate/substrate.json
+          cp /tmp/qckn-live-substrate/result/state.json /tmp/qckn-live-substrate/state.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-developmental-substrate-v1
+          path: /tmp/qckn-live-substrate/
+          if-no-files-found: error
