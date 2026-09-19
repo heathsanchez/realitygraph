@@ -77,8 +77,6 @@ jobs:
           for f in arena/checkers/mathgraph/*.mjs; do node --check "$f"; done
       - name: Run real official-proof bridge qualification
         working-directory: realitygraph
-        env:
-          PATH: ${{ env.HOME }}/.elan/bin:${{ env.PATH }}
         run: |
           export PATH="$HOME/.elan/bin:$PATH"
           python -u qckn_lean_sair_bridge_v1.py | tee qckn-lean-sair-bridge-results/stdout.txt
