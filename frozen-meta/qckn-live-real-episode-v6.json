@@ -1,0 +1,39 @@
+{
+  "schema": "qckn-live-real-episode-v6-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35425682112,
+  "source_episode_artifact": 10578428028,
+  "source_episode_digest": "sha256:d4c45fe366f753941a82803821f6aa758e510f2f7af06b098bb9e8f8462a6c46",
+  "selected_by_reclosure": "lean-isvalidchar-operation-chain-diagnostic",
+  "selected_experiment": {
+    "id": "isvalidchar-operation-chain-diagnostic-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-isvalidchar-method-profile-v1",
+    "question": "Inside isValidChar_UInt32, do the common substitute/make/whnf costs arise from one repeated method-transition edge or a small stable transition basis shared by both deep-list cases?",
+    "profiled_methods": [
+      "whnf",
+      "normal",
+      "equal",
+      "infer",
+      "proofType",
+      "instantiateDeclaration",
+      "same",
+      "substitute",
+      "shift",
+      "getApp",
+      "make",
+      "appN"
+    ],
+    "budget_per_case": 4000000,
+    "classification_rule": {
+      "stable_edge_basis": "same dominant parent->child edge in both cases, dominant edge count >= 100000, and top-5 edge coverage >= 80% in each case",
+      "distributed_chain": "otherwise"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_stable_edge_basis": "compile chain separator and prospectively test the cheapest exact transformation at the dominant edge",
+    "if_distributed_chain": "compile obstruction against a single-edge explanation and reclose to a broader representation change"
+  },
+  "claim_boundary": "Diagnostic call-edge attribution only. Method wrappers observe nesting but do not alter kernel semantics."
+}
