@@ -381,6 +381,246 @@ class ObstructionRevocationEvent:
     reason: str
 
 
+@dataclass(frozen=True)
+class ExternalEventEnvelope:
+    schema: str
+    event_id: str
+    event_kind: str
+    repository: str
+    commit: str
+    authority_snapshot: str
+    verifier_id: str
+    source_evidence_sha256: str
+    payload: dict[str, object]
+    payload_sha256: str
+
+    SCHEMA = "qckn-flash-external-event-v1"
+
+    @staticmethod
+    def _canonical_payload(payload: dict[str, object]) -> str:
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    @classmethod
+    def _payload_digest(cls, payload: dict[str, object]) -> str:
+        return hashlib.sha256(cls._canonical_payload(payload).encode()).hexdigest()
+
+    @staticmethod
+    def _source_digest(source_evidence: bytes) -> str:
+        return hashlib.sha256(source_evidence).hexdigest()
+
+    @staticmethod
+    def _valid_commit(commit: str) -> bool:
+        return len(commit) == 40 and all(ch in "0123456789abcdef" for ch in commit)
+
+    @classmethod
+    def _build(
+        cls,
+        *,
+        event_id: str,
+        event_kind: str,
+        repository: str,
+        commit: str,
+        authority_snapshot: str,
+        verifier_id: str,
+        source_evidence: bytes,
+        payload: dict[str, object],
+    ) -> "ExternalEventEnvelope":
+        if not event_id or not repository or "/" not in repository:
+            raise ValueError("external event requires identity and repository")
+        if not cls._valid_commit(commit):
+            raise ValueError("external event requires full lowercase commit SHA")
+        if not authority_snapshot or not verifier_id:
+            raise ValueError("external event requires authority and verifier")
+        return cls(
+            schema=cls.SCHEMA,
+            event_id=event_id,
+            event_kind=event_kind,
+            repository=repository,
+            commit=commit,
+            authority_snapshot=authority_snapshot,
+            verifier_id=verifier_id,
+            source_evidence_sha256=cls._source_digest(source_evidence),
+            payload=payload,
+            payload_sha256=cls._payload_digest(payload),
+        )
+
+    @classmethod
+    def capability(
+        cls,
+        *,
+        event_id: str,
+        repository: str,
+        commit: str,
+        authority_snapshot: str,
+        verifier_id: str,
+        source_evidence: bytes,
+        capability: dict[str, object],
+        oracle: list[list[str]],
+        support_ids: list[str] | None = None,
+        origin: str = "verified-external",
+    ) -> "ExternalEventEnvelope":
+        payload: dict[str, object] = {
+            "capability": capability,
+            "oracle": oracle,
+            "support_ids": list(support_ids or []),
+            "origin": origin,
+        }
+        return cls._build(
+            event_id=event_id,
+            event_kind="capability_admission",
+            repository=repository,
+            commit=commit,
+            authority_snapshot=authority_snapshot,
+            verifier_id=verifier_id,
+            source_evidence=source_evidence,
+            payload=payload,
+        )
+
+    @classmethod
+    def obstruction(
+        cls,
+        *,
+        event_id: str,
+        repository: str,
+        commit: str,
+        authority_snapshot: str,
+        verifier_id: str,
+        source_evidence: bytes,
+        obstruction: dict[str, object],
+    ) -> "ExternalEventEnvelope":
+        payload: dict[str, object] = {"obstruction": obstruction}
+        return cls._build(
+            event_id=event_id,
+            event_kind="obstruction_admission",
+            repository=repository,
+            commit=commit,
+            authority_snapshot=authority_snapshot,
+            verifier_id=verifier_id,
+            source_evidence=source_evidence,
+            payload=payload,
+        )
+
+    def _plain(self) -> dict[str, object]:
+        return {
+            "schema": self.schema,
+            "event_id": self.event_id,
+            "event_kind": self.event_kind,
+            "repository": self.repository,
+            "commit": self.commit,
+            "authority_snapshot": self.authority_snapshot,
+            "verifier_id": self.verifier_id,
+            "source_evidence_sha256": self.source_evidence_sha256,
+            "payload": self.payload,
+            "payload_sha256": self.payload_sha256,
+        }
+
+    def to_text(self) -> str:
+        return json.dumps(self._plain(), sort_keys=True, separators=(",", ":"))
+
+    @classmethod
+    def from_text(cls, text: str) -> "ExternalEventEnvelope":
+        try:
+            row = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid external flash event") from exc
+        if not isinstance(row, dict) or row.get("schema") != cls.SCHEMA:
+            raise ValueError("unsupported external flash event schema")
+        payload = row.get("payload")
+        if not isinstance(payload, dict):
+            raise ValueError("invalid external flash event payload")
+        expected_payload_digest = cls._payload_digest(payload)
+        if row.get("payload_sha256") != expected_payload_digest:
+            raise ValueError("external flash event payload digest mismatch")
+        envelope = cls(
+            schema=str(row["schema"]),
+            event_id=str(row.get("event_id", "")),
+            event_kind=str(row.get("event_kind", "")),
+            repository=str(row.get("repository", "")),
+            commit=str(row.get("commit", "")),
+            authority_snapshot=str(row.get("authority_snapshot", "")),
+            verifier_id=str(row.get("verifier_id", "")),
+            source_evidence_sha256=str(row.get("source_evidence_sha256", "")),
+            payload=payload,
+            payload_sha256=str(row.get("payload_sha256", "")),
+        )
+        if (
+            not envelope.event_id
+            or "/" not in envelope.repository
+            or not cls._valid_commit(envelope.commit)
+            or not envelope.authority_snapshot
+            or not envelope.verifier_id
+            or len(envelope.source_evidence_sha256) != 64
+        ):
+            raise ValueError("invalid external flash event metadata")
+        if envelope.to_text() != text:
+            raise ValueError("noncanonical external flash event")
+        return envelope
+
+    def verify_source_bytes(self, source_evidence: bytes) -> None:
+        if self._source_digest(source_evidence) != self.source_evidence_sha256:
+            raise ValueError("external flash event source evidence digest mismatch")
+
+    def to_runtime_event(
+        self,
+    ) -> CapabilityAdmissionEvent | ObstructionAdmissionEvent:
+        if self.event_kind == "capability_admission":
+            raw = self.payload.get("capability")
+            oracle = self.payload.get("oracle")
+            if not isinstance(raw, dict) or not isinstance(oracle, list):
+                raise ValueError("invalid capability event payload")
+            if (
+                raw.get("authority_snapshot") != self.authority_snapshot
+                or raw.get("verifier_id") != self.verifier_id
+            ):
+                raise ValueError("capability contract does not match envelope")
+            capability = FiniteCapability(
+                capability_id=str(raw["capability_id"]),
+                input_type=str(raw["input_type"]),
+                output_type=str(raw["output_type"]),
+                semantics=tuple((str(a), str(b)) for a, b in raw["semantics"]),
+                guard_inputs=tuple(str(v) for v in raw.get("guard_inputs", ())),
+                certificate_id=str(raw["certificate_id"]),
+                dependencies=tuple(str(v) for v in raw.get("dependencies", ())),
+                authority_snapshot=str(raw["authority_snapshot"]),
+                verifier_id=str(raw["verifier_id"]),
+                provenance_ids=tuple(str(v) for v in raw.get("provenance_ids", ())),
+                cost=int(raw.get("cost", 0)),
+            )
+            return CapabilityAdmissionEvent(
+                event_id=self.event_id,
+                capability=capability,
+                oracle=tuple((str(a), str(b)) for a, b in oracle),
+                support_ids=tuple(str(v) for v in self.payload.get("support_ids", ())),
+                origin=str(self.payload.get("origin", "verified-external")),
+            )
+        if self.event_kind == "obstruction_admission":
+            raw = self.payload.get("obstruction")
+            if not isinstance(raw, dict):
+                raise ValueError("invalid obstruction event payload")
+            contract_raw = raw.get("contract")
+            if not isinstance(contract_raw, dict):
+                raise ValueError("invalid obstruction contract")
+            contract = FlashContract(
+                str(contract_raw.get("authority_snapshot", "")),
+                str(contract_raw.get("verifier_id", "")),
+            )
+            if contract.key != (self.authority_snapshot, self.verifier_id):
+                raise ValueError("obstruction contract does not match envelope")
+            obstruction = FlashObstruction(
+                obstruction_id=str(raw["obstruction_id"]),
+                input_type=str(raw["input_type"]),
+                output_type=str(raw["output_type"]),
+                contract=contract,
+                candidate_fingerprint=str(raw["candidate_fingerprint"]),
+                separating_input=str(raw["separating_input"]),
+                expected_output=str(raw["expected_output"]),
+                actual_output=str(raw["actual_output"]),
+                provenance=str(raw.get("provenance", "")),
+            )
+            return ObstructionAdmissionEvent(self.event_id, obstruction)
+        raise ValueError(f"unsupported external flash event kind: {self.event_kind}")
+
+
 class FlashEventRuntime:
     """Idempotent typed admission boundary for domain-produced Flash events."""
 
