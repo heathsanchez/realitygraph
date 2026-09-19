@@ -1,0 +1,137 @@
+name: QCKN Flash Live Daemon V1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/qckn-flash-live-daemon-v1.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: qckn-flash-live-daemon-v1
+  cancel-in-progress: false
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout frozen Flash runtime
+        uses: actions/checkout@v4
+        with:
+          ref: qckn-flash-live-router-v1-frozen
+          path: runtime
+
+      - name: Checkout live Lean producer
+        uses: actions/checkout@v4
+        with:
+          repository: metalogiclabs/mathgraph-lean-kernel
+          ref: qckn-flash-event-emitter-v1
+          path: sources/lean
+
+      - name: Checkout live ARC producer
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: arc3-qckn-flash-event-emitter-v1
+          path: sources/arc
+
+      - name: Checkout live Collatz producer
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: collatz-qckn-flash-event-emitter-v1
+          path: sources/collatz
+
+      - name: Checkout live SAIR producer
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/equational-theories-lean-stage2
+          ref: qckn-flash-event-emitter-v1
+          path: sources/sair
+
+      - name: Recover latest compiled Flash present
+        run: |
+          mkdir -p /tmp/qckn-previous
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=qckn-flash-live-state-v1&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/qckn-previous.zip
+            unzip -q /tmp/qckn-previous.zip -d /tmp/qckn-previous
+            previous="$(find /tmp/qckn-previous -type f -name state-bundle.json -print -quit)"
+            test -n "$previous"
+            cp "$previous" /tmp/qckn-previous-state-bundle.json
+            echo "PREVIOUS_STATE=present"
+            echo "PREVIOUS_ARTIFACT_ID=$artifact_id"
+          else
+            echo "PREVIOUS_STATE=none"
+          fi
+
+      - name: Emit current verified producer events
+        run: |
+          mkdir -p /tmp/qckn-bundles/{lean,arc,collatz,sair}
+          lean_sha="$(git -C sources/lean rev-parse HEAD)"
+          arc_sha="$(git -C sources/arc rev-parse HEAD)"
+          collatz_sha="$(git -C sources/collatz rev-parse HEAD)"
+          sair_sha="$(git -C sources/sair rev-parse HEAD)"
+          python sources/lean/experiments/emit_qckn_flash_event.py --commit "$lean_sha" --out /tmp/qckn-bundles/lean
+          python sources/arc/kaggle/scripts/emit_qckn_flash_event.py --commit "$arc_sha" --out /tmp/qckn-bundles/arc
+          python sources/collatz/experiments/emit_qckn_flash_event.py --commit "$collatz_sha" --out /tmp/qckn-bundles/collatz
+          python sources/sair/experiments/mathgraph/residual12/emit_qckn_flash_event.py --commit "$sair_sha" --out /tmp/qckn-bundles/sair
+          cat > /tmp/qckn-producer-heads.json <<EOF
+          {"arc":"$arc_sha","collatz":"$collatz_sha","lean":"$lean_sha","sair":"$sair_sha"}
+          EOF
+
+      - name: Recompile live consequential present
+        run: |
+          mkdir -p /tmp/qckn-live-state
+          previous_args=()
+          if [ -f /tmp/qckn-previous-state-bundle.json ]; then
+            previous_args=(--previous /tmp/qckn-previous-state-bundle.json)
+          fi
+          PYTHONPATH=runtime python runtime/qckn_flash_live_router.py \
+            "${previous_args[@]}" \
+            --bundle /tmp/qckn-bundles/lean \
+            --bundle /tmp/qckn-bundles/arc \
+            --bundle /tmp/qckn-bundles/collatz \
+            --bundle /tmp/qckn-bundles/sair \
+            --out /tmp/qckn-live-state
+          cp /tmp/qckn-producer-heads.json /tmp/qckn-live-state/producer-heads.json
+
+      - name: Qualify daemon cycle
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-state/cycle.json'))
+          s=r['summary']
+          assert s['external_events'] >= 4, r
+          assert s['active_capabilities'] >= 2, r
+          assert s['obstructions'] >= 2, r
+          assert s['event_count'] == s['external_events'], r
+          assert sorted(s['repositories']) == [
+              'heathsanchez/Minimal-Sufficient-Interface',
+              'heathsanchez/equational-theories-lean-stage2',
+              'heathsanchez/test',
+              'metalogiclabs/mathgraph-lean-kernel',
+          ], r
+          print('PASS_QCKN_FLASH_LIVE_DAEMON_V1')
+          print('NEW_EVENT_IDS=' + json.dumps(r['new_event_ids']))
+          print('UNCHANGED_EVENT_IDS=' + json.dumps(r['unchanged_event_ids']))
+          print('RETAINED_PAST_EVENT_IDS=' + json.dumps(r['retained_past_event_ids']))
+          print('ACTIVE_CAPABILITIES=' + json.dumps(s['active_capability_ids']))
+          print('OBSTRUCTIONS=' + json.dumps(s['obstruction_ids']))
+          PY
+
+      - name: Persist next live state
+        uses: actions/upload-artifact@v4
+        with:
+          name: qckn-flash-live-state-v1
+          path: /tmp/qckn-live-state/
+          if-no-files-found: error
