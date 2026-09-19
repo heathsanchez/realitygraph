@@ -1,0 +1,107 @@
+name: QCKN Live Win Portfolio V5
+
+on:
+  push:
+    branches:
+      - qckn-live-win-portfolio-v5
+    paths:
+      - "realitygraph/real_flash.py"
+      - "realitygraph/win_scheduler.py"
+      - "realitygraph/flash_bus.py"
+      - "realitygraph/win_controller.py"
+      - "qckn_real_multidomain_flash_v1.py"
+      - "qckn_real_multidomain_flash_v2.py"
+      - "qckn_live_win_portfolio_v4.py"
+      - "qckn_live_win_portfolio_v5.py"
+      - "qckn_flash_win_scheduler_v1.py"
+      - "qckn_flash_win_controller_v1.py"
+      - "tests/test_real_flash.py"
+      - "tests/test_qckn_flash_win_scheduler_v1.py"
+      - "tests/test_flash_bus.py"
+      - "tests/test_qckn_flash_win_controller_v1.py"
+      - ".github/workflows/qckn-live-win-portfolio-v5.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  live-win-portfolio-v5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Protect Flash graph, bus, controller and scheduler contracts
+        run: |
+          python -m unittest tests.test_real_flash -v
+          python -m unittest tests.test_qckn_flash_win_scheduler_v1 -v
+          python -m unittest tests.test_flash_bus -v
+          python -m unittest tests.test_qckn_flash_win_controller_v1 -v
+
+      - name: Compile joined live portfolio
+        run: |
+          python -m py_compile \
+            qckn_real_multidomain_flash_v2.py \
+            qckn_live_win_portfolio_v4.py \
+            qckn_live_win_portfolio_v5.py \
+            realitygraph/flash_bus.py \
+            realitygraph/win_controller.py \
+            realitygraph/win_scheduler.py
+
+      - name: Reconstruct current real multidomain closure
+        run: |
+          mkdir -p /tmp/qckn-live-win-portfolio-v5/real
+          python -u qckn_real_multidomain_flash_v2.py \
+            --out /tmp/qckn-live-win-portfolio-v5/real \
+            | tee /tmp/qckn-live-win-portfolio-v5/real/run.log
+
+      - name: Run authority-gated continuous portfolio closure
+        run: |
+          python -u qckn_live_win_portfolio_v5.py \
+            --real-result /tmp/qckn-live-win-portfolio-v5/real/real-multidomain-flash-v2.json \
+            --out /tmp/qckn-live-win-portfolio-v5/live-win-portfolio-v5.json \
+            | tee /tmp/qckn-live-win-portfolio-v5/portfolio.log
+
+      - name: Gate joined real controller
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('/tmp/qckn-live-win-portfolio-v5')
+          r = json.loads((root/'live-win-portfolio-v5.json').read_text())
+          assert r['passed'] is True
+          assert all(r['gates'].values())
+          assert set(r['supporting_domains']) == {
+              'sair', 'arc', 'gpu-ir', 'lean-kernel'
+          }
+          assert r['open_real_residuals'] == [
+              'res:gpu-hardware:promote-ir-capability'
+          ]
+          for profile, row in r['profiles'].items():
+              assert row['controller_delta']['edge_count'] == 4
+              assert len(row['controller_delta']['applied_effect_ids']) == 4
+              assert row['open_authority_opportunities'] == [
+                  'gpu-hardware-authority'
+              ]
+              assert row['battle_after'][0] == 'lean-kernel'
+              costs = row['typed_avoided_costs']
+              assert costs['protocol_search_units'] == 500.0
+              assert costs['lean.verifier_calls'] == 8.0
+              assert costs['gpu-ir.search_candidates'] == 96.0
+          print('PASS_QCKN_LIVE_WIN_PORTFOLIO_V5')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-win-portfolio-v5
+          path: /tmp/qckn-live-win-portfolio-v5/
+          if-no-files-found: error
