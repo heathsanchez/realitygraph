@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   qualify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
       MATHGRAPH_REPO: ${{ github.workspace }}/mathgraph
