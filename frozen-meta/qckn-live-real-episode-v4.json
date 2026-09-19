@@ -1,0 +1,42 @@
+{
+  "schema": "qckn-live-real-episode-v4-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35425168709,
+  "source_episode_artifact": 10578117716,
+  "source_episode_digest": "sha256:3bd1bc23e71c242b40cb05c7c9b93fc4de56ca7a95588fefacd2fcc44af4f682",
+  "source_transition_run": 35425078446,
+  "source_transition_artifact": 10578288835,
+  "source_transition_digest": "sha256:55af8ffd71d8ee527b6169192a2bd18b6d0a344f9a7f4c70a8a85c00d059ffeb",
+  "selected_by_reclosure": "lean-direct-nat-le-transition-rule",
+  "selected_experiment": {
+    "id": "direct-le-le-nat-instlenat-transition-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-deep-list-semantic-repair-v1",
+    "candidate_rule": "When WHNF sees LE.le.{0} Nat instLENat applied to zero or more remaining arguments, return Nat.le applied to those same remaining arguments.",
+    "guards": [
+      "head is exactly LE.le",
+      "universe levels are exactly [0]",
+      "first argument is exactly Nat",
+      "second argument is exactly instLENat",
+      "only WHNF reduction authority is used"
+    ],
+    "target_gate": {
+      "semantic_status": "candidate and cold statuses must match on both deep-list targets",
+      "no_wrong_reject": true,
+      "restart": "second candidate replay matches first",
+      "ablation": "cold arm restored",
+      "performance": "candidate must reduce semantic steps or wall time on at least one target"
+    },
+    "corpus_gate": {
+      "public_arena": "candidate must introduce zero wrong verdicts on the current public Arena corpus",
+      "diagnostic_unknowns_allowed": true
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_target_and_corpus_green": "promote as verified Lean capability, compile direct transition, reclose and rerank",
+    "if_semantically_green_but_economically_neutral": "retain in reserve, compile preference result, reclose",
+    "if_any_wrong_or_semantic_mismatch": "refute candidate and compile obstruction"
+  },
+  "claim_boundary": "The diagnostic licenses only this prospectively guarded candidate. No general typeclass-projection shortcut or arbitrary LE instance rewrite is authorized."
+}
