@@ -1,0 +1,16 @@
+name: QCKN Flash context scope v1
+
+on:
+  push:
+    branches:
+      - qckn-flash-context-refinement-v1
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test contextual capability semantics
+        run: |
+          python3 tests/test_flash_context_scope.py
