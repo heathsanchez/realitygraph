@@ -117,6 +117,23 @@ jobs:
           {"artifact_id":10577446253,"artifact_digest":"$expected_digest","run_id":35419905616,"head_sha":"5d77b19a502e360a7da9d44c2d0358931d72b037"}
           EOF
 
+      - name: Retrieve qualified succ_le_succ method profile
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/qckn-live-substrate/method
+          artifact_id=10576957132
+          expected_digest='sha256:d46029ddd1d2ef98fe8f8463acf9e90bdf02d2c5cbd3f4da582cb3bee7c0b73c'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/method.zip
+          unzip -q /tmp/method.zip -d /tmp/qckn-live-substrate/method
+          evidence="$(find /tmp/qckn-live-substrate/method -type f -name deep-list-succ-le-succ-method-profile-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-substrate/method-evidence.json
+          cat > /tmp/qckn-live-substrate/method-meta.json <<EOF
+          {"artifact_id":10576957132,"artifact_digest":"$expected_digest","run_id":35420028188,"head_sha":"8ea22afeb12dd59c5565befb41673d931ab5ee3e"}
+          EOF
+
       - name: Recover previous substrate state if present
         run: |
           set -euo pipefail
@@ -146,9 +163,11 @@ jobs:
             --context-view /tmp/qckn-live-substrate/context-view.json \
             --deep-list-evidence /tmp/qckn-live-substrate/deep-list-evidence.json \
             --frontier-evidence /tmp/qckn-live-substrate/frontier-evidence.json \
+            --method-evidence /tmp/qckn-live-substrate/method-evidence.json \
             --live-meta /tmp/qckn-live-substrate/live-meta.json \
             --deep-meta /tmp/qckn-live-substrate/deep-meta.json \
             --frontier-meta /tmp/qckn-live-substrate/frontier-meta.json \
+            --method-meta /tmp/qckn-live-substrate/method-meta.json \
             "${previous_args[@]}" \
             --out /tmp/qckn-live-substrate/result \
             | tee /tmp/qckn-live-substrate/substrate.log
@@ -163,7 +182,7 @@ jobs:
           assert not r['authority_state']['declared_residuals_open']
           assert set(r['battle_consensus'].values())=={'lean-kernel'}
           assert set(r['discovery_consensus'].values())=={'flash-platform-next'}
-          assert r['selected_experiment']['experiment_class']=='deep-list-succ-le-succ-method-profile'
+          assert r['selected_experiment']['experiment_class']=='deep-list-succ-le-succ-whnf-recurrence'
           for row in r['profiles'].values():
               assert len(row['applied_live_effects'])==5
           print('PASS_QCKN_LIVE_DEVELOPMENTAL_SUBSTRATE_V1')
