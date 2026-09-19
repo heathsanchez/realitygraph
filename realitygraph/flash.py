@@ -380,6 +380,38 @@ class TemporalFlashDelta:
 
 
 @dataclass(frozen=True)
+class AcquisitionProposal:
+    proposal_id: str
+    capability: FiniteCapability
+    verification_cost: int
+    future_equivalences: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.proposal_id:
+            raise ValueError("acquisition proposal requires identity")
+        if self.verification_cost <= 0:
+            raise ValueError("verification cost must be positive")
+        normalized = tuple(
+            sorted(
+                {
+                    (str(left), str(right))
+                    for left, right in self.future_equivalences
+                }
+            )
+        )
+        object.__setattr__(self, "future_equivalences", normalized)
+
+
+@dataclass(frozen=True)
+class AcquisitionScore:
+    proposal_id: str
+    obligations_solved: tuple[str, ...]
+    future_search_removed: int
+    verification_cost: int
+    value: float
+
+
+@dataclass(frozen=True)
 class CapabilityAdmissionEvent:
     event_id: str
     capability: FiniteCapability
@@ -1126,6 +1158,61 @@ class FlashClosure:
                 obligation.obligation_id
                 for obligation in self.obligations.values()
                 if obligation.status == "DISCHARGED"
+            )
+        )
+
+    def rank_acquisition_proposals(
+        self,
+        proposals: Iterable[AcquisitionProposal],
+    ) -> tuple[AcquisitionScore, ...]:
+        """Rank speculative proposals by predicted global search removal per verify cost.
+
+        This is developmental policy only. Calling it never admits a capability,
+        writes the ledger, or changes obligation state.
+        """
+        scores: list[AcquisitionScore] = []
+        for proposal in proposals:
+            guard_valid = True
+            if proposal.future_equivalences:
+                if self.future_quotient is None:
+                    guard_valid = False
+                else:
+                    guard_valid = all(
+                        self.future_quotient.equivalent(left, right)
+                        for left, right in proposal.future_equivalences
+                    )
+
+            solved: list[str] = []
+            removed = 0
+            if guard_valid:
+                for obligation in self.obligations.values():
+                    if obligation.status != "OPEN":
+                        continue
+                    if self._capability_solves(
+                        proposal.capability,
+                        obligation,
+                    ):
+                        solved.append(obligation.obligation_id)
+                        removed += obligation.remaining_search()
+
+            scores.append(
+                AcquisitionScore(
+                    proposal_id=proposal.proposal_id,
+                    obligations_solved=tuple(sorted(solved)),
+                    future_search_removed=removed,
+                    verification_cost=proposal.verification_cost,
+                    value=float(removed) / float(proposal.verification_cost),
+                )
+            )
+        return tuple(
+            sorted(
+                scores,
+                key=lambda row: (
+                    -row.value,
+                    -row.future_search_removed,
+                    row.verification_cost,
+                    row.proposal_id,
+                ),
             )
         )
 
