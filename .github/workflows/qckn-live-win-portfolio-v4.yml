@@ -1,0 +1,91 @@
+name: QCKN Live Win Portfolio V4
+
+on:
+  push:
+    branches:
+      - qckn-live-win-portfolio-v4
+    paths:
+      - "realitygraph/real_flash.py"
+      - "realitygraph/win_scheduler.py"
+      - "qckn_real_multidomain_flash_v1.py"
+      - "qckn_real_multidomain_flash_v2.py"
+      - "qckn_live_win_portfolio_v4.py"
+      - "tests/test_real_flash.py"
+      - "tests/test_qckn_flash_win_scheduler_v1.py"
+      - ".github/workflows/qckn-live-win-portfolio-v4.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  live-win-portfolio-v4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Protect Flash and scheduler contracts
+        run: |
+          python -m unittest tests.test_real_flash -v
+          python -m unittest tests.test_qckn_flash_win_scheduler_v1 -v
+
+      - name: Reconstruct current real multidomain closure
+        run: |
+          mkdir -p /tmp/qckn-live-win-portfolio-v4/real
+          python -u qckn_real_multidomain_flash_v2.py \
+            --out /tmp/qckn-live-win-portfolio-v4/real \
+            | tee /tmp/qckn-live-win-portfolio-v4/real/run.log
+
+      - name: Admit verified closure into global win scheduler
+        run: |
+          python -u qckn_live_win_portfolio_v4.py \
+            --real-result /tmp/qckn-live-win-portfolio-v4/real/real-multidomain-flash-v2.json \
+            --out /tmp/qckn-live-win-portfolio-v4/live-win-portfolio-v4.json \
+            | tee /tmp/qckn-live-win-portfolio-v4/portfolio.log
+
+      - name: Gate event-driven portfolio closure
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('/tmp/qckn-live-win-portfolio-v4')
+          result = json.loads((root/'live-win-portfolio-v4.json').read_text())
+          assert result['passed'] is True
+          assert set(result['real_flash_supporting_domains']) == {
+              'sair', 'arc', 'gpu-ir', 'lean-kernel'
+          }
+          assert result['real_flash_open_residuals'] == [
+              'res:gpu-hardware:promote-ir-capability'
+          ]
+          assert all(result['gates'].values())
+
+          for profile, row in result['results'].items():
+              assert row['scheduler_metrics']['cancelled_work_cost'] == 500.0
+              assert row['scheduler_metrics']['total_future_search_removed'] == 500.0
+              assert row['open_authority_opportunities'] == [
+                  'gpu-hardware-authority'
+              ]
+              assert row['after']['battle'][0]['opportunity_id'] == 'lean-kernel'
+              assert set(row['delta']['cancelled']) == {
+                  'acquire-sair-state-compilation',
+                  'acquire-arc-state-compilation',
+                  'acquire-gpu-ir-state-compilation',
+                  'acquire-lean-restart-authority',
+              }
+          print('PASS_QCKN_LIVE_WIN_PORTFOLIO_V4')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-win-portfolio-v4
+          path: /tmp/qckn-live-win-portfolio-v4/
+          if-no-files-found: error
