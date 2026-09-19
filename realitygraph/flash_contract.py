@@ -180,6 +180,16 @@ class IncrementalFlashRuntime:
         old = self.events.get(event.event_id)
         if old is not None and old != event:
             raise ValueError("event identity conflict")
+        if old == event and event.event_id in self.active_event_ids:
+            delta = ClosureDelta(
+                event_id=event.event_id,
+                touched_frontiers=(),
+                changed_frontiers=(),
+                emitted_event_ids=(),
+                iterations=0,
+            )
+            self.history.append({"kind": "idempotent-admit", **asdict(delta)})
+            return delta
         self.events[event.event_id] = event
         for superseded in event.supersedes:
             self.active_event_ids.discard(superseded)
