@@ -1,0 +1,32 @@
+{
+  "schema": "qckn-live-real-episode-v15-precommit",
+  "frozen_before_target_experiment": true,
+  "source_episode_run": 35435225709,
+  "source_episode_artifact": 10581868816,
+  "source_episode_digest": "sha256:9d55b81acda609aca7b869a611968009daee8e08fa74775bcf1bab12fbc577a9",
+  "selected_by_reclosure": "lean-substitute-app-allocation-diagnostic",
+  "selected_experiment": {
+    "id": "substitute-fresh-app-child-identity-v1",
+    "repository": "heathsanchez/lean-kernel-arena",
+    "base_ref": "mda-substitute-node-reuse-accounting-v1",
+    "question": "For fresh app nodes constructed inside substitute, is one child identity highly reusable while the other varies, or are both child positions diffuse?",
+    "scope": "freshAllocation app calls inside substitute only",
+    "sample_limit_per_kernel": 100000,
+    "classification_rule": {
+      "left_hot_right_diffuse": "top-32 left-child identity coverage >= 80% and right-child coverage < 80% in both cases",
+      "left_diffuse_right_hot": "left coverage < 80% and right coverage >= 80% in both cases",
+      "bilateral_hot": "both >= 80% in both cases",
+      "bilateral_diffuse": "both < 80% in both cases",
+      "mixed": "classification differs across cases"
+    },
+    "no_cherry_pick": true
+  },
+  "post_result_policy": {
+    "if_left_hot_right_diffuse": "prospectively test an exact application-context representation keyed by the hot function child and varying argument",
+    "if_left_diffuse_right_hot": "prospectively test the dual exact context keyed by hot argument child and varying function",
+    "if_bilateral_hot": "inspect whether a smaller exact pair index is cheaper than current compiled node reuse",
+    "if_bilateral_diffuse": "compile obstruction against child-identity-local app reuse and move to traversal/continuation representation",
+    "if_mixed": "split the two deep-list frontiers before another representation"
+  },
+  "claim_boundary": "Diagnostic runtime-local child identity concentration only. No application-node reuse across distinct child pairs is authorized."
+}
