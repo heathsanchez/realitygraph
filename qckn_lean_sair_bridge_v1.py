@@ -20,6 +20,27 @@ LEAN4EXPORT_BIN = Path(os.environ["LEAN4EXPORT_BIN"]).resolve()
 OUT = Path(os.environ.get("QCKN_LEAN_SAIR_BRIDGE_OUT", ROOT / "qckn-lean-sair-bridge-results")).resolve()
 TARGET = int(os.environ.get("QCKN_LEAN_SAIR_TARGET", "6"))
 
+DEFAULT_PROOF_POLICY = {
+    "allowed_axioms": ["propext", "Quot.sound", "Classical.choice"],
+    "allowed_declarations": ["letFun"],
+    "allowed_declaration_prefixes": [
+        "And.", "Bool.", "Classical.", "Decidable.", "Eq.",
+        "EquationLHS", "EquationRHS", "Goal",
+        "Exists.", "False.",
+        "Fin.", "Fintype.", "Function.", "HEq.", "Iff.", "Init.", "Int.", "Lean.",
+        "List.", "Magma.", "Mathlib.", "MemoFinOp.", "Nat.", "Nonempty.", "Not.",
+        "NthRewrites.", "OfNat.", "Option.", "Or.", "Prod.", "PUnit.",
+        "RewriteCombinations.", "RewriteGoal.", "RewriteHypothesis.",
+        "RewriteHypothesisAndGoal.", "SimpleRewrites.",
+        "Std.", "Subgraph.", "Subtype.", "Sum.",
+        "Trans.", "True.", "Unit.",
+        "JudgeDecide.", "JudgeFinOp.", "JudgeMagma.",
+        "inst", "of_decide_", "submission.",
+        "congrArg", "congr_arg", "eq_self", "of_eq_true", "id",
+        "eq_comm", "eq_mp", "eq_mpr", "rfl", "absurd",
+    ],
+}
+
 
 def _load_module(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, str(path))
@@ -86,6 +107,8 @@ def _problem_sets():
 
 
 def _official_accept(problem, raw_answer, JudgeConfig, verify_answer):
+    judge_problem = dict(problem)
+    judge_problem["proof_policy"] = problem.get("proof_policy") or DEFAULT_PROOF_POLICY
     config = JudgeConfig(
         lean_bin=Path(shutil.which("lean") or "lean"),
         lake_bin=Path(shutil.which("lake") or "lake"),
@@ -93,7 +116,7 @@ def _official_accept(problem, raw_answer, JudgeConfig, verify_answer):
         lean_timeout_seconds=180,
     )
     start = time.perf_counter()
-    result = verify_answer(problem, raw_answer, config=config)
+    result = verify_answer(judge_problem, raw_answer, config=config)
     elapsed = time.perf_counter() - start
     return config, result, elapsed
 
