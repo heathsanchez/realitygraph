@@ -1,0 +1,223 @@
+name: Open World Recoherence V4 Live Attachment
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23,53 * * * *'
+  push:
+    branches:
+      - qckn-open-world-recoherence-v4-live-attachment
+    paths:
+      - '.github/workflows/open-world-recoherence-v4-live-attachment.yml'
+      - 'docs/research/open-world-recoherence-v4-live-attachment.md'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: qckn-open-world-recoherence-v4-live-attachment
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout live attachment branch
+        uses: actions/checkout@v4
+        with:
+          path: attachment
+
+      - name: Checkout qualified residual-schema kernel
+        uses: actions/checkout@v4
+        with:
+          ref: qckn-open-world-recoherence-v3-residual-schema-genesis
+          path: developmental
+
+      - name: Checkout persistent Flash router
+        uses: actions/checkout@v4
+        with:
+          ref: qckn-flash-live-router-v3
+          path: runtime
+
+      - name: Checkout live Lean producer
+        uses: actions/checkout@v4
+        with:
+          repository: metalogiclabs/mathgraph-lean-kernel
+          ref: qckn-flash-event-emitter-v1
+          path: sources/lean
+
+      - name: Checkout live ARC producer
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/Minimal-Sufficient-Interface
+          ref: arc3-qckn-flash-event-emitter-v1
+          path: sources/arc
+
+      - name: Checkout live Collatz producer
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/test
+          ref: collatz-qckn-flash-event-emitter-v2-frozen
+          path: sources/collatz
+
+      - name: Checkout live SAIR producer
+        uses: actions/checkout@v4
+        with:
+          repository: heathsanchez/equational-theories-lean-stage2
+          ref: qckn-flash-event-emitter-v1-frozen
+          path: sources/sair
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Requalify residual-derived developmental kernel
+        run: |
+          mkdir -p /tmp/open-world-v4/kernel
+          python developmental/open_world_recoherence_v3.py             | tee /tmp/open-world-v4/kernel/result.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/open-world-v4/kernel/result.json'))
+          assert p['verdict']=='PASS_OPEN_WORLD_RECOHERENCE_V3_RESIDUAL_SCHEMA_GENESIS', p
+          assert all(p['gates'].values()), p['gates']
+          print('PASS_V3_KERNEL_REQUALIFICATION')
+          PY
+
+      - name: Recover previous live V4 compiled present
+        run: |
+          mkdir -p /tmp/open-world-v4/previous
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=open-world-recoherence-v4-live-state&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/open-world-v4-previous.zip
+            unzip -q /tmp/open-world-v4-previous.zip -d /tmp/open-world-v4/previous
+            previous="$(find /tmp/open-world-v4/previous -type f -name state-bundle.json -print -quit)"
+            if [ -n "$previous" ]; then
+              cp "$previous" /tmp/open-world-v4/previous-state-bundle.json
+              echo "PREVIOUS_STATE=present"
+              echo "PREVIOUS_ARTIFACT_ID=$artifact_id"
+            else
+              echo "PREVIOUS_STATE=artifact-without-state"
+            fi
+          else
+            echo "PREVIOUS_STATE=none"
+          fi
+
+      - name: Emit current independently verified producer events
+        run: |
+          mkdir -p /tmp/open-world-v4/bundles/{lean,arc,collatz,sair}
+          lean_sha="$(git -C sources/lean rev-parse HEAD)"
+          arc_sha="$(git -C sources/arc rev-parse HEAD)"
+          collatz_sha="$(git -C sources/collatz rev-parse HEAD)"
+          sair_sha="$(git -C sources/sair rev-parse HEAD)"
+
+          python sources/lean/experiments/emit_qckn_flash_event.py             --commit "$lean_sha" --out /tmp/open-world-v4/bundles/lean
+
+          python sources/arc/kaggle/scripts/emit_qckn_flash_event.py             --commit "$arc_sha" --out /tmp/open-world-v4/bundles/arc
+
+          python sources/collatz/experiments/emit_qckn_flash_event.py             --commit "$collatz_sha" --out /tmp/open-world-v4/bundles/collatz
+
+          python sources/sair/experiments/mathgraph/residual12/emit_qckn_flash_event.py             --commit "$sair_sha" --out /tmp/open-world-v4/bundles/sair
+
+          cat > /tmp/open-world-v4/producer-heads.json <<EOF
+          {"arc":"$arc_sha","collatz":"$collatz_sha","lean":"$lean_sha","sair":"$sair_sha"}
+          EOF
+
+          event_count="$(find /tmp/open-world-v4/bundles -type f -name event.json | wc -l | tr -d ' ')"
+          test "$event_count" -ge 4
+          echo "DISCOVERED_EVENT_BUNDLES=$event_count"
+
+      - name: Reclose real live producer graph
+        run: |
+          mkdir -p /tmp/open-world-v4/live-state
+          previous_args=()
+          if [ -f /tmp/open-world-v4/previous-state-bundle.json ]; then
+            previous_args=(--previous /tmp/open-world-v4/previous-state-bundle.json)
+          fi
+
+          bundle_args=()
+          while IFS= read -r event_path; do
+            bundle_args+=(--bundle "$(dirname "$event_path")")
+          done < <(find /tmp/open-world-v4/bundles -type f -name event.json | sort)
+
+          PYTHONPATH=runtime python runtime/qckn_flash_live_router.py             "${previous_args[@]}"             "${bundle_args[@]}"             --out /tmp/open-world-v4/live-state
+
+          cp /tmp/open-world-v4/producer-heads.json             /tmp/open-world-v4/live-state/producer-heads.json
+
+      - name: Build combined live developmental manifest
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          root=Path('/tmp/open-world-v4')
+          kernel=json.loads((root/'kernel/result.json').read_text())
+          cycle=json.loads((root/'live-state/cycle.json').read_text())
+          heads=json.loads((root/'producer-heads.json').read_text())
+
+          s=cycle['summary']
+          assert kernel['verdict']=='PASS_OPEN_WORLD_RECOHERENCE_V3_RESIDUAL_SCHEMA_GENESIS'
+          assert s['external_events'] >= 4, cycle
+          assert s['active_capabilities'] >= 1, cycle
+          assert s['obstructions'] >= 1, cycle
+          assert sorted(s['repositories']) == [
+              'heathsanchez/Minimal-Sufficient-Interface',
+              'heathsanchez/equational-theories-lean-stage2',
+              'heathsanchez/test',
+              'metalogiclabs/mathgraph-lean-kernel',
+          ], s['repositories']
+
+          manifest={
+            'schema':'open-world-recoherence-v4-live-attachment',
+            'classification':'LIVE_EXTERNAL_PRODUCER_ATTACHMENT_PRECURSOR',
+            'kernel_verdict':kernel['verdict'],
+            'kernel_protocol_sha256':kernel['protocol_sha256'],
+            'producer_heads':heads,
+            'live_summary':s,
+            'new_event_ids':cycle.get('new_event_ids',[]),
+            'unchanged_event_ids':cycle.get('unchanged_event_ids',[]),
+            'retained_past_event_ids':cycle.get('retained_past_event_ids',[]),
+            'claim_boundary':(
+              'The same workflow requalifies the residual-derived developmental '
+              'kernel and ingests independently emitted live events from Lean, ARC, '
+              'Collatz, and SAIR into the persistent Flash graph. V4 does not yet '
+              'claim that the V3 schema compiler is choosing or inventing the real '
+              'domain experiments; it closes the runtime attachment and persistence '
+              'boundary before that causal integration.'
+            ),
+          }
+          raw=json.dumps(manifest,sort_keys=True,separators=(',',':')).encode()
+          manifest['digest']=hashlib.sha256(raw).hexdigest()
+
+          (root/'live-state/open-world-v4-manifest.json').write_text(
+              json.dumps(manifest,indent=2,sort_keys=True)+'\n'
+          )
+
+          print('PASS_OPEN_WORLD_RECOHERENCE_V4_LIVE_ATTACHMENT')
+          print(json.dumps({
+            'external_events':s['external_events'],
+            'active_capabilities':s['active_capabilities'],
+            'obstructions':s['obstructions'],
+            'new_event_ids':manifest['new_event_ids'],
+            'producer_heads':heads,
+            'digest':manifest['digest'],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Persist live V4 state
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-world-recoherence-v4-live-state
+          path: /tmp/open-world-v4/live-state/
+          if-no-files-found: error
+
+      - name: Persist V4 kernel qualification
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-world-recoherence-v4-kernel-evidence
+          path: /tmp/open-world-v4/kernel/result.json
+          if-no-files-found: error
