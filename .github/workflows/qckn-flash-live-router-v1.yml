@@ -1,0 +1,18 @@
+name: QCKN Flash live router v1
+
+on:
+  push:
+    branches: [qckn-flash-live-router-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run live router tests
+        run: python -m unittest tests.test_flash_live_router -v
