@@ -1,0 +1,90 @@
+name: QCKN Live Real Episode V2
+
+on:
+  push:
+    branches:
+      - qckn-live-developmental-substrate-v3
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v2.json"
+      - "qckn_live_real_episode_v2.py"
+      - ".github/workflows/qckn-live-real-episode-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve episode-one evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10577249725
+          expected_digest='sha256:4d2b1bb252c0865738c4ceaefac82c0b3708a5d523c07081c0edf2e4b6dccf1f'
+          actual_digest="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v2/episode1
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/episode1.zip
+          unzip -q /tmp/episode1.zip -d /tmp/qckn-live-real-episode-v2/episode1
+          evidence="$(find /tmp/qckn-live-real-episode-v2/episode1 -type f -name episode.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v2/episode1.json
+
+      - name: Retrieve overhead-decomposition target
+        run: |
+          set -euo pipefail
+          artifact_id=10576714731
+          expected_digest='sha256:eb405f9383ad5a2b765ea466e8a0fe58637ea9747747b9d4107b7a77f478d6b6'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v2/target
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/target2.zip
+          unzip -q /tmp/target2.zip -d /tmp/qckn-live-real-episode-v2/target
+          evidence="$(find /tmp/qckn-live-real-episode-v2/target -type f -name localdef-whnf-cache-overhead-decomposition-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v2/target.json
+
+      - name: Reclose second cycle
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v2/result
+          python -u qckn_live_real_episode_v2.py \
+            --precommit frozen-meta/qckn-live-real-episode-v2.json \
+            --target /tmp/qckn-live-real-episode-v2/target.json \
+            --episode1 /tmp/qckn-live-real-episode-v2/episode1.json \
+            --out /tmp/qckn-live-real-episode-v2/result \
+            | tee /tmp/qckn-live-real-episode-v2/run.log
+
+      - name: Gate repeated real cycles
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v2/result/episode2.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['target']['next_route']=='pivot-away-from-whnf-memoization'
+          assert r['closure']['cumulative_exact_routes_eliminated']==2
+          assert 'lean:whnf-memoization-no-net-win-at-2m:v1' in r['closure']['obstructions']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V2')
+          print('CUMULATIVE_EXACT_ROUTES_ELIMINATED=2')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v2
+          path: /tmp/qckn-live-real-episode-v2/
+          if-no-files-found: error
