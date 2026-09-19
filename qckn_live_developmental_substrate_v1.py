@@ -327,6 +327,25 @@ def _validate_frontier(frontier: dict[str, Any]) -> None:
             raise AssertionError("common dominant succ_le_succ hotspot changed")
 
 
+
+def _validate_method_profile(profile: dict[str, Any]) -> None:
+    if profile.get("schema") != "deep-list-succ-le-succ-method-profile-v1":
+        raise AssertionError("unexpected succ_le_succ method-profile schema")
+    if not all(profile.get("gates", {}).values()):
+        raise AssertionError("succ_le_succ method-profile gates are not green")
+    rows = profile.get("rows", [])
+    if len(rows) != 2:
+        raise AssertionError("expected two method-profile cases")
+    for row in rows:
+        methods = row.get("attempts", [])[-1].get(
+            "top_method_ticks_for_profiled_declaration", []
+        )
+        if not methods or methods[0].get("method") != "whnf":
+            raise AssertionError("WHNF is no longer the common dominant method")
+        if int(methods[0].get("ticks", 0)) < 3_000_000:
+            raise AssertionError("WHNF concentration fell below the observed separator")
+
+
 def _apply_live_effects(
     scheduler: GlobalWinScheduler,
     cycle: dict[str, Any],
@@ -455,9 +474,11 @@ def main() -> int:
     p.add_argument("--context-view", required=True)
     p.add_argument("--deep-list-evidence", required=True)
     p.add_argument("--frontier-evidence", required=True)
+    p.add_argument("--method-evidence", required=True)
     p.add_argument("--live-meta", required=True)
     p.add_argument("--deep-meta", required=True)
     p.add_argument("--frontier-meta", required=True)
+    p.add_argument("--method-meta", required=True)
     p.add_argument("--previous-state")
     p.add_argument("--out", required=True)
     args = p.parse_args()
@@ -467,23 +488,28 @@ def main() -> int:
     context_path = Path(args.context_view)
     deep_path = Path(args.deep_list_evidence)
     frontier_path = Path(args.frontier_evidence)
+    method_path = Path(args.method_evidence)
     live_meta_path = Path(args.live_meta)
     deep_meta_path = Path(args.deep_meta)
     frontier_meta_path = Path(args.frontier_meta)
+    method_meta_path = Path(args.method_meta)
 
     v3 = _load(v3_path)
     cycle = _load(live_cycle_path)
     context = _load(context_path)
     deep = _load(deep_path)
     frontier = _load(frontier_path)
+    method_profile = _load(method_path)
     live_meta = _load(live_meta_path)
     deep_meta = _load(deep_meta_path)
     frontier_meta = _load(frontier_meta_path)
+    method_meta = _load(method_meta_path)
 
     _validate_v3(v3)
     _validate_live(cycle, context)
     _validate_deep_list(deep)
     _validate_frontier(frontier)
+    _validate_method_profile(method_profile)
 
     profiles = {
         profile: run_profile(profile, v3, cycle, context, deep)
@@ -519,20 +545,21 @@ def main() -> int:
     selected = next(iter(battle_tops.values()))
     selected_experiment = {
         "opportunity_id": selected,
-        "experiment_class": "deep-list-succ-le-succ-method-profile",
+        "experiment_class": "deep-list-succ-le-succ-whnf-recurrence",
         "repository": "heathsanchez/lean-kernel-arena",
-        "ref": "mda-deep-list-succ-le-succ-method-profile-v1",
-        "ref_sha": "8ea22afeb12dd59c5565befb41673d931ab5ee3e",
-        "source_evidence_run": 35419905616,
-        "source_evidence_artifact": 10577446253,
-        "source_evidence_digest": "sha256:cafce85914807c519b2ece264fd8543438babfb322405b5fbd6735fc9f14c64e",
+        "ref": "mda-deep-list-succ-le-succ-whnf-recurrence-v1",
+        "ref_sha": "447938b714c5395d2a4a5d050ffb699fcfd54650",
+        "source_evidence_run": 35420028188,
+        "source_evidence_artifact": 10576957132,
+        "source_evidence_digest": "sha256:d46029ddd1d2ef98fe8f8463acf9e90bdf02d2c5cbd3f4da582cb3bee7c0b73c",
         "next_question": (
-            "inside the common Nat.succ_le_succ hotspot now dominating both deep-list "
-            "UNKNOWN cases, which exact kernel operation is consuming the repeated consequence cost?"
+            "WHNF accounts for about 3.13M ticks inside Nat.succ_le_succ in both "
+            "deep-list cases; are those requests recurring by exact structure but "
+            "missing the current identity-keyed verified WHNF cache?"
         ),
         "claim_boundary": (
-            "diagnostic method-attribution selection only; no optimization or new "
-            "conversion authority is admitted until destination evidence verifies it"
+            "diagnostic recurrence measurement only; structural serialization is "
+            "bounded sampling evidence and is not admitted as a semantic cache key"
         ),
     }
     history.append(
@@ -558,6 +585,10 @@ def main() -> int:
                     for row in frontier["rows"]
                 ],
             },
+            "succ_le_succ_method_profile": [
+                row["attempts"][-1]["top_method_ticks_for_profiled_declaration"][:8]
+                for row in method_profile["rows"]
+            ],
         }
     )
 
@@ -571,9 +602,11 @@ def main() -> int:
             "context_view_sha256": _sha(context_path),
             "deep_list_evidence_sha256": _sha(deep_path),
             "frontier_evidence_sha256": _sha(frontier_path),
+            "method_evidence_sha256": _sha(method_path),
             "live_artifact": live_meta,
             "deep_list_artifact": deep_meta,
             "frontier_artifact": frontier_meta,
+            "method_artifact": method_meta,
         },
         "authority_state": {
             "declared_residuals_open": [],
