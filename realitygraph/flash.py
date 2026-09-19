@@ -381,16 +381,35 @@ class ObstructionRevocationEvent:
     reason: str
 
 
+@dataclass(frozen=True)
+class ContinuationAdmissionEvent:
+    event_id: str
+    continuation: ProtectedContinuation
+
+
+@dataclass(frozen=True)
+class ContinuationRevocationEvent:
+    event_id: str
+    continuation_id: str
+    reason: str
+
+
 class FlashEventRuntime:
     """Idempotent typed admission boundary for domain-produced Flash events."""
 
     MANIFEST_SCHEMA = "qckn-flash-event-manifest-v1"
 
-    def __init__(self, closure: "FlashClosure") -> None:
+    def __init__(
+        self,
+        closure: "FlashClosure",
+        *,
+        future_quotient: FutureQuotient | None = None,
+    ) -> None:
         self.closure = closure
+        self.future_quotient = future_quotient
         self._events: dict[str, object] = {}
         self._event_digests: dict[str, str] = {}
-        self._results: dict[str, FlashDelta] = {}
+        self._results: dict[str, FlashDelta | QuotientDelta] = {}
 
     @staticmethod
     def _event_digest(event: object) -> str:
@@ -429,6 +448,8 @@ class FlashEventRuntime:
         cls,
         closure: "FlashClosure",
         text: str,
+        *,
+        future_quotient: FutureQuotient | None = None,
     ) -> "FlashEventRuntime":
         try:
             payload = json.loads(text)
@@ -457,15 +478,34 @@ class FlashEventRuntime:
         canonical = cls._manifest_text_from_digests(digests)
         if text != canonical:
             raise ValueError("noncanonical flash event manifest")
-        runtime = cls(closure)
+        runtime = cls(
+            closure,
+            future_quotient=future_quotient,
+        )
         runtime._event_digests = digests
         return runtime
 
     def event_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._event_digests))
 
-    @staticmethod
-    def _replay_noop() -> FlashDelta:
+    def _replay_noop(
+        self,
+        event: object,
+    ) -> FlashDelta | QuotientDelta:
+        if isinstance(
+            event,
+            (ContinuationAdmissionEvent, ContinuationRevocationEvent),
+        ):
+            if self.future_quotient is None:
+                raise ValueError("future quotient required for continuation event")
+            classes = self.future_quotient.classes()
+            return QuotientDelta(
+                previous_classes=classes,
+                current_classes=classes,
+                split_classes=(),
+                merged_classes=(),
+                changed_state_ids=(),
+            )
         return FlashDelta(
             iterations=0,
             discharged=(),
@@ -484,8 +524,10 @@ class FlashEventRuntime:
             | ObstructionAdmissionEvent
             | CapabilityRevocationEvent
             | ObstructionRevocationEvent
+            | ContinuationAdmissionEvent
+            | ContinuationRevocationEvent
         ),
-    ) -> FlashDelta:
+    ) -> FlashDelta | QuotientDelta:
         if not event.event_id:
             raise ValueError("flash event requires identity")
         digest = self._event_digest(event)
@@ -493,7 +535,9 @@ class FlashEventRuntime:
         if old_digest is not None:
             if old_digest != digest:
                 raise ValueError("flash event identity conflict")
-            return self._results.get(event.event_id, self._replay_noop())
+            if event.event_id in self._results:
+                return self._results[event.event_id]
+            return self._replay_noop(event)
 
         if isinstance(event, CapabilityAdmissionEvent):
             result = self.closure.admit_capability(
@@ -512,6 +556,19 @@ class FlashEventRuntime:
         elif isinstance(event, ObstructionRevocationEvent):
             result = self.closure.revoke_obstruction(
                 event.obstruction_id,
+                reason=event.reason,
+            )
+        elif isinstance(event, ContinuationAdmissionEvent):
+            if self.future_quotient is None:
+                raise ValueError("future quotient required for continuation event")
+            result = self.future_quotient.admit_continuation(
+                event.continuation
+            )
+        elif isinstance(event, ContinuationRevocationEvent):
+            if self.future_quotient is None:
+                raise ValueError("future quotient required for continuation event")
+            result = self.future_quotient.revoke_continuation(
+                event.continuation_id,
                 reason=event.reason,
             )
         else:
