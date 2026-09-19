@@ -1,0 +1,82 @@
+name: QCKN Live Real Episode V7
+
+on:
+  push:
+    branches: [qckn-live-developmental-substrate-v3]
+    paths:
+      - "frozen-meta/qckn-live-real-episode-v7.json"
+      - "qckn_live_real_episode_v7.py"
+      - ".github/workflows/qckn-live-real-episode-v7.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Retrieve episode-six evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10579535046
+          expected_digest='sha256:990769532bbffb81625a145703c8333506bd399f58951b53082033548cb38022'
+          actual_digest="$(gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v7/episode6
+          gh api "repos/heathsanchez/realitygraph/actions/artifacts/$artifact_id/zip" > /tmp/episode6.zip
+          unzip -q /tmp/episode6.zip -d /tmp/qckn-live-real-episode-v7/episode6
+          evidence="$(find /tmp/qckn-live-real-episode-v7/episode6 -type f -name episode6.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v7/episode6.json
+
+      - name: Retrieve substitute-make shape evidence
+        run: |
+          set -euo pipefail
+          artifact_id=10581495447
+          expected_digest='sha256:62f636ef62bcf001ec92892a513a9e4f5b9ae774a78a1752687f7430027c8261'
+          actual_digest="$(gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id" --jq '.digest')"
+          test "$actual_digest" = "$expected_digest"
+          mkdir -p /tmp/qckn-live-real-episode-v7/target
+          gh api "repos/heathsanchez/lean-kernel-arena/actions/artifacts/$artifact_id/zip" > /tmp/target7.zip
+          unzip -q /tmp/target7.zip -d /tmp/qckn-live-real-episode-v7/target
+          evidence="$(find /tmp/qckn-live-real-episode-v7/target -type f -name substitute-make-shape-quotient-diagnostic-v1.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/qckn-live-real-episode-v7/target.json
+
+      - name: Reclose seventh cycle
+        run: |
+          mkdir -p /tmp/qckn-live-real-episode-v7/result
+          python -u qckn_live_real_episode_v7.py             --precommit frozen-meta/qckn-live-real-episode-v7.json             --target /tmp/qckn-live-real-episode-v7/target.json             --episode6 /tmp/qckn-live-real-episode-v7/episode6.json             --out /tmp/qckn-live-real-episode-v7/result             | tee /tmp/qckn-live-real-episode-v7/run.log
+
+      - name: Gate seventh real cycle
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/qckn-live-real-episode-v7/result/episode7.json'))
+          assert r['verdict']=='PASS'
+          assert all(r['gates'].values()),r['gates']
+          assert r['target']['classification']=='distributed-shapes'
+          assert r['closure']['cumulative_exact_routes_eliminated']==7
+          assert 'lean:substitute-make-no-small-shape-basis:v1' in r['closure']['obstructions']
+          print('PASS_QCKN_LIVE_REAL_EPISODE_V7')
+          print('CUMULATIVE_EXACT_ROUTES_ELIMINATED=7')
+          print('NEXT_BATTLE='+r['reselection']['next_battle_experiment'])
+          print('NEXT_DISCOVERY='+r['reselection']['next_discovery_experiment'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qckn-live-real-episode-v7
+          path: /tmp/qckn-live-real-episode-v7/
+          if-no-files-found: error
