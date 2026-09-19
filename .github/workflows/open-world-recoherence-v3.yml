@@ -1,0 +1,61 @@
+name: Open World Recoherence V3 Residual Schema Genesis
+
+on:
+  push:
+    branches:
+      - qckn-open-world-recoherence-v3-residual-schema-genesis
+    paths:
+      - 'open_world_recoherence_v3.py'
+      - 'docs/research/open-world-recoherence-v3.md'
+      - '.github/workflows/open-world-recoherence-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run residual-derived node-schema integration
+        run: |
+          mkdir -p artifacts/open-world-recoherence-v3
+          python open_world_recoherence_v3.py | tee artifacts/open-world-recoherence-v3/result.json
+
+      - name: Enforce scientific gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(Path('artifacts/open-world-recoherence-v3/result.json').read_text())
+          assert p['verdict'] == 'PASS_OPEN_WORLD_RECOHERENCE_V3_RESIDUAL_SCHEMA_GENESIS', p['verdict']
+          assert p['classification'] == 'BOUNDED_PROSPECTIVE_RESIDUAL_DERIVED_NODE_SCHEMA'
+          assert p['protocol']['named_repair_portfolio'] == []
+          assert p['protocol']['supplied_candidate_node_families'] == []
+          assert all(p['gates'].values()), p['gates']
+          assert p['warm']['total_checks'] < p['cold']['total_checks']
+          assert p['capability_ablation']['total_checks'] > p['warm']['total_checks']
+
+          cold = {r['episode']: r for r in p['cold']['records']}
+          for episode, row in cold.items():
+              assert row['route'] in {'VERIFIED', 'UNKNOWN'}, (episode, row['route'])
+
+          print('OPEN_WORLD_RECOHERENCE_V3_RESIDUAL_SCHEMA_GENESIS=PASS')
+          print('WARM_CHECKS', p['warm']['total_checks'])
+          print('COLD_CHECKS', p['cold']['total_checks'])
+          print('ABLATION_CHECKS', p['capability_ablation']['total_checks'])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: open-world-recoherence-v3-residual-schema-evidence
+          path: artifacts/open-world-recoherence-v3/result.json
+          if-no-files-found: error
