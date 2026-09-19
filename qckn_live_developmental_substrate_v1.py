@@ -346,6 +346,25 @@ def _validate_method_profile(profile: dict[str, Any]) -> None:
             raise AssertionError("WHNF concentration fell below the observed separator")
 
 
+
+def _validate_recurrence(recurrence: dict[str, Any]) -> None:
+    if recurrence.get("schema") != "deep-list-succ-le-succ-whnf-recurrence-v1":
+        raise AssertionError("unexpected WHNF recurrence schema")
+    if not all(recurrence.get("gates", {}).values()):
+        raise AssertionError("WHNF recurrence gates are not green")
+    rows = recurrence.get("rows", [])
+    if len(rows) != 2:
+        raise AssertionError("expected two WHNF recurrence cases")
+    for row in rows:
+        q = row.get("attempts", [])[-1].get("whnf_recurrence", {})
+        if float(q.get("identity_repeat_fraction", 0.0)) < 0.99:
+            raise AssertionError("exact identity recurrence fell below separator")
+        if float(q.get("sampled_exact_repeat_fraction", 0.0)) < 0.99:
+            raise AssertionError("exact structural recurrence fell below separator")
+        if int(q.get("sampled_distinct_exact_terms", 10**9)) > 500:
+            raise AssertionError("sampled exact WHNF vocabulary unexpectedly widened")
+
+
 def _apply_live_effects(
     scheduler: GlobalWinScheduler,
     cycle: dict[str, Any],
@@ -475,10 +494,12 @@ def main() -> int:
     p.add_argument("--deep-list-evidence", required=True)
     p.add_argument("--frontier-evidence", required=True)
     p.add_argument("--method-evidence", required=True)
+    p.add_argument("--recurrence-evidence", required=True)
     p.add_argument("--live-meta", required=True)
     p.add_argument("--deep-meta", required=True)
     p.add_argument("--frontier-meta", required=True)
     p.add_argument("--method-meta", required=True)
+    p.add_argument("--recurrence-meta", required=True)
     p.add_argument("--previous-state")
     p.add_argument("--out", required=True)
     args = p.parse_args()
@@ -489,10 +510,12 @@ def main() -> int:
     deep_path = Path(args.deep_list_evidence)
     frontier_path = Path(args.frontier_evidence)
     method_path = Path(args.method_evidence)
+    recurrence_path = Path(args.recurrence_evidence)
     live_meta_path = Path(args.live_meta)
     deep_meta_path = Path(args.deep_meta)
     frontier_meta_path = Path(args.frontier_meta)
     method_meta_path = Path(args.method_meta)
+    recurrence_meta_path = Path(args.recurrence_meta)
 
     v3 = _load(v3_path)
     cycle = _load(live_cycle_path)
@@ -500,16 +523,19 @@ def main() -> int:
     deep = _load(deep_path)
     frontier = _load(frontier_path)
     method_profile = _load(method_path)
+    recurrence = _load(recurrence_path)
     live_meta = _load(live_meta_path)
     deep_meta = _load(deep_meta_path)
     frontier_meta = _load(frontier_meta_path)
     method_meta = _load(method_meta_path)
+    recurrence_meta = _load(recurrence_meta_path)
 
     _validate_v3(v3)
     _validate_live(cycle, context)
     _validate_deep_list(deep)
     _validate_frontier(frontier)
     _validate_method_profile(method_profile)
+    _validate_recurrence(recurrence)
 
     profiles = {
         profile: run_profile(profile, v3, cycle, context, deep)
@@ -545,21 +571,23 @@ def main() -> int:
     selected = next(iter(battle_tops.values()))
     selected_experiment = {
         "opportunity_id": selected,
-        "experiment_class": "deep-list-succ-le-succ-whnf-recurrence",
+        "experiment_class": "localdef-whnf-context-cache",
         "repository": "heathsanchez/lean-kernel-arena",
-        "ref": "mda-deep-list-succ-le-succ-whnf-recurrence-v1",
-        "ref_sha": "447938b714c5395d2a4a5d050ffb699fcfd54650",
-        "source_evidence_run": 35420028188,
-        "source_evidence_artifact": 10576957132,
-        "source_evidence_digest": "sha256:d46029ddd1d2ef98fe8f8463acf9e90bdf02d2c5cbd3f4da582cb3bee7c0b73c",
+        "ref": "mda-localdef-whnf-context-cache-v1",
+        "ref_sha": "52ade6bc4d724e3c8d318bd165cb979dbd43c1bd",
+        "source_evidence_run": 35420232683,
+        "source_evidence_artifact": 10577696503,
+        "source_evidence_digest": "sha256:b2feeb57d2acbf8426a2a533319f4e263ac08f343e1dbdd2e06c04c4b2607d28",
         "next_question": (
-            "WHNF accounts for about 3.13M ticks inside Nat.succ_le_succ in both "
-            "deep-list cases; are those requests recurring by exact structure but "
-            "missing the current identity-keyed verified WHNF cache?"
+            "Nat.succ_le_succ issues about 782.8k WHNF requests per case with "
+            ">99.97% exact object-identity recurrence; can successful local-definition "
+            "WHNF consequences be safely reused under an exact declaration, params, "
+            "and local-context identity key?"
         ),
         "claim_boundary": (
-            "diagnostic recurrence measurement only; structural serialization is "
-            "bounded sampling evidence and is not admitted as a semantic cache key"
+            "candidate cache may retain successful WHNF consequences only under "
+            "exact expression/context identity; failures and cross-context results "
+            "must never be reused"
         ),
     }
     history.append(
@@ -589,6 +617,15 @@ def main() -> int:
                 row["attempts"][-1]["top_method_ticks_for_profiled_declaration"][:8]
                 for row in method_profile["rows"]
             ],
+            "succ_le_succ_whnf_recurrence": [
+                {
+                    "calls": row["attempts"][-1]["whnf_recurrence"]["calls"],
+                    "identity_repeat_fraction": row["attempts"][-1]["whnf_recurrence"]["identity_repeat_fraction"],
+                    "sampled_exact_repeat_fraction": row["attempts"][-1]["whnf_recurrence"]["sampled_exact_repeat_fraction"],
+                    "sampled_distinct_exact_terms": row["attempts"][-1]["whnf_recurrence"]["sampled_distinct_exact_terms"],
+                }
+                for row in recurrence["rows"]
+            ],
         }
     )
 
@@ -603,10 +640,12 @@ def main() -> int:
             "deep_list_evidence_sha256": _sha(deep_path),
             "frontier_evidence_sha256": _sha(frontier_path),
             "method_evidence_sha256": _sha(method_path),
+            "recurrence_evidence_sha256": _sha(recurrence_path),
             "live_artifact": live_meta,
             "deep_list_artifact": deep_meta,
             "frontier_artifact": frontier_meta,
             "method_artifact": method_meta,
+            "recurrence_artifact": recurrence_meta,
         },
         "authority_state": {
             "declared_residuals_open": [],
