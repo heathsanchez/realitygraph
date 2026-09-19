@@ -1,0 +1,20 @@
+name: QCKN Flash temporal coupling qualification v1
+
+on:
+  push:
+    branches: [qckn-flash-temporal-coupling-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run full RealityGraph unit suite
+        run: python -m unittest discover -s tests -v
+      - name: Re-run Flash nonlinear non-dual witness
+        run: python qckn_flash_nonlinear_nondual_v1.py
