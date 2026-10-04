@@ -1,0 +1,122 @@
+{
+  "schema": "current-authority-event-manifest-v1",
+  "experiment_id": "realitygraph-current-authority-rebinding-2026-10-04",
+  "policy": {
+    "preserve_historical_events": true,
+    "supersession_scope": "campaign-view-only",
+    "truth_revocations": [],
+    "qualification_rule": "exact source commit + successful Actions run + matching run head + exact artifact digest + frozen Flash replay/reload"
+  },
+  "baseline": {
+    "repository": "heathsanchez/realitygraph",
+    "commit": "aea6d005a0997e22831b126b487c919e57831db9",
+    "run": 37165512453,
+    "artifact": 11289187812,
+    "artifact_digest": "sha256:fd8f06436a3c5d38b36fa625dd928e18511720f0b56981be1346b80c35099f91",
+    "artifact_name": "qckn-flash-live-state-v1",
+    "interpretation": "green legacy-emitter daemon state; NEW_EVENTS=0 is not a programme fixed point"
+  },
+  "entries": [
+    {
+      "campaign": "nucleus-independent",
+      "epistemic_status": "WARRANTED",
+      "repository": "heathsanchez/test",
+      "commit": "0a9b45753846b7c75497b12af834d0680b48b49c",
+      "run": 37154392064,
+      "artifact": 11284604964,
+      "artifact_digest": "sha256:b478d56e012707313dca3a65985c06e072db940b7704e9b274cc09d02bb4f270",
+      "artifact_name": "nucleus-projection-defeq-0a9b45753846b7c75497b12af834d0680b48b49c",
+      "authority_snapshot": "lean-kernel-arena@b1d6e91d6de351f9bcf21e6b039f4d51d6b9bb42",
+      "verifier_id": "arena196-zero-wrong-reclosure-v1",
+      "event": {
+        "kind": "capability_admission",
+        "event_id": "nucleus:projection-defeq-arena196:v1",
+        "input_type": "nucleus-arena196-boundary",
+        "output_type": "qualification-status",
+        "input": "projection-defeq+arena196",
+        "output": "107A-59R-30U-zero-wrong",
+        "certificate_id": "run:37154392064/artifact:11284604964",
+        "claim_boundary": "196 pinned Arena tests; 107 ACCEPT / 59 REJECT / 30 UNKNOWN; zero wrong verdicts, regressions, errors, or timeouts"
+      },
+      "supersedes_views": [
+        {
+          "view_id": "lean-kernel-current",
+          "prior_source": "metalogiclabs/mathgraph-lean-kernel:qckn-flash-event-emitter-v1",
+          "preserve_event_ids": [
+            "lean:direct-var:v1"
+          ],
+          "reason": "historical Flash/Arena event remains valid evidence; current independent Nucleus authority now lives in heathsanchez/test"
+        }
+      ]
+    },
+    {
+      "campaign": "collatz-v80",
+      "epistemic_status": "WARRANTED_BOUNDED",
+      "repository": "heathsanchez/test",
+      "commit": "535b094d9afff698196cb6f06d1587a66209c924",
+      "run": 36994764543,
+      "artifact": 11220349135,
+      "artifact_digest": "sha256:9c0e155023ece8041685c028dad8c02c1a060df7c70ce9e8322292fc386cda11",
+      "artifact_name": "collatz-v79-source-factor-quotient-v80",
+      "authority_snapshot": "collatz-v80-frozen-v53@535b094d9afff698196cb6f06d1587a66209c924",
+      "verifier_id": "source-factor-one-step-functionality-v1",
+      "event": {
+        "kind": "capability_admission",
+        "event_id": "collatz:v80-minimum-admission-state:v1",
+        "input_type": "collatz-frozen-v53-transition-corpus",
+        "output_type": "future-functionality-status",
+        "input": "5487-residual-transition-rows",
+        "output": "functional:affine+nearest+extra+a-mod-3^6",
+        "certificate_id": "run:36994764543/artifact:11220349135",
+        "claim_boundary": "frozen V53 one-step corpus only; zero collisions for (affine law, nearest, extra, a mod 3^6); a mod 3^5 leaves one collision; global Collatz remains UNKNOWN"
+      },
+      "supersedes_views": [
+        {
+          "view_id": "collatz-current",
+          "prior_source": "heathsanchez/test:collatz-qckn-flash-event-emitter-v1",
+          "preserve_event_ids": [
+            "collatz:bank-order-redundancy:v1",
+            "collatz:shared-normalized-equivalence:k8-r4:v1"
+          ],
+          "reason": "legacy bounded facts remain valid; V80 is the current representation frontier"
+        }
+      ]
+    },
+    {
+      "campaign": "arc3-role-transfer",
+      "epistemic_status": "REJECTED",
+      "repository": "heathsanchez/Minimal-Sufficient-Interface",
+      "commit": "dabb9f66151d401cd5a9c23527f0c376096e3de0",
+      "run": 36828592627,
+      "artifact": 11147550369,
+      "artifact_digest": "sha256:87494b17283baf1466b859234b4f1217b0d6561929dee3369584e53918f3d036",
+      "artifact_name": "arc3-causal-role-rebinding-v1",
+      "authority_snapshot": "arc3-causal-role-rebinding@dabb9f66151d401cd5a9c23527f0c376096e3de0",
+      "verifier_id": "prospective-causal-role-transfer-v1",
+      "event": {
+        "kind": "obstruction_admission",
+        "event_id": "arc3:causal-role-transfer-prospective-refutation:v1",
+        "input_type": "arc3-causal-role-transfer",
+        "output_type": "prospective-transfer-validity",
+        "separating_input": "whole-game+within-game+prospective-refinement+25-game-live-ab",
+        "expected_output": "zero-error-positive-relative-progress-no-regression",
+        "actual_output": "48/77/25-wrong;91-live-uses;0-relative-progress;regression-observed",
+        "candidate": {
+          "hypothesis": "current causal-role controller representation is sufficient for prospective reusable transfer",
+          "scope": "declared run 36828592627 only"
+        },
+        "claim_boundary": "whole-game transfer 48 wrong; within-game next-level 77 wrong; prospective refinement 25 wrong; frozen 25-game A/B used candidate 91 times, produced zero relative-progress events, and observed both improvement and regression; release_qualified=false"
+      },
+      "supersedes_views": [
+        {
+          "view_id": "arc3-current",
+          "prior_source": "heathsanchez/Minimal-Sufficient-Interface:arc3-qckn-flash-event-emitter-v1",
+          "preserve_event_ids": [
+            "arc3:ft09-vc33-transfer-refutation:v2"
+          ],
+          "reason": "older refutation remains valid lineage; this prospective gate is the current role-transfer boundary"
+        }
+      ]
+    }
+  ]
+}
