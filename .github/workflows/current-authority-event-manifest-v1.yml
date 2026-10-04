@@ -1,0 +1,175 @@
+name: Current Authority Event Manifest V1
+
+on:
+  push:
+    branches: [current-authority-event-manifest-v1]
+    paths:
+      - 'manifests/current-authority-event-manifest-v1.json'
+      - 'experiments/current_authority_event_manifest_v1.py'
+      - '.github/workflows/current-authority-event-manifest-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout experiment
+        uses: actions/checkout@v4
+
+      - name: Checkout frozen Flash runtime
+        uses: actions/checkout@v4
+        with:
+          ref: qckn-flash-live-router-v1-frozen
+          path: frozen-runtime
+
+      - name: Verify exact source authorities
+        run: |
+          set -euo pipefail
+          manifest=manifests/current-authority-event-manifest-v1.json
+          mkdir -p /tmp/current-authority
+          : > /tmp/current-authority/source-verification.tsv
+
+          baseline_artifact="$(jq -r '.baseline.artifact' "$manifest")"
+          baseline_digest="$(jq -r '.baseline.artifact_digest' "$manifest")"
+          actual_baseline_digest="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$baseline_artifact" --jq '.digest')"
+          test "$actual_baseline_digest" = "$baseline_digest"
+          printf 'baseline\t%s\t%s\n' "$baseline_artifact" "$actual_baseline_digest" >> /tmp/current-authority/source-verification.tsv
+
+          while IFS= read -r row; do
+            repo="$(jq -r '.repository' <<<"$row")"
+            commit="$(jq -r '.commit' <<<"$row")"
+            run_id="$(jq -r '.run' <<<"$row")"
+            artifact_id="$(jq -r '.artifact' <<<"$row")"
+            expected_digest="$(jq -r '.artifact_digest' <<<"$row")"
+
+            actual_commit="$(gh api "repos/$repo/commits/$commit" --jq '.sha')"
+            test "$actual_commit" = "$commit"
+
+            run_conclusion="$(gh api "repos/$repo/actions/runs/$run_id" --jq '.conclusion')"
+            run_head="$(gh api "repos/$repo/actions/runs/$run_id" --jq '.head_sha')"
+            test "$run_conclusion" = "success"
+            test "$run_head" = "$commit"
+
+            artifact_digest="$(gh api "repos/$repo/actions/artifacts/$artifact_id" --jq '.digest')"
+            test "$artifact_digest" = "$expected_digest"
+
+            printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "$commit" "$run_id" "$artifact_id" "$artifact_digest" >> /tmp/current-authority/source-verification.tsv
+          done < <(jq -c '.entries[]' "$manifest")
+
+          cp "$manifest" /tmp/current-authority/manifest.json
+          echo PASS_EXACT_SOURCE_AUTHORITY_BINDINGS_V1
+
+      - name: Recover pinned previous Flash present
+        run: |
+          set -euo pipefail
+          artifact_id="$(jq -r '.baseline.artifact' manifests/current-authority-event-manifest-v1.json)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/current-authority/baseline.zip
+          mkdir -p /tmp/current-authority/baseline
+          unzip -q /tmp/current-authority/baseline.zip -d /tmp/current-authority/baseline
+          previous="$(find /tmp/current-authority/baseline -type f -name state-bundle.json -print -quit)"
+          test -n "$previous"
+          cp "$previous" /tmp/current-authority/previous-state-bundle.json
+          echo PASS_PINNED_PREVIOUS_FLASH_PRESENT_V1
+
+      - name: Emit three current authority events
+        run: |
+          python experiments/current_authority_event_manifest_v1.py \
+            --manifest manifests/current-authority-event-manifest-v1.json \
+            --out /tmp/current-authority/bundles
+
+      - name: Reclose through frozen Flash router
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/current-authority/live
+          bundle_args=()
+          while IFS= read -r event_path; do
+            bundle_args+=(--bundle "$(dirname "$event_path")")
+          done < <(find /tmp/current-authority/bundles -mindepth 2 -maxdepth 2 -type f -name event.json | sort)
+          test "${#bundle_args[@]}" -eq 6
+          PYTHONPATH=frozen-runtime python frozen-runtime/qckn_flash_live_router.py \
+            --previous /tmp/current-authority/previous-state-bundle.json \
+            "${bundle_args[@]}" \
+            --out /tmp/current-authority/live
+
+      - name: Qualify lineage supersession and reload
+        run: |
+          PYTHONPATH=frozen-runtime python - <<'PY'
+          import json
+          from pathlib import Path
+          from qckn_flash_cross_repo_ingest import restore_state_bundle
+
+          root=Path("/tmp/current-authority")
+          manifest=json.loads((root/"manifest.json").read_text())
+          audit=json.loads((root/"bundles/manifest-audit.json").read_text())
+          view=json.loads((root/"bundles/current-authority-view.json").read_text())
+          cycle=json.loads((root/"live/cycle.json").read_text())
+          previous_text=(root/"previous-state-bundle.json").read_text()
+          current_text=(root/"live/state-bundle.json").read_text()
+
+          previous_summary,_=restore_state_bundle(previous_text)
+          current_summary,_=restore_state_bundle(current_text)
+
+          expected=set(audit["expected_new_event_ids"])
+          preserved=set(audit["preserve_historical_event_ids"])
+          previous_ids=set(previous_summary["event_ids"])
+          current_ids=set(current_summary["event_ids"])
+
+          assert len(expected)==3, expected
+          assert set(cycle["new_event_ids"])==expected, cycle
+          assert not set(cycle["unchanged_event_ids"]), cycle
+          assert previous_ids <= current_ids
+          assert preserved <= previous_ids
+          assert preserved <= current_ids
+          assert current_ids == previous_ids | expected
+          assert current_summary["external_events"] == previous_summary["external_events"] + 3
+          assert current_summary["active_capabilities"] == previous_summary["active_capabilities"] + 2
+          assert current_summary["obstructions"] == previous_summary["obstructions"] + 1
+          assert not current_summary["revoked_capability_ids"]
+          assert manifest["policy"]["truth_revocations"] == []
+          assert audit["truth_revocations"] == []
+          assert view["supersession_semantics"].startswith("view-only")
+          assert {v["current_event_id"] for v in view["views"]} == expected
+
+          # A second parse/rebuild of the emitted state must reproduce the same manifest.
+          restarted_summary,_=restore_state_bundle(current_text)
+          assert restarted_summary["event_ids"] == current_summary["event_ids"]
+          assert restarted_summary["active_capability_ids"] == current_summary["active_capability_ids"]
+          assert restarted_summary["obstruction_ids"] == current_summary["obstruction_ids"]
+
+          qualification={
+              "schema":"current-authority-event-manifest-qualification-v1",
+              "baseline_run":manifest["baseline"]["run"],
+              "baseline_artifact":manifest["baseline"]["artifact"],
+              "previous_external_events":previous_summary["external_events"],
+              "current_external_events":current_summary["external_events"],
+              "new_event_ids":sorted(expected),
+              "preserved_historical_event_ids":sorted(preserved),
+              "active_capability_delta":current_summary["active_capabilities"]-previous_summary["active_capabilities"],
+              "obstruction_delta":current_summary["obstructions"]-previous_summary["obstructions"],
+              "truth_revocations":[],
+              "reload_exact":True,
+              "result":"PASS_CURRENT_AUTHORITY_EVENT_MANIFEST_V1",
+          }
+          (root/"qualification.json").write_text(json.dumps(qualification,indent=2,sort_keys=True)+"\n")
+          print("PASS_CURRENT_AUTHORITY_EVENT_MANIFEST_V1")
+          print(json.dumps(qualification,sort_keys=True))
+          PY
+
+      - name: Persist qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-authority-event-manifest-v1
+          path: |
+            /tmp/current-authority/manifest.json
+            /tmp/current-authority/source-verification.tsv
+            /tmp/current-authority/bundles/
+            /tmp/current-authority/live/
+            /tmp/current-authority/qualification.json
+          if-no-files-found: error
