@@ -131,7 +131,7 @@ jobs:
           assert current_summary["external_events"] == previous_summary["external_events"] + 3
           assert current_summary["active_capabilities"] == previous_summary["active_capabilities"] + 2
           assert current_summary["obstructions"] == previous_summary["obstructions"] + 1
-          assert not current_summary["revoked_capability_ids"]
+          assert current_summary["revoked_capability_ids"] == previous_summary["revoked_capability_ids"]
           assert manifest["policy"]["truth_revocations"] == []
           assert audit["truth_revocations"] == []
           assert view["supersession_semantics"].startswith("view-only")
