@@ -1,0 +1,84 @@
+name: RealityGraph — Independent MathGraph Warrant Replay
+
+on:
+  push:
+    branches:
+      - realitygraph-mathgraph-warrant-consumer-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-warrant-replay:
+    name: independent-mathgraph-source-bound-consumer
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Retrieve exact immutable external source without producer implementation
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/warrant-source" evidence-out
+          curl -fsSL --retry 3 --max-time 70 \
+            "https://raw.githubusercontent.com/metalogiclabs/mathgraph/040456fc8862c79c8b384ce63846628274b678be/evidence/living_warrant_openai_jpl_20261010.json" \
+            -o "$RUNNER_TEMP/warrant-source/living.json"
+          curl -fsSL --retry 3 --max-time 70 \
+            "https://raw.githubusercontent.com/openai/math/fd4aeeb2ee4fc729c18d98444fed42fd0529eeeb/history.md" \
+            -o "$RUNNER_TEMP/warrant-source/openai-history.md"
+          echo "0a850b112cce200f2fa97f0d861db712f3752712a6326e62f4c0d56996a95d87  $RUNNER_TEMP/warrant-source/living.json" | sha256sum -c -
+          echo "41c2a2d470014b3628695c7aabf5fd0c93f6f687621fca172062f22b59ed6a1e  $RUNNER_TEMP/warrant-source/openai-history.md" | sha256sum -c -
+          echo "MATHGRAPH_WARRANT_SNAPSHOT=$RUNNER_TEMP/warrant-source/living.json" >> "$GITHUB_ENV"
+          echo "MATHGRAPH_OPENAI_HISTORY=$RUNNER_TEMP/warrant-source/openai-history.md" >> "$GITHUB_ENV"
+          echo "EXACT_EXTERNAL_SOURCE_BYTES_ACCEPTED"
+      - name: Independent graph derivation and protected-negative qualification
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_mathgraph_warrant_consumer_v1.py -v \
+            2>&1 | tee evidence-out/independent-tests.log
+          grep -Eq '^Ran 1[01] tests?' evidence-out/independent-tests.log
+      - name: Reproduce published consequences independently
+        run: |
+          set -euo pipefail
+          python research/mathgraph_warrant_consumer_v1.py \
+            --snapshot "$MATHGRAPH_WARRANT_SNAPSHOT" \
+            --history "$MATHGRAPH_OPENAI_HISTORY" \
+            | tee evidence-out/independent-replay.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path("evidence-out/independent-replay.json").read_text())
+          assert result["status"] == "WARRANTED_BOUNDED_CONSUMER_REPLAY"
+          assert result["checked_claims"] == 7
+          assert result["stale_documentary_paths"] == 3
+          assert result["unknown_mathematical_truths"] == 3
+          assert result["unaffected_formal_controls"] == 1
+          states = result["independent_states"]
+          assert states["jpl.l4yaml.finite_parser_acceptance"]["after"] == "WARRANTED_BOUNDED"
+          assert all(states["openai.theorem.%d" % n]["after"] == "UNKNOWN"
+                     for n in (1, 2, 3))
+          print("QUALIFIED_INDEPENDENT_GRAPH_REPLAY_NOT_INDEPENDENT_JPL_LEAN_RECHECK")
+          PY
+          {
+            echo "CONSUMER_COMMIT=$(git rev-parse HEAD)"
+            echo "PRODUCER_PIN=metalogiclabs/mathgraph@040456fc8862c79c8b384ce63846628274b678be"
+            echo "SOURCE_PIN=openai/math@fd4aeeb2ee4fc729c18d98444fed42fd0529eeeb"
+            echo "LIMIT=independent graph/source replay; JPL 48-case qualification is a pinned prior authority"
+            echo "NO_CLAIM=universal semantic correctness or fresh formal theorem replay"
+            sha256sum research/mathgraph_warrant_consumer_v1.py \
+              tests/test_mathgraph_warrant_consumer_v1.py \
+              "$MATHGRAPH_WARRANT_SNAPSHOT" \
+              "$MATHGRAPH_OPENAI_HISTORY" \
+              evidence-out/independent-replay.json
+          } > evidence-out/source-receipt.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: realitygraph-independent-mathgraph-warrant-v1
+          path: evidence-out/
+          if-no-files-found: warn
