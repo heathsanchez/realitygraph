@@ -1,0 +1,130 @@
+name: RealityGraph independent Mathlib receipt recipient
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/mathlib_receipt_recipient/**'
+      - '.github/workflows/mathlib-receipt-recipient.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-receipt-replay:
+    name: Offline admission and scoped revocation
+    outputs:
+      observed_head: ${{ steps.live.outputs.observed_head }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Decode immutable original artifacts and fetch pinned Mathlib source
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, pathlib, urllib.request
+          home = pathlib.Path('experiments/mathlib_receipt_recipient')
+          policy = json.loads((home/'policy.json').read_text())
+          root = home/'fixtures'
+          (root/'artifacts').mkdir(parents=True, exist_ok=True)
+          for item in policy['receipts']:
+              stored = home/'fixtures'/'producer_artifacts'/(item['id']+'.zip.b64')
+              raw = base64.b64decode(stored.read_text().strip(), validate=True)
+              assert hashlib.sha256(raw).hexdigest() == item['archive_sha256'], 'PINNED_ARTIFACT_MISMATCH'
+              (root/'artifacts'/(item['id']+'.zip')).write_bytes(raw)
+              source_url = (f"https://raw.githubusercontent.com/"
+                            f"{policy['source']['repository']}/{policy['source']['commit']}/{item['file']}")
+              with urllib.request.urlopen(urllib.request.Request(source_url,
+                      headers={'User-Agent': 'realitygraph-independent-receiver'}), timeout=90) as response:
+                  source = response.read(2_000_001)
+              blob = hashlib.sha1(b'blob '+str(len(source)).encode()+b'\0'+source).hexdigest()
+              assert blob == item['git_blob'], 'ORIGINAL_MATHLIB_SOURCE_MISMATCH'
+              target = root/'sources'/item['file']
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(source)
+              print(item['id'], 'source and producer bytes pinned', flush=True)
+          PY
+
+      - name: Validate external trust-policy pin and replay real evidence
+        run: |
+          python experiments/mathlib_receipt_recipient/consumer.py \
+            --policy experiments/mathlib_receipt_recipient/policy.json \
+            --policy-sha256 ba9313b4cf4225592dbae5bcd6bbca837d03be34d837e43267544923f3774426 \
+            --artifacts experiments/mathlib_receipt_recipient/fixtures/artifacts \
+            --sources experiments/mathlib_receipt_recipient/fixtures/sources \
+            | tee experiments/mathlib_receipt_recipient/recipient-report.json
+
+      - name: Independent adversarial and selective revocation suite
+        run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_consumer.py -v
+
+      - name: Observe current publisher-repository branch and exact source files
+        id: live
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python experiments/mathlib_receipt_recipient/current_source.py \
+            --policy experiments/mathlib_receipt_recipient/policy.json \
+            --policy-sha256 ba9313b4cf4225592dbae5bcd6bbca837d03be34d837e43267544923f3774426 \
+            --artifacts experiments/mathlib_receipt_recipient/fixtures/artifacts \
+            --sources experiments/mathlib_receipt_recipient/fixtures/sources \
+            --output experiments/mathlib_receipt_recipient/current-source-report.json
+          head=$(python3 -c 'import json; print(json.load(open("experiments/mathlib_receipt_recipient/current-source-report.json"))["observed_head"])')
+          echo "observed_head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Test no false current-proof promotion and localized source drift
+        run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_source.py -v
+
+      - name: Keep verified immutable snapshot separate from moving-HEAD freshness
+        run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_native.py -v
+
+      - name: Preserve original inputs, verdicts and negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realitygraph-mathlib-independent-recipient
+          path: |
+            experiments/mathlib_receipt_recipient/fixtures/
+            experiments/mathlib_receipt_recipient/recipient-report.json
+            experiments/mathlib_receipt_recipient/current-source-report.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  native-current-replay:
+    name: Receiver-owned native Lean replay at observed upstream head
+    needs: independent-receipt-replay
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install exact Lean v4.35.0 toolchain
+        run: |
+          curl --fail --silent --show-error --location https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          export PATH="$HOME/.elan/bin:$PATH"
+          elan toolchain install leanprover/lean4:v4.35.0
+          elan default leanprover/lean4:v4.35.0
+          lean --version
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Rebuild two original Mathlib declarations independently under observed head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 experiments/mathlib_receipt_recipient/current_native.py \
+            --policy experiments/mathlib_receipt_recipient/policy.json \
+            --policy-sha256 ba9313b4cf4225592dbae5bcd6bbca837d03be34d837e43267544923f3774426 \
+            --observed-head "${{ needs.independent-receipt-replay.outputs.observed_head }}"
+      - name: Retain independent native proof logs and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realitygraph-current-mathlib-native-replay
+          path: experiments/mathlib_receipt_recipient/current_native_evidence/
+          if-no-files-found: warn
+          retention-days: 90

@@ -1,0 +1,32 @@
+{
+  "schema": "realitygraph.mathlib-source-recipient.v1",
+  "producer": {
+    "repository": "metalogiclabs/mathgraph",
+    "commit": "a75aa63af76694ea944ccf1c02a1d96c3a4ec327",
+    "actions_run": "38490276564"
+  },
+  "source": {
+    "repository": "leanprover-community/mathlib4",
+    "commit": "56a005855ea17e0b0958f73ec801ae140b0a1679",
+    "lean_version": "4.35.0",
+    "lean_commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc"
+  },
+  "receipts": [
+    {
+      "id": "mathlib.function.flip_def",
+      "module": "Mathlib.Logic.Function.Defs",
+      "file": "Mathlib/Logic/Function/Defs.lean",
+      "git_blob": "565ae3df6b95fa084d60818ab13fab2e80874f3f",
+      "archive_sha256": "b7424fd888c5768c2dacd4713383014890083a04cde154729a9960668007e307",
+      "artifact_id": 11861810218
+    },
+    {
+      "id": "mathlib.nat.choose_zero_right",
+      "module": "Mathlib.Data.Nat.Choose.Basic",
+      "file": "Mathlib/Data/Nat/Choose/Basic.lean",
+      "git_blob": "1cd090d71c8175e5f2071d939d30394b4c56d9de",
+      "archive_sha256": "2f7f3f3b82c4ac638759ed60bd9996ccff5092ce92d43d7fcfb99a5006c88353",
+      "artifact_id": 11860839777
+    }
+  ]
+}
