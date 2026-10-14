@@ -106,6 +106,20 @@ run_cmd do
     (WORK/"CurrentForgedValid.lean").write_text(
         f"import {module}\n\ntheorem ReceiverProof.checked : True := True.intro\n")
 
+def classify_current_head(start, finish, observed):
+    """A moving branch cannot revoke an already checked immutable proof."""
+    if start is None or finish is None:
+        return "UNKNOWN_LIVE_BRANCH_OBSERVATION_UNAVAILABLE"
+    if start == observed and finish == observed:
+        return "CHECKED_AT_LATEST_OBSERVED_HEAD_ONLY"
+    return "UNKNOWN_BRANCH_HEAD_ADVANCED_DURING_OR_BEFORE_REPLAY"
+
+def safe_github_head():
+    try:
+        return github_head()
+    except Refused:
+        return None
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--policy",type=Path,required=True)
@@ -129,7 +143,7 @@ def main():
             raise Refused("UPSTREAM_POLICY_OR_HEAD_UNAUTHORIZED")
         # HEAD may advance while a source-pinned proof is being checked.
         # This does NOT invalidate a proof at its exact immutable commit.
-        result["head_at_native_start"] = github_head()
+        result["head_at_native_start"] = safe_github_head()
         (WORK/"lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
         (WORK/"lakefile.toml").write_text(
             'name = "realitygraph_current_mathlib"\nversion = "0.1.0"\n'
@@ -164,12 +178,11 @@ def main():
                 "original":name,"git_blob":item["git_blob"],
                 "native":"CHECKED_AT_EXACT_OBSERVED_HEAD",
                 "false_attribution":"REJECTED"}
-        result["head_after_native_replay"] = github_head()
-        result["current_applicability"] = (
-            "CHECKED_AT_LATEST_OBSERVED_HEAD_ONLY"
-            if result["head_at_native_start"] == args.observed_head
-            and result["head_after_native_replay"] == args.observed_head
-            else "UNKNOWN_BRANCH_HEAD_ADVANCED_DURING_OR_BEFORE_REPLAY"
+        result["head_after_native_replay"] = safe_github_head()
+        result["current_applicability"] = classify_current_head(
+            result["head_at_native_start"],
+            result["head_after_native_replay"],
+            args.observed_head,
         )
         result["status"]="WARRANTED_BOUNDED_RECEIVER_NATIVE_IMMUTABLE_SNAPSHOT"
     except (Refused,OSError,ValueError,KeyError,TypeError) as ex:
