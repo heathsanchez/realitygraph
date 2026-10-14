@@ -80,6 +80,9 @@ jobs:
       - name: Test no false current-proof promotion and localized source drift
         run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_source.py -v
 
+      - name: Keep verified immutable snapshot separate from moving-HEAD freshness
+        run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_native.py -v
+
       - name: Preserve original inputs, verdicts and negatives
         if: always()
         uses: actions/upload-artifact@v4
