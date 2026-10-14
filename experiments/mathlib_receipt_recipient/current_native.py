@@ -127,8 +127,9 @@ def main():
         policy=policy_from_bytes(args.policy.read_bytes(),args.policy_sha256)
         if policy["source"]["repository"]!=REPO or not SHA.fullmatch(args.observed_head):
             raise Refused("UPSTREAM_POLICY_OR_HEAD_UNAUTHORIZED")
-        if github_head()!=args.observed_head:
-            raise Refused("HEAD_MOVED_BEFORE_NATIVE_REPLAY")
+        # HEAD may advance while a source-pinned proof is being checked.
+        # This does NOT invalidate a proof at its exact immutable commit.
+        report["head_at_native_start"] = github_head()
         (WORK/"lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
         (WORK/"lakefile.toml").write_text(
             'name = "realitygraph_current_mathlib"\nversion = "0.1.0"\n'
@@ -163,16 +164,23 @@ def main():
                 "original":name,"git_blob":item["git_blob"],
                 "native":"CHECKED_AT_EXACT_OBSERVED_HEAD",
                 "false_attribution":"REJECTED"}
-        if github_head()!=args.observed_head:
-            raise Refused("HEAD_MOVED_DURING_REPLAY")
-        result["status"]="WARRANTED_BOUNDED_RECEIVER_NATIVE_AT_OBSERVED_HEAD"
+        report["head_after_native_replay"] = github_head()
+        report["current_applicability"] = (
+            "CHECKED_AT_LATEST_OBSERVED_HEAD_ONLY"
+            if report["head_at_native_start"] == args.observed_head
+            and report["head_after_native_replay"] == args.observed_head
+            else "UNKNOWN_BRANCH_HEAD_ADVANCED_DURING_OR_BEFORE_REPLAY"
+        )
+        result["status"]="WARRANTED_BOUNDED_RECEIVER_NATIVE_IMMUTABLE_SNAPSHOT"
     except (Refused,OSError,ValueError,KeyError,TypeError) as ex:
         result["failure"]=ex.reason if isinstance(ex,Refused) else "NATIVE_INFRA_FAILURE"
     (OUT/"report.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
     print("RESULT",json.dumps({"status":result["status"],"head":result["observed_head"],
+                               "current":result.get("current_applicability","UNKNOWN"),
+                               "head_after":result.get("head_after_native_replay"),
                                "claims":list(result["theorems"]),"failure":result["failure"]}),
           flush=True)
-    return 0 if result["status"]=="WARRANTED_BOUNDED_RECEIVER_NATIVE_AT_OBSERVED_HEAD" else 1
+    return 0 if result["status"]=="WARRANTED_BOUNDED_RECEIVER_NATIVE_IMMUTABLE_SNAPSHOT" else 1
 
 if __name__=="__main__":
     raise SystemExit(main())
