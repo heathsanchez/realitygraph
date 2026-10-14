@@ -74,7 +74,8 @@ jobs:
             --artifacts experiments/mathlib_receipt_recipient/fixtures/artifacts \
             --sources experiments/mathlib_receipt_recipient/fixtures/sources \
             --output experiments/mathlib_receipt_recipient/current-source-report.json
-          echo "observed_head=$(python3 -c "import json; print(json.load(open('experiments/mathlib_receipt_recipient/current-source-report.json'))['observed_head'])")" >> "$GITHUB_OUTPUT"
+          head=$(python3 -c 'import json; print(json.load(open("experiments/mathlib_receipt_recipient/current-source-report.json"))["observed_head"])')
+          echo "observed_head=$head" >> "$GITHUB_OUTPUT"
 
       - name: Test no false current-proof promotion and localized source drift
         run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_source.py -v
