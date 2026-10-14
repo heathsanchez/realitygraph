@@ -13,6 +13,8 @@ permissions:
 jobs:
   independent-receipt-replay:
     name: Offline admission and scoped revocation
+    outputs:
+      observed_head: ${{ steps.live.outputs.observed_head }}
     runs-on: ubuntu-22.04
     timeout-minutes: 12
     steps:
@@ -62,6 +64,7 @@ jobs:
         run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_consumer.py -v
 
       - name: Observe current publisher-repository branch and exact source files
+        id: live
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -71,6 +74,7 @@ jobs:
             --artifacts experiments/mathlib_receipt_recipient/fixtures/artifacts \
             --sources experiments/mathlib_receipt_recipient/fixtures/sources \
             --output experiments/mathlib_receipt_recipient/current-source-report.json
+          echo "observed_head=$(python3 -c "import json; print(json.load(open('experiments/mathlib_receipt_recipient/current-source-report.json'))['observed_head'])")" >> "$GITHUB_OUTPUT"
 
       - name: Test no false current-proof promotion and localized source drift
         run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_source.py -v
@@ -84,5 +88,39 @@ jobs:
             experiments/mathlib_receipt_recipient/fixtures/
             experiments/mathlib_receipt_recipient/recipient-report.json
             experiments/mathlib_receipt_recipient/current-source-report.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  native-current-replay:
+    name: Receiver-owned native Lean replay at observed upstream head
+    needs: independent-receipt-replay
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install exact Lean v4.35.0 toolchain
+        run: |
+          curl --fail --silent --show-error --location https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          export PATH="$HOME/.elan/bin:$PATH"
+          elan toolchain install leanprover/lean4:v4.35.0
+          elan default leanprover/lean4:v4.35.0
+          lean --version
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Rebuild two original Mathlib declarations independently under observed head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 experiments/mathlib_receipt_recipient/current_native.py \
+            --policy experiments/mathlib_receipt_recipient/policy.json \
+            --policy-sha256 ba9313b4cf4225592dbae5bcd6bbca837d03be34d837e43267544923f3774426 \
+            --observed-head "${{ needs.independent-receipt-replay.outputs.observed_head }}"
+      - name: Retain independent native proof logs and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realitygraph-current-mathlib-native-replay
+          path: experiments/mathlib_receipt_recipient/current_native_evidence/
           if-no-files-found: warn
           retention-days: 90
