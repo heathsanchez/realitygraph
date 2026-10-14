@@ -47,3 +47,44 @@ python experiments/mathlib_receipt_recipient/current_source.py \
   --sources experiments/mathlib_receipt_recipient/fixtures/sources \
   --output experiments/mathlib_receipt_recipient/current-source-report.json
 ```
+
+
+## Receiver-owned native requalification at the observed head
+
+The same read-only workflow now passes the exact observed Mathlib head from
+its live-source admission job into a **separate receiver-owned Lean 4.35 job**.
+That job does not trust or import MathGraph's producer Python code. It checks
+out the exact observed source revision, resolves the current dependencies
+through Lake, derives the first scoped theorem name from the original source,
+and compiles its own proof wrapper and deliberately false-attribution control
+with the native Lean kernel.
+
+At [CI #38494606080](https://github.com/heathsanchez/realitygraph/actions/runs/38494606080),
+both original declarations were successfully checked at Mathlib head
+`f9254e257357eb9fce947e3ac01d428e4ba11d6a` with two independently
+valid false-attribution controls rejected as intended. The receiver's
+[exact native artifact](https://github.com/heathsanchez/realitygraph/actions/runs/38494606080/artifacts/11863292983)
+has ZIP SHA-256
+`dfbd4c28f077e3f3e558ff26b860b3087cca96d35fe6b6267d3247b04159afa4`;
+all 13 command logs and expected exit statuses were independently checked.
+The separate [live observation artifact](https://github.com/heathsanchez/realitygraph/actions/runs/38494606080/artifacts/11863532324)
+is SHA-256 `27699db7eb9ff85c40a8b7db92fa7257c26b7b330f7d92873dfa42c3f407e16e`.
+
+**Immutable correctness and branch freshness are different statuses.**
+An earlier run [#38494129918](https://github.com/heathsanchez/realitygraph/actions/runs/38494129918)
+compiled both theorems and their negative controls successfully at `d20f010d…`,
+but reported `UNKNOWN` because upstream `master` moved while CI was running.
+Its logs are retained and SHA-audited. The corrected receiver retains an
+exact-commit native snapshot when Lean checks pass and separately reports
+`CHECKED_AT_LATEST_OBSERVED_HEAD_ONLY` if the first and final branch
+observations agree. If the branch advances, the source-pinned proof remains
+historically bounded, while current applicability becomes
+`UNKNOWN_BRANCH_HEAD_ADVANCED_DURING_OR_BEFORE_REPLAY`. Missing live
+observations likewise cannot promote freshness.
+
+This remains **same-owner, independently implemented native Lean replay**,
+not a proof checked by a second kernel or outside organization. No
+unrestricted source parser, theorem invention, natural-language fidelity,
+publisher-signature verification, whole-dependency *equivalence across
+versions*, or permanent correctness warrant for a moving branch is implied.
+No production authorization or public catalogue mutation occurs.
