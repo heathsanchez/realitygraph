@@ -102,7 +102,8 @@ def inspect_observation(historical: dict, policy: dict, *, observed_commit: str,
 
 
 def api_get_json(url: str, token: str | None, *, allow_missing: bool = False) -> dict | None:
-    insist(url.startswith(BASE + "/repos/" + ALLOWED_REPO + "/"),
+    authorized_root = BASE + "/repos/" + ALLOWED_REPO
+    insist(url == authorized_root or url.startswith(authorized_root + "/"),
            "UNTRUSTED_API_ENDPOINT")
     headers = {
         "Accept": "application/vnd.github+json",
@@ -115,7 +116,8 @@ def api_get_json(url: str, token: str | None, *, allow_missing: bool = False) ->
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             final_url = response.geturl()
-            insist(final_url.startswith(BASE + "/repos/" + ALLOWED_REPO + "/"),
+            insist(final_url == authorized_root or
+                   final_url.startswith(authorized_root + "/"),
                    "UNTRUSTED_API_REDIRECT")
             raw = response.read(300000)
     except urllib.error.HTTPError as error:
@@ -165,7 +167,7 @@ def observe_live(policy: dict, *, token: str | None) -> tuple[dict, dict]:
         insist(type(payload) is str, "SOURCE_CONTENT_API_MISMATCH")
         try:
             decoded = base64.b64decode("".join(payload.split()), validate=True)
-        except (ValueError, Exception) as err:
+        except Exception:
             # Never classify a transport decoding failure as source withdrawal.
             fail("SOURCE_CONTENT_DECODE_FAILURE")
         reported_blob = response.get("sha")
