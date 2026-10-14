@@ -61,6 +61,20 @@ jobs:
       - name: Independent adversarial and selective revocation suite
         run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_consumer.py -v
 
+      - name: Observe current publisher-repository branch and exact source files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python experiments/mathlib_receipt_recipient/current_source.py \
+            --policy experiments/mathlib_receipt_recipient/policy.json \
+            --policy-sha256 ba9313b4cf4225592dbae5bcd6bbca837d03be34d837e43267544923f3774426 \
+            --artifacts experiments/mathlib_receipt_recipient/fixtures/artifacts \
+            --sources experiments/mathlib_receipt_recipient/fixtures/sources \
+            --output experiments/mathlib_receipt_recipient/current-source-report.json
+
+      - name: Test no false current-proof promotion and localized source drift
+        run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_current_source.py -v
+
       - name: Preserve original inputs, verdicts and negatives
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,5 +83,6 @@ jobs:
           path: |
             experiments/mathlib_receipt_recipient/fixtures/
             experiments/mathlib_receipt_recipient/recipient-report.json
+            experiments/mathlib_receipt_recipient/current-source-report.json
           if-no-files-found: warn
           retention-days: 90
