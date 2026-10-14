@@ -1,0 +1,82 @@
+name: RealityGraph independent Mathlib receipt recipient
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/mathlib_receipt_recipient/**'
+      - '.github/workflows/mathlib-receipt-recipient.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-receipt-replay:
+    name: Offline admission and scoped revocation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Retrieve independently pinned native producer artifacts and Mathlib source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, urllib.request
+          home = pathlib.Path('experiments/mathlib_receipt_recipient')
+          policy = json.loads((home/'policy.json').read_text())
+          root = home/'fixtures'
+          (root/'artifacts').mkdir(parents=True, exist_ok=True)
+          for item in policy['receipts']:
+              url = (f"https://api.github.com/repos/{policy['producer']['repository']}"
+                     f"/actions/artifacts/{item['artifact_id']}/zip")
+              headers = {'Accept': 'application/vnd.github+json',
+                         'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                         'X-GitHub-Api-Version': '2022-11-28',
+                         'User-Agent': 'realitygraph-independent-receiver'}
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=90) as response:
+                  raw = response.read(300_000)
+              assert hashlib.sha256(raw).hexdigest() == item['archive_sha256'], 'PINNED_ARTIFACT_MISMATCH'
+              (root/'artifacts'/(item['id']+'.zip')).write_bytes(raw)
+              source_url = (f"https://raw.githubusercontent.com/"
+                            f"{policy['source']['repository']}/{policy['source']['commit']}/{item['file']}")
+              with urllib.request.urlopen(urllib.request.Request(source_url,
+                      headers={'User-Agent': 'realitygraph-independent-receiver'}), timeout=90) as response:
+                  source = response.read(2_000_001)
+              blob = hashlib.sha1(b'blob '+str(len(source)).encode()+b'\0'+source).hexdigest()
+              assert blob == item['git_blob'], 'ORIGINAL_MATHLIB_SOURCE_MISMATCH'
+              target = root/'sources'/item['file']
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(source)
+              print(item['id'], 'source and producer bytes pinned', flush=True)
+          PY
+
+      - name: Validate external trust-policy pin and replay real evidence
+        run: |
+          python experiments/mathlib_receipt_recipient/consumer.py \
+            --policy experiments/mathlib_receipt_recipient/policy.json \
+            --policy-sha256 ba9313b4cf4225592dbae5bcd6bbca837d03be34d837e43267544923f3774426 \
+            --artifacts experiments/mathlib_receipt_recipient/fixtures/artifacts \
+            --sources experiments/mathlib_receipt_recipient/fixtures/sources \
+            | tee experiments/mathlib_receipt_recipient/recipient-report.json
+
+      - name: Independent adversarial and selective revocation suite
+        run: python -m unittest discover -s experiments/mathlib_receipt_recipient -p test_consumer.py -v
+
+      - name: Preserve original inputs, verdicts and negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realitygraph-mathlib-independent-recipient
+          path: |
+            experiments/mathlib_receipt_recipient/fixtures/
+            experiments/mathlib_receipt_recipient/recipient-report.json
+          if-no-files-found: warn
+          retention-days: 90
