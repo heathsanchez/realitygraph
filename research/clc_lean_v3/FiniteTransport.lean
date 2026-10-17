@@ -33,7 +33,7 @@ theorem refines_decisive {a b : Verdict}
 /-- One typed state-test interface, with a designated protected test family. -/
 structure Form (State Test : Type) where
   eval : State → Test → Verdict
-  protected : Test → Bool
+  isProtected : Test → Bool
 
 /-- A candidate CLC transport. The verification laws are not assumed here. -/
 structure Transport {SA TA SB TB : Type}
@@ -47,9 +47,9 @@ def Valid {SA TA SB TB : Type}
     (A : Form SA TA) (B : Form SB TB)
     (r : Transport A B) : Prop :=
   (∀ x d, Refines (A.eval x (r.pull d)) (B.eval (r.forward x) d)) ∧
-  (∀ d, B.protected d = true → A.protected (r.pull d) = true) ∧
-  (∀ p, A.protected p = true →
-    B.protected (r.lift p) = true ∧ r.pull (r.lift p) = p)
+  (∀ d, B.isProtected d = true → A.isProtected (r.pull d) = true) ∧
+  (∀ p, A.isProtected p = true →
+    B.isProtected (r.lift p) = true ∧ r.pull (r.lift p) = p)
 
 /-- A decisive old verdict cannot turn into its opposite under a valid refinement. -/
 theorem preserve_decisive {SA TA SB TB : Type}
@@ -84,10 +84,10 @@ theorem valid_compose {SA TA SB TB SC TC : Type}
   · intro x d
     exact refines_trans (hr.1 x (s.pull d)) (hs.1 (r.forward x) d)
   constructor
-  · intro d protected
-    exact hr.2.1 (s.pull d) (hs.2.1 d protected)
-  · intro p protected
-    have ha := hr.2.2 p protected
+  · intro d hp
+    exact hr.2.1 (s.pull d) (hs.2.1 d hp)
+  · intro p hp
+    have ha := hr.2.2 p hp
     have hb := hs.2.2 (r.lift p) ha.1
     constructor
     · exact hb.1
