@@ -5,7 +5,9 @@ on:
       - research/clc-flash-mda-preference-repair-v2-20261018
     paths:
       - 'research/clc_flash_mda_v1/**'
-      - '.github/workflows/clc-flash-mda-integration-v1.yml'
+      - '.github/workflows/clc-flash-mda-integration-v2.yml'
+      - 'realitygraph/flash.py'
+      - 'tests/test_clc_flash_preference_v2.py'
   workflow_dispatch:
 permissions:
   contents: read
