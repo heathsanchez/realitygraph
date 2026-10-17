@@ -26,7 +26,7 @@ jobs:
           set -euo pipefail
           git merge-base --is-ancestor c60cb66712014680f8558413f8ea183eab95ec0e HEAD
           test "$(git hash-object realitygraph/flash.py)" = 07aa9013aa265fdd640182e8dddbdb2d7ea46912
-          test "$(git hash-object realitygraph/capability.py)" = "$(git rev-parse 81deb459120de01a4fd6b686cf2ed260158dd766:realitygraph/capability.py)"
+          test "$(git hash-object realitygraph/capability.py)" = 02d8b3257686d92346ed9974474532a25f6a40e5
           echo "FROZEN_V2_FLASH_REPAIR_SOURCE_PIN_OK"
       - name: Recheck inherited native Flash and MDA authority tests
         shell: bash
