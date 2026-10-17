@@ -793,6 +793,34 @@ class FlashClosure:
                 reopened.add(obligation.obligation_id)
                 changed.add(obligation.obligation_id)
 
+            # A previously discharged result remains semantically valid, but
+            # newly certified equivalent implementations may be cheaper. The
+            # lawful representative is a separate, cost-governed decision.
+            if obligation.status == "DISCHARGED" and valid_current:
+                candidates = [
+                    capability_id
+                    for capability_id in active
+                    if self._capability_solves(
+                        self.capabilities[capability_id].capability,
+                        obligation,
+                    )
+                ]
+                candidates.sort(
+                    key=lambda capability_id: (
+                        self.capabilities[capability_id].capability.cost,
+                        capability_id,
+                    )
+                )
+                if candidates and candidates[0] != obligation.solved_by:
+                    chosen = candidates[0]
+                    obligation.solved_by = chosen
+                    obligation.support_ids = (
+                        chosen,
+                        *self.capabilities[chosen].support_ids,
+                    )
+                    changed.add(obligation.obligation_id)
+                continue
+
             if obligation.status != "OPEN":
                 continue
 
@@ -858,7 +886,7 @@ class FlashClosure:
             new_discharged, new_reopened, obligation_changes = (
                 self._refresh_obligations()
             )
-            if new_discharged or new_reopened:
+            if obligation_changes:
                 changed = True
             discharged.update(new_discharged)
             reopened.update(new_reopened)
