@@ -1,0 +1,88 @@
+name: CLC finite Lean transport and FLASH admission V3
+on:
+  push:
+    branches:
+      - research/clc-lean-certified-flash-v3-20261018
+    paths:
+      - 'realitygraph/clc_lean.py'
+      - 'realitygraph/flash.py'
+      - 'research/clc_lean_v3/**'
+      - 'tests/test_clc_lean_admission_v3.py'
+      - '.github/workflows/clc-lean-flash-admission-v3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prove-and-admit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout frozen predecessor and audit commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+      - name: Assert pre-result freeze and inherited native source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor f15074e5b3ee591d12b783e71320a7cb11c32cba HEAD
+          test -f research/clc_lean_v3/FROZEN_PROTOCOL.md
+          test "$(git hash-object realitygraph/capability.py)" = 02d8b3257686d92346ed9974474532a25f6a40e5
+          echo FROZEN_V3_PROTOCOL_AND_INHERITED_CAPABILITY_AUTHORITY
+      - name: Install pinned Lean 4.24.0 via elan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 4 -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o "$RUNNER_TEMP/elan-init.sh"
+          sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain leanprover/lean4:v4.24.0 --no-modify-path
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/lean" --version
+          "$HOME/.elan/bin/lean" --version | grep -F 'version 4.24.0'
+      - name: Original source-native FLASH and developmental regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p test_flash_event_runtime.py -v
+          python3 -m unittest discover -s tests -p test_flash_future_quotient.py -v
+          python3 -m unittest discover -s tests -p test_developmental_closure.py -v
+          python3 -m unittest discover -s tests -p test_clc_flash_preference_v2.py -v
+          python3 research/clc_flash_mda_v1/reference.py
+          PYTHONPATH="$PWD" python3 research/clc_flash_mda_v1/execute_integration.py --output research/clc_lean_v3/V2_REGRESSION_RESULTS.json --strict
+      - name: Compile generic CLC Lean theorems in original toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          lean research/clc_lean_v3/FiniteTransport.lean 2>&1 | tee research/clc_lean_v3/lean_library.log
+      - name: Prove finite source-bound transports and test real FLASH admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLC_LEAN="$(command -v lean)" python3 -m unittest discover -s tests -p test_clc_lean_admission_v3.py -v 2>&1 | tee research/clc_lean_v3/lean_flash_tests.log
+          grep -F 'Ran 5 tests' research/clc_lean_v3/lean_flash_tests.log
+          grep -F 'OK' research/clc_lean_v3/lean_flash_tests.log
+      - name: Record exact source and trusted toolchain identity
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          (lean --version || true) > research/clc_lean_v3/lean_version.txt
+          sha256sum research/clc_lean_v3/FiniteTransport.lean realitygraph/clc_lean.py realitygraph/flash.py tests/test_clc_lean_admission_v3.py > research/clc_lean_v3/source_sha256.txt
+          printf '%s\n' "$GITHUB_SHA" > research/clc_lean_v3/qualified_head.txt
+      - name: Retain source, proof and independent replay evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clc-v3-lean-transport-flash-admission
+          path: |
+            research/clc_lean_v3/FROZEN_PROTOCOL.md
+            research/clc_lean_v3/FiniteTransport.lean
+            research/clc_lean_v3/lean_library.log
+            research/clc_lean_v3/lean_flash_tests.log
+            research/clc_lean_v3/V2_REGRESSION_RESULTS.json
+            research/clc_lean_v3/lean_version.txt
+            research/clc_lean_v3/source_sha256.txt
+            research/clc_lean_v3/qualified_head.txt
+            realitygraph/clc_lean.py
+            tests/test_clc_lean_admission_v3.py
+          if-no-files-found: warn
+          retention-days: 90
