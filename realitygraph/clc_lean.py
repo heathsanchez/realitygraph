@@ -318,7 +318,7 @@ class LeanCLCChecker:
                 raise ValueError("CLC Lean transport checker did not finish: UNKNOWN_ENVIRONMENT") from exc
         marker = f"CLC_FINITE_TRANSPORT_CHECKED:{claim.digest}"
         if result.returncode != 0 or marker not in result.stdout:
-            raise ValueError("CLC transport failed Lean kernel proof: REJECTED_OR_ENVIRONMENT")
+            raise ValueError("CLC transport failed Lean kernel proof: REJECTED_OR_ENVIRONMENT; " + (result.stdout + result.stderr)[-3500:])
         if ("sorryAx" in result.stdout or "sorry" in result.stderr
                 or "error:" in result.stderr.lower()):
             raise ValueError("CLC transport proof contains invalid or unsound Lean diagnostics")
