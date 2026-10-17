@@ -1,3 +1,5 @@
+import Init.Data.Nat.Lemmas
+
 /-!
 CLC finite transport proof kernel (Lean 4.24.0)
 Scope: finite instances and general abstract laws relative to admitted evaluator functions.
