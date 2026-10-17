@@ -98,7 +98,8 @@ class CLCLeanAdmissionTests(unittest.TestCase):
     def test_invalid_laws_cause_lean_kernel_failure(self):
         cap = capability('f')
         valid = canonical_transport(cap)
-        self.assertEqual(self.lean_direct(valid).returncode, 0)
+        valid_run = self.lean_direct(valid)
+        self.assertEqual(valid_run.returncode, 0, msg=valid_run.stdout+valid_run.stderr)
         malformed = [
             replace(valid, forward=(('x0','y1'),('x1','y0'))),
             replace(valid, pull=(('probe:0','probe:1'),('probe:1','probe:0'))),
