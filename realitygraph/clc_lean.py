@@ -244,9 +244,9 @@ def generated_lean_source(claim: FiniteCLCTransport,
                          claim.lift),
            "def clcWitness : FiniteCLC.Transport clcSource clcTarget :=\n"
            "  { forward := clcForward, pull := clcPull, lift := clcLift }",
-           ("theorem clcChecked : FiniteCLC.Strict clcSource clcTarget clcWitness := by decide"
+           ("theorem clcChecked : FiniteCLC.Strict clcSource clcTarget clcWitness := by\n  unfold FiniteCLC.Strict FiniteCLC.Valid FiniteCLC.Refines\n  decide"
             if claim.strict else
-            "theorem clcChecked : FiniteCLC.Valid clcSource clcTarget clcWitness := by decide"),
+            "theorem clcChecked : FiniteCLC.Valid clcSource clcTarget clcWitness := by\n  unfold FiniteCLC.Valid FiniteCLC.Refines\n  decide"),
            'theorem clcPreservesDecisive (x : Fin ' + str(len(claim.source.states)) +
            ') (d : Fin ' + str(len(claim.target.tests)) +
            ') (h : clcSource.eval x (clcPull d) ≠ .unknown) :' +
