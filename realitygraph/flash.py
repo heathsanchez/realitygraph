@@ -359,6 +359,7 @@ class CapabilityAdmissionEvent:
     oracle: tuple[tuple[str, str], ...]
     support_ids: tuple[str, ...] = ()
     origin: str = "verified-external"
+    transport_claim: FiniteCLCTransport | None = None
 
 
 @dataclass(frozen=True)
@@ -415,6 +416,7 @@ class FlashEventRuntime:
                 oracle=event.oracle,
                 support_ids=event.support_ids,
                 origin=event.origin,
+                transport_claim=event.transport_claim,
             )
         elif isinstance(event, ObstructionAdmissionEvent):
             result = self.closure.admit_obstruction(event.obstruction)
@@ -450,6 +452,7 @@ class FlashClosure:
         *,
         composition_rules: Iterable[FlashCompositionRule] = (),
         kernel: str = "qckn-flash-closure-v1",
+        clc_checker: LeanCLCChecker | None = None,
     ) -> None:
         rows = tuple(obligations)
         ids = [row.obligation_id for row in rows]
@@ -461,6 +464,9 @@ class FlashClosure:
         if len(rule_ids) != len(set(rule_ids)):
             raise ValueError("composition rule IDs must be unique")
         self.kernel = str(kernel)
+        self.clc_checker = clc_checker
+        self.clc_claims: dict[str, FiniteCLCTransport] = {}
+        self.clc_receipts: dict[str, CLCProofReceipt] = {}
         self.ledger = Ledger()
         self.capabilities: dict[str, CapabilityRecord] = {}
         self.revoked_ids: set[str] = set()
@@ -524,9 +530,21 @@ class FlashClosure:
         oracle: tuple[tuple[str, str], ...],
         support_ids: Iterable[str] = (),
         origin: str = "verified-external",
+        transport_claim: FiniteCLCTransport | None = None,
     ) -> FlashDelta:
         if not self._verify_capability(capability, oracle):
             raise ValueError("capability failed declared independent authority")
+        receipt = None
+        if self.clc_checker is not None:
+            if transport_claim is None:
+                raise ValueError("CLC-gated FLASH requires a typed, source-bound transport")
+            receipt = self.clc_checker.check_transport(capability, oracle, transport_claim)
+            old_claim = self.clc_claims.get(capability.capability_id)
+            if old_claim is not None and old_claim != transport_claim:
+                raise ValueError("CLC capability identity/witness conflict")
+            # All newly enabled source-level compositions must be certified
+            # BEFORE the admitted fact or ledger is mutated.
+            self._preflight_clc_compositions(capability, transport_claim)
         support = tuple(sorted(set(str(value) for value in support_ids)))
         if capability.capability_id in support:
             raise ValueError("capability cannot causally support itself")
@@ -537,6 +555,9 @@ class FlashClosure:
         if old is None:
             self.capabilities[capability.capability_id] = record
             self.ledger.append_promote_capability(capability, self.kernel)
+            if receipt is not None and transport_claim is not None:
+                self.clc_claims[capability.capability_id] = transport_claim
+                self.clc_receipts[capability.capability_id] = receipt
         self.event_count += 1
         delta = self.close()
         self._record_flash_event(
@@ -702,6 +723,51 @@ class FlashClosure:
                 changed.add(obligation.obligation_id)
         return pruned, restored, changed
 
+    def _preflight_clc_compositions(
+        self, incoming: FiniteCapability, witness: FiniteCLCTransport,
+    ) -> None:
+        """Fail closed before state mutation if an admission enables a bad transport.
+
+        This is needed because ordinary FLASH closure mutates its ledger as it
+        derives composition. The ordinary ungated code path stays unchanged.
+        """
+        if self.clc_checker is None:
+            return
+        from .clc_lean import compose_transports
+        for rule in self.composition_rules:
+            if (rule.result_capability_id in self.capabilities or
+                    incoming.capability_id not in (
+                        rule.first_capability_id, rule.second_capability_id)):
+                continue
+            first_id, second_id = rule.first_capability_id, rule.second_capability_id
+            if incoming.capability_id == first_id:
+                if not self._record_valid(second_id):
+                    continue
+                first, second = incoming, self.capabilities[second_id].capability
+                a, b = witness, self.clc_claims[second_id]
+            else:
+                if not self._record_valid(first_id):
+                    continue
+                first, second = self.capabilities[first_id].capability, incoming
+                a, b = self.clc_claims[first_id], witness
+            dependent = compose_capabilities(
+                f"{rule.result_capability_id}:dependent", first, second)
+            standalone = FiniteCapability(
+                capability_id=rule.result_capability_id,
+                input_type=dependent.input_type,
+                output_type=dependent.output_type,
+                semantics=dependent.semantics,
+                guard_inputs=dependent.guard_inputs,
+                certificate_id=rule.certificate_id,
+                dependencies=(),
+                authority_snapshot=dependent.authority_snapshot,
+                verifier_id=dependent.verifier_id,
+                provenance_ids=dependent.provenance_ids,
+                cost=dependent.cost,
+            )
+            claim = compose_transports(a, b)
+            self.clc_checker.check_transport(standalone, rule.oracle, claim)
+
     def _derive_compositions(self) -> tuple[list[str], bool]:
         generated: list[str] = []
         changed = False
@@ -746,6 +812,18 @@ class FlashClosure:
             )
             if not self._verify_capability(standalone, rule.oracle):
                 raise ValueError("standalone composition materialization failed authority")
+            composed_claim = None
+            composed_receipt = None
+            if self.clc_checker is not None:
+                from .clc_lean import compose_transports
+                if (rule.first_capability_id not in self.clc_claims or
+                        rule.second_capability_id not in self.clc_claims):
+                    raise ValueError("CLC-derived capability lacks certified parent transport")
+                composed_claim = compose_transports(
+                    self.clc_claims[rule.first_capability_id],
+                    self.clc_claims[rule.second_capability_id])
+                composed_receipt = self.clc_checker.check_transport(
+                    standalone, rule.oracle, composed_claim)
             support = tuple(
                 sorted(
                     set(
@@ -762,6 +840,9 @@ class FlashClosure:
                 f"composition:{rule.rule_id}",
             )
             self.ledger.append_promote_capability(standalone, self.kernel)
+            if composed_claim is not None and composed_receipt is not None:
+                self.clc_claims[standalone.capability_id] = composed_claim
+                self.clc_receipts[standalone.capability_id] = composed_receipt
             generated.append(standalone.capability_id)
             changed = True
         return generated, changed
