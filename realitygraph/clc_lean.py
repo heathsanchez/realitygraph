@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 VERDICTS = frozenset(("UNKNOWN", "EQ", "DIST"))
-LEAN_LIBRARY_SHA256 = "7e0099d7f4038175fab3fb9b3841f3f733d32e5c3127786e6075e405d12b32e9"
+LEAN_LIBRARY_SHA256 = "70b3eceeed69a08437d1d8da687c645ff6928d682f2930f29e559041e3f37730"
 EXPECTED_LEAN_VERSION = "4.24.0"
 LEAN_LIBRARY = Path(__file__).resolve().parents[1] / "research" / "clc_lean_v3" / "FiniteTransport.lean"
 
@@ -225,7 +225,7 @@ def _form_source(name: str, form: FiniteCLCForm) -> str:
     for i, s in enumerate(form.states):
         for j, t in enumerate(form.tests):
             lines.append(f"      | {i}, {j} => .{entries[(s,t)].lower()}")
-    lines.extend(["      | _, _ => .unknown", "    protected := fun t =>", "      match t.val with"])
+    lines.extend(["      | _, _ => .unknown", "    isProtected := fun t =>", "      match t.val with"])
     for j, t in enumerate(form.tests):
         lines.append(f"      | {j} => {'true' if t in form.protected else 'false'}")
     lines.extend(["      | _ => false", "  }"])
