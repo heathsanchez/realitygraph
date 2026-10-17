@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 research/clc_flash_mda_v1/reference.py
-          python3 research/clc_flash_mda_v1/execute_integration.py \
+          PYTHONPATH="$PWD" python3 research/clc_flash_mda_v1/execute_integration.py \
              --output research/clc_flash_mda_v1/V1_CI_RESULTS.json --strict
       - name: Retain source, failure evidence and frozen protocol
         if: always()
