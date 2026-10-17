@@ -20,7 +20,7 @@ jobs:
       - name: Checkout frozen predecessor and audit commit
         uses: actions/checkout@v4
         with:
-          fetch-depth: 10
+          fetch-depth: 0
       - name: Assert pre-result freeze and inherited native source identity
         shell: bash
         run: |
