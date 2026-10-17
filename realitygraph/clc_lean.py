@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 VERDICTS = frozenset(("UNKNOWN", "EQ", "DIST"))
-LEAN_LIBRARY_SHA256 = "70b3eceeed69a08437d1d8da687c645ff6928d682f2930f29e559041e3f37730"
+LEAN_LIBRARY_SHA256 = "c664e164d815097ba01051e8489f214e508bcf5f5d3e2ab4484bfcbfd9ec443c"
 EXPECTED_LEAN_VERSION = "4.24.0"
 LEAN_LIBRARY = Path(__file__).resolve().parents[1] / "research" / "clc_lean_v3" / "FiniteTransport.lean"
 
