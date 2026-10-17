@@ -1,0 +1,52 @@
+name: CLC MDA FLASH Finite Integration V1
+on:
+  push:
+    branches:
+      - research/clc-flash-mda-compatibility-20261018
+    paths:
+      - 'research/clc_flash_mda_v1/**'
+      - '.github/workflows/clc-flash-mda-integration-v1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-flash-versus-independent-batch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout original pinned FLASH and developmental runtime
+        uses: actions/checkout@v4
+      - name: Confirm before-result protocol and unmodified source authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 43d119e4a3c0134db9c536ac82b17b67b3315e3d HEAD
+          test "$(git hash-object realitygraph/flash.py)" = 472e6312010706ee7a9d7b416971e4026f2a184b
+          test "$(git hash-object realitygraph/capability.py)" = "$(git rev-parse 81deb459120de01a4fd6b686cf2ed260158dd766:realitygraph/capability.py)"
+          echo "ORIGINAL_FLASH_SOURCE_PIN_OK"
+      - name: Recheck inherited native Flash and MDA authority tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p test_flash_event_runtime.py -v
+          python3 -m unittest discover -s tests -p test_flash_future_quotient.py -v
+          python3 -m unittest discover -s tests -p test_developmental_closure.py -v
+      - name: CLC finite transport + exhaustive genuine Flash-versus-batch + causal checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 research/clc_flash_mda_v1/reference.py
+          python3 research/clc_flash_mda_v1/execute_integration.py \
+             --output research/clc_flash_mda_v1/V1_CI_RESULTS.json --strict
+      - name: Retain source, failure evidence and frozen protocol
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clc-flash-mda-v1-original-source-batch-evidence
+          path: |
+            research/clc_flash_mda_v1/FROZEN_PROTOCOL.md
+            research/clc_flash_mda_v1/reference.py
+            research/clc_flash_mda_v1/execute_integration.py
+            research/clc_flash_mda_v1/V1_CI_RESULTS.json
+          if-no-files-found: warn
+          retention-days: 90
