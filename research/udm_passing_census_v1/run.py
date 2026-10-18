@@ -40,7 +40,7 @@ def __udm_record(left,right):
     import json,os
     equal=left==right
     with open(os.environ["UDM_CENSUS_PATH"],"a",encoding="utf8") as f:
-        f.write(json.dumps({"actual":left,"expected":right,"equal":equal},sort_keys=True)+"\n")
+        f.write(json.dumps({"actual":left,"expected":right,"equal":equal},sort_keys=True)+"\\n")
     return equal
 """
             # Preserve equality computation, defer collective failure to the end
