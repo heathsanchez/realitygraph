@@ -1,0 +1,14 @@
+{
+  "schema": "UDM_FACTORY_PROSPECTIVE_SELECTION_V1",
+  "method_freeze_commit": "c5bfc48a7213e47357240522bf3f51a6f99ea552",
+  "selection_repository": "python-jsonschema/jsonschema",
+  "api": "GET /repos/python-jsonschema/jsonschema/pulls?state=closed&sort=updated&direction=desc&per_page=100",
+  "inspected_metadata_items": 100,
+  "rule": "merged non-bot PR with title or label matching default|factory|inherit, most recent merge first",
+  "eligible_count": 0,
+  "status": "UNKNOWN_NO_METADATA_ROLE",
+  "heldout_source": "UNOPENED",
+  "method_execution": "NOT_EXECUTED",
+  "native_tests": "NOT_EXECUTED",
+  "G2": "UNKNOWN"
+}
