@@ -24,6 +24,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_clc_lean_admission_v3.py -v 2>&1 | tee original.log
           python3 -m unittest discover -s tests -p test_clc_lifetime_v1.py -v 2>&1 | tee lifetime.log
           python3 -m unittest discover -s tests -p test_clc_flash_lifetime_replay_v1.py -v 2>&1 | tee flash_replay.log
+          python3 -m unittest discover -s tests -p test_clc_persistent_bytes_v1.py -v 2>&1 | tee persistent.log
       - name: Retain evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -33,6 +34,7 @@ jobs:
             original.log
             lifetime.log
             flash_replay.log
+            persistent.log
             tests/test_clc_lifetime_v1.py
             research/clc_lifetime_v1/PROTOCOL.md
           retention-days: 90
