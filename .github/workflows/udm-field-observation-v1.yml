@@ -1,0 +1,37 @@
+name: UDM cattrs field observation genesis V1
+on:
+  push:
+    branches:
+      - research/udm-cattrs-field-observation-v1-20261019
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-observer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install source declared pytest dependencies
+        run: |
+          python3 -m pip install 'pytest>=8.4.1' 'hypothesis>=6.135.26' 'pytest-benchmark>=5.1.0' 'immutables>=0.21' 'attrs>=25.4.0'
+      - name: Execute frozen native training observation
+        run: |
+          set -euo pipefail
+          python3 research/udm_field_observation_v1/train.py "$RUNNER_TEMP/field-observation"
+          cat "$RUNNER_TEMP/field-observation/RESULT.json"
+      - name: Preserve raw native evidence and frozen specification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udm-cattrs-field-observation-v1
+          path: |
+            research/udm_field_observation_v1/FROZEN_PROTOCOL.md
+            research/udm_field_observation_v1/train.py
+            realitygraph/udm_field_observer.py
+            ${{ runner.temp }}/field-observation/RESULT.json
+            ${{ runner.temp }}/field-observation/mapping-observations.jsonl
+            ${{ runner.temp }}/field-observation/junit.xml
+            ${{ runner.temp }}/field-observation/native.stdout
+            ${{ runner.temp }}/field-observation/native.stderr
+          retention-days: 90
