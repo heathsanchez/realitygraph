@@ -16,7 +16,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          python3 -m pip install pytest hypothesis attrs
+          python3 -m pip install 'pytest>=8.4.1' 'hypothesis>=6.135.26' 'pytest-benchmark>=5.1.0' 'immutables>=0.21' 'attrs>=25.4.0'
       - name: Execute frozen source selection and native admission
         run: |
           set -euo pipefail
