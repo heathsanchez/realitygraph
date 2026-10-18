@@ -1,0 +1,34 @@
+name: UDM factory policy inheritance V1
+on:
+  push:
+    branches:
+      - research/udm-factory-policy-v1-20261019
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install source native test dependencies
+        run: python3 -m pip install 'pytest>=8.4.1' 'hypothesis>=6.135.26' 'pytest-benchmark>=5.1.0' 'immutables>=0.21' 'attrs>=25.4.0'
+      - name: One frozen candidate and native qualification
+        run: |
+          set -euo pipefail
+          python3 research/udm_factory_policy_v1/run.py "$RUNNER_TEMP/udm-factory"
+      - name: Retain source and native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udm-factory-policy-v1
+          path: |
+            research/udm_factory_policy_v1/FROZEN_PROTOCOL.md
+            research/udm_factory_policy_v1/run.py
+            ${{ runner.temp }}/udm-factory/RESULT.json
+            ${{ runner.temp }}/udm-factory/CANDIDATE_SOURCE.py
+            ${{ runner.temp }}/udm-factory/*/junit.xml
+            ${{ runner.temp }}/udm-factory/*/stdout.txt
+            ${{ runner.temp }}/udm-factory/*/stderr.txt
+          retention-days: 90
