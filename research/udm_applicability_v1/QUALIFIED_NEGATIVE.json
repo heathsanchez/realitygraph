@@ -1,0 +1,17 @@
+{
+  "schema": "UDM_CATTRS_PROSPECTIVE_APPLICABILITY_V1_RESULT",
+  "source": "python-attrs/cattrs",
+  "pr": 788,
+  "base": "b3fb197563bd784adcbe7a385bf7d414a9c82829",
+  "head": "ff4682ad7a6d180feed4a527f8e5059afeb02432",
+  "selected_test": "tests/strategies/test_include_subclasses.py",
+  "changed_nodes": ["test_omit_if_default_with_discriminator_override"],
+  "test_file_candidates": ["tests/strategies/test_include_subclasses.py", "tests/test_gen_dict.py"],
+  "native_counts": {"tests": 2, "failures": 2, "errors": 0, "skipped": 0},
+  "native_returncode": 1,
+  "direct_boolean_parametrized_candidates": [],
+  "status": "REJECTED_PROSPECTIVE_APPLICABILITY_SHAPE",
+  "G2": "UNKNOWN",
+  "original_sha256": "48c1308d2c9b03ee41f38f2cca810a1680cd670a09a7dead2709bde9d6fd72e8",
+  "overlay_sha256": "f2009e26e4baf31511085314688629be807e79b5d85eaca101a287db8b9003dd"
+}
