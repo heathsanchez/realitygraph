@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install native testing dependencies
-        run: python3 -m pip install pytest
+        run: python3 -m pip install pytest simplejson
       - name: Frozen held-out source and native applicability
         run: |
           set -euo pipefail
