@@ -18,7 +18,7 @@ jobs:
       - name: Execute frozen native training observation
         run: |
           set -euo pipefail
-          python3 research/udm_field_observation_v1/train.py "$RUNNER_TEMP/field-observation"
+          PYTHONPATH="$PWD" python3 research/udm_field_observation_v1/train.py "$RUNNER_TEMP/field-observation"
           cat "$RUNNER_TEMP/field-observation/RESULT.json"
       - name: Preserve raw native evidence and frozen specification
         if: always()
