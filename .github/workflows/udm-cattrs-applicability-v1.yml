@@ -17,6 +17,8 @@ jobs:
           set -euo pipefail
           python3 -m pip install --upgrade pip
           python3 -m pip install 'pytest>=8.4.1' 'hypothesis>=6.135.26' 'pytest-benchmark>=5.1.0' 'immutables>=0.21' 'attrs>=25.4.0'
+      - name: Test fail-closed negative applicability boundary
+        run: python3 -m unittest discover -s tests -p test_udm_cattrs_negative_v1.py -v
       - name: Execute frozen source selection and native admission
         run: |
           set -euo pipefail
