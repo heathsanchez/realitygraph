@@ -1,0 +1,43 @@
+name: UDM prospective cattrs applicability V1
+on:
+  push:
+    branches:
+      - research/udm-cross-source-applicability-v1-20261019
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prospective-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install source-declared native dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest hypothesis attrs
+      - name: Execute frozen source selection and native admission
+        run: |
+          set -euo pipefail
+          python3 research/udm_applicability_v1/run_native.py "$RUNNER_TEMP/udm-cattrs" || echo "NATIVE_EXIT_CODE=$?" > "$RUNNER_TEMP/native-exit.txt"
+          test -f "$RUNNER_TEMP/udm-cattrs/RESULT.json"
+          cat "$RUNNER_TEMP/udm-cattrs/RESULT.json"
+          cp "$RUNNER_TEMP/udm-cattrs/RESULT.json" research/udm_applicability_v1/RESULT.json
+          if test -f "$RUNNER_TEMP/native-exit.txt"; then
+            cat "$RUNNER_TEMP/native-exit.txt"
+            test "$(sed 's/.*=//' "$RUNNER_TEMP/native-exit.txt")" != 2
+          fi
+      - name: Archive source-exact scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udm-cattrs-applicability-v1
+          path: |
+            research/udm_applicability_v1/FROZEN_PROTOCOL.md
+            research/udm_applicability_v1/run_native.py
+            research/udm_applicability_v1/RESULT.json
+            ${{ runner.temp }}/udm-cattrs/native.xml
+            ${{ runner.temp }}/udm-cattrs/native.stdout
+            ${{ runner.temp }}/udm-cattrs/native.stderr
+          retention-days: 90
