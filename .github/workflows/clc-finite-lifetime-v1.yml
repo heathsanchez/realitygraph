@@ -1,0 +1,36 @@
+name: CLC finite lifetime replay V1
+on:
+  push:
+    branches:
+      - research/clc-lifetime-reauth-v1-20261018
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  finite-lifetime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Lean
+        run: |
+          set -euo pipefail
+          curl --retry 4 -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o "$RUNNER_TEMP/elan-init.sh"
+          sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain leanprover/lean4:v4.24.0 --no-modify-path
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Native original and lifetime replay
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p test_clc_lean_admission_v3.py -v 2>&1 | tee original.log
+          python3 -m unittest discover -s tests -p test_clc_lifetime_v1.py -v 2>&1 | tee lifetime.log
+      - name: Retain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clc-finite-lifetime-v1
+          path: |
+            original.log
+            lifetime.log
+            tests/test_clc_lifetime_v1.py
+            research/clc_lifetime_v1/PROTOCOL.md
+          retention-days: 90
