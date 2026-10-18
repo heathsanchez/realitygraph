@@ -1,0 +1,11 @@
+# Factory policy inheritance V1 — frozen before candidate execution
+
+2026-10-19 NZ. Training source cattrs PR #788; base b3fb197563bd784adcbe7a385bf7d414a9c82829; author-head ff4682ad7a6d180feed4a527f8e5059afeb02432. Parent census: RealityGraph a9e777b40bfcea4a20fc0b4a0d3e53d23fdd5469, native run 39168712401.
+
+One constructor, learned from the source-bound residual: where a generated output factory accepts a Boolean option governing field omission, change only the default to a distinct sentinel "from_converter"; at factory entry resolve that sentinel from the supplied converter's same named option, with False when unavailable. An explicitly supplied False or True must not be overridden. Per-attribute overrides retain their existing precedence.
+
+Freeze *exactly one implementation*: within src/cattrs/gen/__init__.py, the two def signatures for make_dict_unstructure_fn_from_attrs and make_dict_unstructure_fn change their default _cattrs_omit_if_default from False to "from_converter". Only make_dict_unstructure_fn_from_attrs gains a sentinel-resolution conditional immediately ahead of the existing _cattrs_use_alias resolution. The wrapper function forwards the option as before, unchanged. No other source edits; do not read or copy upstream repaired production.
+
+Gates: original native base with exact head tests produces failing assertions and no collection errors; one patched production passes the originally selected two changed nodes twice, both changed author-test files completely (no failures/errors and nonzero tests), protected source tests; physical withdrawal restores failures and byte-identical restoration passes. If the whole suite cannot be executed, report the tested file scope, not the entire library. Do not tune the constructor after viewing results. No future selected or opened; G2 UNKNOWN regardless of this training success.
+
+The candidate is a source-independent *policy inheritance operation*, not a proof that the text edit works for arbitrary factories. Distinguish acquired abstract method from this implementation's bounded native warrant.
