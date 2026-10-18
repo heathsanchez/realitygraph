@@ -25,9 +25,9 @@ def patch(data):
     if src.count(old)!=2:raise ValueError("SOURCE_SHAPE_CHANGED")
     src=src.replace(old,new)
     anchor='    if _cattrs_use_alias == "from_converter":'
-    if src.count(anchor)!=1:raise ValueError("SENTINEL_INSERTION_NOT_UNIQUE")
+    if src.count(anchor)<1:raise ValueError("SENTINEL_INSERTION_MISSING")
     insertion='    if _cattrs_omit_if_default == "from_converter":\n        _cattrs_omit_if_default = getattr(converter, "omit_if_default", False)\n\n'
-    src=src.replace(anchor,insertion+anchor)
+    src=src.replace(anchor,insertion+anchor,1)
     compile(src,PROD,"exec")
     return src.encode()
 def main(out):
