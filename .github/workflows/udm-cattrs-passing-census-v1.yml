@@ -1,0 +1,36 @@
+name: UDM cattrs passing-control census V1
+on:
+  push:
+    branches:
+      - research/udm-cattrs-passing-census-v1-20261019
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install source-declared native test dependencies
+        run: python3 -m pip install 'pytest>=8.4.1' 'hypothesis>=6.135.26' 'pytest-benchmark>=5.1.0' 'immutables>=0.21' 'attrs>=25.4.0'
+      - name: Execute source-exact passing census
+        run: |
+          set -euo pipefail
+          python3 research/udm_passing_census_v1/run.py "$RUNNER_TEMP/udm-census"
+          cat "$RUNNER_TEMP/udm-census/RESULT.json"
+      - name: Preserve complete evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udm-cattrs-passing-census-v1
+          path: |
+            research/udm_passing_census_v1/FROZEN_PROTOCOL.md
+            research/udm_passing_census_v1/run.py
+            ${{ runner.temp }}/udm-census/RESULT.json
+            ${{ runner.temp }}/udm-census/census.jsonl
+            ${{ runner.temp }}/udm-census/baseline/junit.xml
+            ${{ runner.temp }}/udm-census/census/junit.xml
+            ${{ runner.temp }}/udm-census/baseline/stdout.txt
+            ${{ runner.temp }}/udm-census/census/stdout.txt
+          retention-days: 90
