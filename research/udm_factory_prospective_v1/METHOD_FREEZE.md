@@ -1,0 +1,14 @@
+# Generalized factory-policy inheritance V1 — method freeze before held-out selection
+
+Freeze date: 2026-10-19 NZ. Trained once on cattrs PR #788. Training warrant: run 39169033098; patch digest 7984d50ad61db13b118b1956b0a269741b54cb57a32c1b7cac13c48ae218661d.
+
+## Fixed method
+Discover by AST exactly one generating factory with an optional Boolean parameter P and converter-like receiver C exposing the same attribute P at runtime. Candidate repair changes an implicit false default for P to the dedicated sentinel "from_converter"; only when P is sentinel resolve P = getattr(C, P, False) at factory entry, before any output-generation decisions. Explicit True/False and per-field overrides must retain precedence. One direct delegating wrapper may receive the same default change only if it forwards P unchanged. At most one patch.
+
+The only supported concrete syntax is Python source with two known roles inferred by AST and the literal policy identifier `_cattrs_omit_if_default` (the learned training parameter). This restriction is an explicit limitation: it does not claim a name-independent discovery algorithm. No source-specific aliases, field names, or new policy symbols are allowed after freeze. If no uniquely matching primary factory and delegator exist, classify REJECTED_METHOD_INAPPLICABLE, with no edit.
+
+Select changed native author tests mechanically from exact base/head test-file AST. Run base production plus author-head changed tests, demand nonempty assertion failure and zero errors; otherwise UNKNOWN. If applicable, apply exactly one generated patch, run changed protected nodes twice plus full selected author-test files, withdraw physical source and restore exact patch. Any failure rejects transfer, no repairs or retries to the method.
+
+Freeze held-out selection by metadata only: use the first eligible merged, non-bot PR (descending merge date, numeric tie-break) in the previously unseen `python-jsonschema/jsonschema` repository whose PR metadata title or labels include `default`, `factory` or `inherit` and whose base/head SHA are available. Limit search to 100 most recently merged PRs as returned at selection; no inspection of source, changed file paths or tests before role freeze. If none eligible, UNKNOWN_NO_METADATA_ROLE, do not substitute. Do not use already exposed attrs/cattrs/tox. Hold out source bodies until method freeze and role metadata commitment exist.
+
+All post-selection outcomes remain admissible negative results. Comparison with an equally informed baseline only after native positive warrant. G2 UNKNOWN otherwise. No claim of arbitrary factory soundness.
