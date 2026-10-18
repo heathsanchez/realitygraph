@@ -1,0 +1,34 @@
+name: UDM factory broad-pool prospective V2
+on:
+  push:
+    branches: [research/udm-factory-broad-pool-v2-20261019]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  heldout-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native testing dependencies
+        run: python3 -m pip install pytest
+      - name: Frozen held-out source and native applicability
+        run: |
+          set -euo pipefail
+          python3 research/udm_factory_prospective_v2/run.py "$RUNNER_TEMP/heldout"
+          cat "$RUNNER_TEMP/heldout/RESULT.json"
+      - name: Preserve native negative or unknown
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udm-factory-prospective-v2
+          path: |
+            research/udm_factory_prospective_v2/SELECTION_FREEZE.md
+            research/udm_factory_prospective_v2/ROLE_LOCK.json
+            research/udm_factory_prospective_v2/run.py
+            ${{ runner.temp }}/heldout/RESULT.json
+            ${{ runner.temp }}/heldout/native.stdout
+            ${{ runner.temp }}/heldout/native.stderr
+            ${{ runner.temp }}/heldout/junit.xml
+          retention-days: 90
