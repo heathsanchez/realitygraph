@@ -1,0 +1,23 @@
+{
+  "schema": "UDM_FIELD_GENESIS_TRAINING_V1",
+  "source": "python-attrs/cattrs",
+  "pr": 788,
+  "base": "b3fb197563bd784adcbe7a385bf7d414a9c82829",
+  "head": "ff4682ad7a6d180feed4a527f8e5059afeb02432",
+  "test": "tests/strategies/test_include_subclasses.py",
+  "node": "test_omit_if_default_with_discriminator_override",
+  "baseline_test_sha256": "48c1308d2c9b03ee41f38f2cca810a1680cd670a09a7dead2709bde9d6fd72e8",
+  "overlay_sha256": "f2009e26e4baf31511085314688629be807e79b5d85eaca101a287db8b9003dd",
+  "native_counts": {"tests": 2, "failures": 2, "errors": 0, "skipped": 0},
+  "mapping_failure_observations": [
+    {"left_only":["renamed"],"left_values":{"renamed":0},"right_only":[],"right_values":{},"unequal":[]},
+    {"left_only":["renamed"],"left_values":{"renamed":0},"right_only":[],"right_values":{},"unequal":[]}
+  ],
+  "field_difference_classes": {"(('renamed',), (), ())":2},
+  "status": "CANDIDATE_FIELD_OBSERVATION_NO_REPAIR_WARRANT",
+  "repair_warrant": "UNKNOWN_NO_PASSING_CONTROL_PRESERVATION",
+  "heldout_future": "NOT_SELECTED_NOT_OPENED",
+  "G2": "UNKNOWN",
+  "qualified_ci": 39166131173,
+  "qualified_artifact": 12149784656
+}
