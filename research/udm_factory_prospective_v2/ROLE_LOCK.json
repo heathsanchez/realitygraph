@@ -1,0 +1,26 @@
+{
+  "schema": "UDM_FACTORY_PROSPECTIVE_V2_ROLE_LOCK",
+  "method_commit": "c5bfc48a7213e47357240522bf3f51a6f99ea552",
+  "selection_freeze_commit": "83e314f560c3d4b3ead8bc6d3faf01d3288ff00d",
+  "counts": {
+    "pydantic/pydantic": 100,
+    "marshmallow-code/marshmallow": 100,
+    "encode/httpx": 100
+  },
+  "qualifying_counts": {
+    "pydantic/pydantic": 0,
+    "marshmallow-code/marshmallow": 1,
+    "encode/httpx": 0
+  },
+  "selected": {
+    "repository": "marshmallow-code/marshmallow",
+    "pr": 2994,
+    "title": "Enum Allow None Default",
+    "merged_at": "2026-07-22T17:28:33Z",
+    "base": "3265c13945a9533f9a3ade8d47eb9b32412c4c27",
+    "head": "919255db0f20580214b53f76b6d2295a84c2de1e",
+    "author": "deckar01"
+  },
+  "state": "FROZEN_BEFORE_SOURCE_OPEN",
+  "G2": "UNKNOWN"
+}
