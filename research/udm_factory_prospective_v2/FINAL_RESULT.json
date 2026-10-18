@@ -1,0 +1,33 @@
+{
+  "schema": "UDM_FACTORY_PROSPECTIVE_V2_FINAL",
+  "selection_freeze": "83e314f560c3d4b3ead8bc6d3faf01d3288ff00d",
+  "role_lock": "401a5019eecc7c897aceef959ad751f60d6101fe",
+  "method_freeze": "c5bfc48a7213e47357240522bf3f51a6f99ea552",
+  "searched_repositories": [
+    "pydantic/pydantic",
+    "marshmallow-code/marshmallow",
+    "encode/httpx"
+  ],
+  "metadata_checked": 300,
+  "eligible_count": 1,
+  "selected": {
+    "repo": "marshmallow-code/marshmallow",
+    "pr": 2994,
+    "base": "3265c13945a9533f9a3ade8d47eb9b32412c4c27",
+    "head": "919255db0f20580214b53f76b6d2295a84c2de1e"
+  },
+  "native": {
+    "tests": 1,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 0
+  },
+  "frozen_factory_matches": 0,
+  "status": "REJECTED_METHOD_INAPPLICABLE",
+  "patch_generated": false,
+  "causal_repair": "NOT_EXECUTED",
+  "G2": "UNKNOWN",
+  "qualified_run": 39171906331,
+  "artifact_id": 12151774610,
+  "artifact_sha256": "9ec43b55ada608720e2d5b29246dfdaf04ff3f4ac2028bfea45bb2c6924cb211"
+}
