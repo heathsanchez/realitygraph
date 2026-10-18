@@ -18,6 +18,8 @@ jobs:
           curl --retry 4 -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o "$RUNNER_TEMP/elan-init.sh"
           sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain leanprover/lean4:v4.24.0 --no-modify-path
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/lean" --version
+          "$HOME/.elan/bin/lean" --version | grep -F "version 4.24.0"
       - name: Native original and lifetime replay
         run: |
           set -euo pipefail
