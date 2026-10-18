@@ -1,0 +1,11 @@
+# Frozen passing-control census V1 (2026-10-19)
+
+Parent: 1ba8dfe7b2bcc9966c8575c3b692249b62dfe62c. Training only: pre-exposed cattrs PR #788, base b3fb197563bd784adcbe7a385bf7d414a9c82829; head ff4682ad7a6d180feed4a527f8e5059afeb02432.
+
+Before executing this census: select exactly the existing changed test node tests/strategies/test_include_subclasses.py::test_omit_if_default_with_discriminator_override, parametrized for None and configure_tagged_union. Preserve original production and exact head test. Instrument only the AST of its mapping equality assertion to evaluate operands once, record actual/expected maps and the original equality outcome, then return that same outcome. The original asserted expression, other assertions and protected native failure must remain unchanged in meaning. Collect ALL eight inner loop comparisons, including passing ones. Run pytest with the frozen mapping observer also enabled. Verify exactly two failed native tests, no errors, and at least one passing comparison. If instrumentation fails to retain those, UNKNOWN.
+
+Frozen observation operator candidate: on a mapping result, remove a single unexpected field only when its primitive value matches the observed failing residual value; all passing comparisons must retain exactly their original outputs. The field name and value are learned ONLY from the failing residual and not hard-coded into the operator. If any passing control is changed, REJECTED_CONTROL_COLLISION. This is an observational operator, NOT authority to rewrite production.
+
+One *production* repair may be generated ONLY after the passing-control proof and a source AST proves a unique directly returned mapping to which the operator can be safely inserted, with no changes to other behaviors; otherwise UNKNOWN_UNSUPPORTED_REPAIR_SHAPE. No source-specific production mutation is allowed outside this exact constructor. If constructed, run selected nodes twice, full selected author test file, exact withdrawal and restoration. Do not change constructor after seeing outcomes.
+
+Never select or open a new held-out source until the training repair meets native causal checks; G2 UNKNOWN regardless of the census result. Preserve negative outcomes.
