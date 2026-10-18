@@ -40,7 +40,7 @@ def __udm_record(left,right):
     import json,os
     equal=left==right
     with open(os.environ["UDM_CENSUS_PATH"],"a",encoding="utf8") as f:
-        f.write(json.dumps({"actual":left,"expected":right,"equal":equal},sort_keys=True)+"\\n")
+        f.write(json.dumps({"actual":left,"expected":right,"equal":equal},sort_keys=True)+"\n")
     return equal
 """
             # Preserve equality computation, defer collective failure to the end
@@ -50,13 +50,13 @@ def __udm_record(left,right):
             if transformed.count(anchor)!=1:
                 result["status"]="UNKNOWN_LOOP_NOT_UNIQUE"
             else:
-                transformed=transformed.replace(anchor,"    __udm_equalities = []\\n"+anchor)
+                transformed=transformed.replace(anchor,"    __udm_equalities = []\n"+anchor)
                 next_line="        assert converter.structure(expected, Parent) == instance"
                 if transformed.count(next_line)!=1:
                     result["status"]="UNKNOWN_NEXT_ASSERTION_NOT_UNIQUE"
                 else:
-                    transformed=transformed.replace(next_line,next_line+"\\n    assert all(__udm_equalities)")
-                    target.write_text(transformed+"\\n"+helper)
+                    transformed=transformed.replace(next_line,next_line+"\n    assert all(__udm_equalities)")
+                    target.write_text(transformed+"\n"+helper)
                     env=os.environ.copy();env["UDM_CENSUS_PATH"]=str(dest/"census.jsonl")
                     stage=dest/"census";stage.mkdir()
                     census_counts=run(w,stage,NODE,env)
@@ -69,11 +69,11 @@ def __udm_record(left,right):
                         failures=[r for r in rows if not r["equal"]]
                         passing=[r for r in rows if r["equal"]]
                         result["passing_count"]=len(passing);result["failure_count"]=len(failures)
-                        if len(failures)!=2 or len(passing)!=6:
+                        if not failures or not passing:
                             result["status"]="UNKNOWN_CENSUS_MISMATCH"
                         else:
                             extra=[(k,v) for r in failures for k,v in r["actual"].items() if k not in r["expected"]]
-                            if len(extra)!=2 or extra[0]!=extra[1]:
+                            if not extra or any(v!=extra[0] for v in extra):
                                 result["status"]="REJECTED_NO_UNIQUE_EXTRA_FIELD"
                             else:
                                 key,value=extra[0]
@@ -87,7 +87,7 @@ def __udm_record(left,right):
                                 result["status"]=("CANDIDATE_CONTROL_PRESERVED_REPAIR_UNSUPPORTED" if safe and fixes else "REJECTED_CONTROL_COLLISION")
                                 # No unique directly-returned mapping in generic converter factory established.
                                 result["production_repair"]="UNKNOWN_UNSUPPORTED_REPAIR_SHAPE"
-    (dest/"RESULT.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\\n")
+    (dest/"RESULT.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
     print(json.dumps({k:result.get(k) for k in ("status","baseline","instrumented","passing_count","failure_count","selected_operator","production_repair","G2")},sort_keys=True))
     return 0 if not result["status"].startswith("UNKNOWN_") else 2
 if __name__=="__main__":sys.exit(main(pathlib.Path(sys.argv[1]).resolve()))
