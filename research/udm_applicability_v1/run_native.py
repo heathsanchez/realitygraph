@@ -35,6 +35,7 @@ def main(out):
                    check=True,timeout=180)
     git(work,"fetch","--quiet","origin",BASE,HEAD)
     git(work,"checkout","--quiet",BASE)
+    subprocess.run([sys.executable,"-m","pip","install","-e",str(work)],check=True,timeout=180,capture_output=True)
     assert git(work,"rev-parse","HEAD")==BASE
     changes=git(work,"diff","--name-only",BASE,HEAD).splitlines()
     eligible=sorted(p for p in changes if p.endswith(".py") and
