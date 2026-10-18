@@ -31,6 +31,9 @@ def main(out):
         result["status"]="UNKNOWN_NO_CHANGED_TEST_NODE"
     else:
         (w/TEST).write_bytes(new)
+        # Exact author-head test helper overlay; original production stays at base.
+        helper="tests/base.py"
+        (w/helper).write_bytes(subprocess.check_output(["git","-C",str(w),"show",HEAD+":"+helper]))
         # The exact base package, never repaired production.
         subprocess.run([sys.executable,"-m","pip","install","-e",str(w)],check=True,timeout=180,capture_output=True)
         xml=out/"junit.xml"
